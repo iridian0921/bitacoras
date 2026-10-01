@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#3c4c5e">
+<title>Bitácora de UPS</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+:root{
+  --fb:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --fc:"Roboto Condensed","Arial Narrow",sans-serif-condensed,system-ui,sans-serif;
+  --bg:#e9edf1; --surface:#f8fafb; --ink:#18212b; --muted:#5a6878; --line:#c9d2db;
+  --steel:#3c4c5e; --lcd:#2438b5; --lcd2:#3b2fa8; --lcdtext:#f3e9b5; --lcdline:#c9bf8a;
+  --ok:#237a47; --okbg:#dcf1e3; --bad:#b4390f; --badbg:#fbe3d8; --warnbg:#fff2c2;
+  --accent:#2438b5;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#10161d; --surface:#18212b; --ink:#e6ebf0; --muted:#9aa8b6; --line:#2e3b48;
+    --steel:#b8c5d2; --ok:#5cc98a; --okbg:#173325; --bad:#ff8a5c; --badbg:#3a1f14; --warnbg:#3a3214;
+    --accent:#8c9bff;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10161d; --surface:#18212b; --ink:#e6ebf0; --muted:#9aa8b6; --line:#2e3b48;
+  --steel:#b8c5d2; --ok:#5cc98a; --okbg:#173325; --bad:#ff8a5c; --badbg:#3a1f14; --warnbg:#3a3214;
+  --accent:#8c9bff;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 var(--fb);font-variant-numeric:tabular-nums}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px 48px}
+header{padding:20px 0 8px}
+h1{font:700 30px/1.05 var(--fc);margin:0;letter-spacing:.2px}
+.sub{color:var(--muted);font-size:14px;margin-top:4px}
+nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:10px 0;display:flex;gap:6px;overflow-x:auto}
+nav button{flex:1 0 auto;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 15px var(--fb);padding:9px 14px;border-radius:8px;cursor:pointer}
+nav button[aria-selected="true"]{background:var(--steel);color:var(--bg);border-color:var(--steel)}
+section{display:none}
+section.on{display:block}
+h2{font:600 22px/1.2 var(--fc);margin:18px 0 10px}
+h3{font:600 17px/1.2 var(--fb);margin:16px 0 8px}
+p{margin:6px 0}
+.muted{color:var(--muted);font-size:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;margin:10px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{border:0;border-radius:8px;padding:11px 16px;font:600 16px var(--fb);cursor:pointer;background:var(--accent);color:#fff}
+.btn.sec{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.danger{background:transparent;color:var(--bad);border:1px solid var(--bad);padding:6px 10px;font-size:14px}
+.btn:disabled{opacity:.5;cursor:default}
+button:focus-visible,input:focus-visible,select:focus-visible,label.file:focus-within{outline:3px solid var(--accent);outline-offset:2px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:8px 16px;font:600 15px var(--fb);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+label.file{display:flex;align-items:center;justify-content:center;gap:10px;border:2px dashed var(--line);border-radius:10px;padding:22px;cursor:pointer;color:var(--muted);font-weight:600;text-align:center}
+label.file input{position:absolute;opacity:0;width:1px;height:1px}
+#preview{max-width:100%;border-radius:8px;display:none;margin-top:10px;max-height:320px;object-fit:contain;background:#000}
+.status{font-size:14px;color:var(--muted);margin-top:8px;min-height:1.2em}
+.status.err{color:var(--bad)}
+
+/* LCD review panel: echoes the Liebert display */
+.lcd{background:linear-gradient(135deg,var(--lcd),var(--lcd2));color:var(--lcdtext);border-radius:10px;padding:14px;margin:12px 0;border:6px solid #4b5563}
+.lcd h4{margin:0 0 6px;font:600 15px var(--fb);border-bottom:1px solid var(--lcdline);padding-bottom:4px}
+.lcd .grp{border:1px solid var(--lcdline);border-radius:4px;padding:8px;margin-bottom:10px}
+.lcd .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.lcd .g2{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.lcd label{display:block;font-size:12px;opacity:.85}
+.lcd input{width:100%;background:rgba(0,0,0,.18);border:1px solid rgba(243,233,181,.35);color:var(--lcdtext);font:600 17px var(--fb);padding:5px 6px;border-radius:4px;font-variant-numeric:tabular-nums}
+.lcd input.miss{background:rgba(255,180,60,.35);border-color:#ffcf6b}
+.lcd .meta{font-size:13px;opacity:.9;margin-bottom:8px}
+.checks{display:grid;gap:6px}
+.chk{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:6px;font-size:15px;background:var(--surface);border:1px solid var(--line)}
+.chk b{font-weight:600}
+.chk.ok{background:var(--okbg);border-color:transparent}
+.chk.bad{background:var(--badbg);border-color:transparent}
+.chk.na{opacity:.7}
+input[type=datetime-local],input[type=number].plain,select,textarea{font:500 16px var(--fb);padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);max-width:100%}
+textarea{width:100%;min-height:60px}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:600;color:var(--muted)}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-weight:600;font-size:13px}
+.pill.ok{background:var(--okbg);color:var(--ok)}
+.pill.bad{background:var(--badbg);color:var(--bad)}
+.big{font:700 44px/1 var(--fc)}
+.kv{display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:15px}
+.kv span:nth-child(even){text-align:right;font-weight:600}
+.units{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.unit{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px}
+.unit .n{font:600 18px var(--fc)}
+.chart{width:100%;height:auto;display:block}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:14px;margin-top:6px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.cfg{display:grid;grid-template-columns:1fr 110px;gap:8px;align-items:center;font-size:15px}
+.cfg input{width:100%}
+.note{background:var(--warnbg);padding:8px 10px;border-radius:6px;font-size:14px;margin:8px 0}
+.hidden{display:none !important}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+.thumb{max-width:100%;max-height:260px;border-radius:8px;display:block;margin-top:10px;background:#000;object-fit:contain}
+.linkbtn{background:none;border:0;color:var(--accent);font:600 14px var(--fb);cursor:pointer;padding:4px 6px;text-decoration:underline}
+dialog{border:0;border-radius:10px;padding:12px;max-width:min(92vw,700px);background:var(--surface);color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog img{max-width:100%;max-height:75vh;display:block}
+.filebtn{position:relative;overflow:hidden;display:inline-flex;align-items:center}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}
+.ramas{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.rama{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
+.rama h3{margin:0 0 6px;font:700 24px/1.1 var(--fc)}
+.rama .big{font-size:38px}
+.rama .units{margin-top:10px}
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+#rep:empty{display:none}
+#rep{margin-top:12px}
+@media print{
+  @page{size:letter;margin:12mm}
+  body{background:#fff !important}
+  header,nav,.noprint,#storeNote,section:not(#inf){display:none !important}
+  section#inf{display:block !important}
+  .wrap{max-width:none;padding:0}
+  :root{padding:0}
+}
+
+.homelink{display:inline-block;margin-bottom:6px;color:var(--accent);font-weight:600;text-decoration:none;font-size:15px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <a href="index.html" class="homelink noprint">← Bitácoras</a>
+  <h1>Bitácora de UPS</h1>
+  <div class="sub">Rama A y Rama B, 4 UPS y SCCT por rama. Funciona sin internet y guarda en este dispositivo.</div>
+</header>
+<nav role="tablist">
+  <button role="tab" data-tab="cap" aria-selected="true">Capturar</button>
+  <button role="tab" data-tab="sis" aria-selected="false">Sistema</button>
+  <button role="tab" data-tab="ten" aria-selected="false">Tendencias</button>
+  <button role="tab" data-tab="inf" aria-selected="false">Informe</button>
+  <button role="tab" data-tab="his" aria-selected="false">Historial</button>
+  <button role="tab" data-tab="cfg" aria-selected="false">Ajustes</button>
+</nav>
+<div id="storeNote" class="note hidden"></div>
+<div id="bakWarn" class="note hidden"></div>
+
+<section id="cap" class="on">
+  <h2>Nueva lectura</h2>
+  <div class="card">
+    <h3 style="margin-top:0">Rama</h3>
+    <div class="chips" id="ramaChips"></div>
+    <h3>Equipo</h3>
+    <div class="chips" id="eqChips"></div>
+    <div class="row" style="margin-top:12px">
+      <label for="ts" class="muted">Fecha y hora</label>
+      <input type="datetime-local" id="ts">
+    </div>
+  </div>
+  <div id="draftNote" class="note hidden"></div>
+  <p class="muted">Copia los valores tal como aparecen en el display. Con Enter o Siguiente pasas al campo que sigue.</p>
+  <div class="lcd" id="lcd"></div>
+  <div class="card">
+    <h3 style="margin-top:0">Verificaciones</h3>
+    <div class="checks" id="checks"></div>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">Foto de evidencia (opcional)</h3>
+    <div class="row">
+      <label class="btn sec filebtn">Tomar foto<input type="file" id="photoCam" accept="image/*" capture="environment"></label>
+      <label class="btn sec filebtn">Elegir de galería<input type="file" id="photoGal" accept="image/*"></label>
+    </div>
+    <div class="status" id="photoStatus"></div>
+    <img id="preview" class="thumb hidden" alt="Foto del display">
+    <button class="linkbtn hidden" id="photoDel">Quitar foto</button>
+    <h3>Nota (opcional)</h3>
+    <textarea id="nota" placeholder="Ej. alarma activa, ruido anormal, temperatura del cuarto"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="saveBtn">Guardar lectura</button>
+      <button class="btn sec" id="clearBtn">Limpiar</button>
+    </div>
+    <div class="status" id="saveStatus"></div>
+  </div>
+</section>
+
+<section id="sis">
+  <h2>Estado del sistema</h2>
+  <p class="muted">Usa la lectura más reciente de cada equipo. Si hay lectura del SCCT, la carga de la rama se toma de ahí.</p>
+  <div class="ramas" id="ramas"></div>
+  <h2>Si se pierde una rama</h2>
+  <div class="card" id="cruce"></div>
+</section>
+
+<section id="ten">
+  <h2>Tendencias</h2>
+  <div class="row">
+    <select id="tenRama" aria-label="Rama"></select>
+    <select id="metric" aria-label="Variable a graficar"></select>
+  </div>
+  <div class="card"><div id="chartBox"></div><div class="legend" id="legend"></div></div>
+</section>
+
+<section id="inf">
+  <h2 class="noprint">Informe rápido</h2>
+  <div class="card noprint">
+    <div class="cfg">
+      <label for="repSitio">Sitio</label><input class="plain" id="repSitio" placeholder="Ej. Data center, sala eléctrica">
+      <label for="repElab">Elaboró</label><input class="plain" id="repElab" placeholder="Nombre y puesto">
+    </div>
+    <div class="row" style="margin-top:10px;gap:16px">
+      <label><input type="checkbox" id="repFotos" checked> Incluir fotos</label>
+      <label><input type="checkbox" id="repNotas" checked> Incluir notas</label>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" id="repGen">Generar informe</button>
+    </div>
+    <div class="row hidden" id="repAcc" style="margin-top:10px">
+      <button class="btn sec" id="repPrint">Imprimir / PDF</button>
+      <button class="btn sec" id="repHtml">Descargar HTML</button>
+      <button class="btn sec" id="repShare">Compartir resumen</button>
+      <button class="btn sec" id="repCopy">Copiar resumen</button>
+    </div>
+    <div class="status" id="repStatus"></div>
+  </div>
+  <div id="rep"></div>
+</section>
+
+<section id="his">
+  <h2>Historial</h2>
+  <div class="row">
+    <select id="hisRama" aria-label="Filtrar por rama"></select>
+    <select id="hisEq" aria-label="Filtrar por equipo"></select>
+    <button class="btn sec" id="csvBtn">Exportar a Excel (CSV)</button>
+  </div>
+  <div class="card tbl-wrap"><table id="hisTbl"></table></div>
+</section>
+
+<section id="cfg">
+  <h2>Parámetros</h2>
+  <div class="card">
+    <div class="cfg" id="cfgForm"></div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="cfgSave">Guardar parámetros</button></div>
+    <div class="status" id="cfgStatus"></div>
+  </div>
+  <h2>Respaldo</h2>
+  <div class="card">
+    <p class="muted" style="margin-top:0">Los datos viven solo en este navegador. Descarga un respaldo cada semana y guárdalo en tu PC o en Drive. Las fotos no se incluyen en el respaldo.</p>
+    <div class="row">
+      <button class="btn" id="bakBtn">Descargar respaldo</button>
+      <label class="btn sec filebtn">Restaurar respaldo<input type="file" id="restore" accept=".json,application/json"></label>
+      <label class="btn sec filebtn">Importar CSV<input type="file" id="csvIn" accept=".csv,text/csv"></label>
+    </div>
+    <div class="status" id="bakStatus"></div>
+    <p class="muted" id="lastBak"></p>
+    <p class="muted" id="usage"></p>
+  </div>
+</section>
+</div>
+<dialog id="dlg"><img id="dlgImg" alt="Foto de evidencia"><div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn sec" id="dlgClose">Cerrar</button></div></dialog>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const RAMAS = ["A","B"];
+const DEFAULTS = {kva:500, fp:0.8, modulos:4, celdas:240, vnom:480, limV:0.02, limI:0.10, limDev:0.05, limCarga:0.80};
+const CFG_FIELDS = [
+  ["kva","Capacidad por módulo (kVA)",1],["fp","Factor de potencia nominal",0.01],["modulos","Módulos UPS por rama",1],
+  ["celdas","Celdas de batería por módulo",1],["vnom","Voltaje nominal de salida (V)",1],["limV","Límite desbalance de voltaje (fracción)",0.005],
+  ["limI","Límite desbalance de corriente (fracción)",0.01],["limDev","Límite desviación vs nominal (fracción)",0.01],["limCarga","Carga máx. por módulo (fracción)",0.05]
+];
+const FIELDS_UPS = [
+  {g:"UPS INPUT PWR", k:"in", cols:3, f:[["vab","ØA-B V"],["vbc","ØB-C V"],["vca","ØC-A V"],["ia","ØA A"],["ib","ØB A"],["ic","ØC A"]]},
+  {g:"OUTPUT VOLTAGE", k:"out", cols:3, f:[["vab","ØA-B V"],["vbc","ØB-C V"],["vca","ØC-A V"],["hz","Hz"]]},
+  {g:"LOAD", k:"load", cols:3, f:[["kva","kVA"],["kw","kW"],["x",""],["ia","ØA A"],["ib","ØB A"],["ic","ØC A"]]},
+  {g:"BATTERY", k:"bat", cols:2, f:[["v","Volts DC"],["a","Amps"]]}
+];
+const FIELDS_SCCT = [
+  {g:"BYPASS INPUT", k:"byp", cols:3, f:[["vab","ØA-B V"],["vbc","ØB-C V"],["vca","ØC-A V"]]},
+  {g:"SYSTEM OUTPUT", k:"out", cols:3, f:[["vab","ØA-B V"],["vbc","ØB-C V"],["vca","ØC-A V"],["hz","Hz"]]},
+  {g:"SYSTEM LOAD", k:"load", cols:3, f:[["kva","kVA"],["kw","kW"],["x",""],["ia","ØA A"],["ib","ØB A"],["ic","ØC A"]]},
+  {g:"MÓDULOS", k:"sys", cols:2, f:[["enlinea","UPS en línea"]]}
+];
+const COLORS = ["#2438b5","#c2410c","#237a47","#8b5cf6","#0e7490","#a16207","#be185d","#4d7c0f"];
+
+let P = {...DEFAULTS}, readings = [];
+let selRama = "A", selEq = "UPS 1", draft = null;
+let photoBlob = null, photoPending = null;
+
+const equipos = () => [...Array.from({length:P.modulos},(_,i)=>"UPS "+(i+1)), "SCCT"];
+const isScct = eq => eq === "SCCT";
+const fieldsFor = eq => isScct(eq) ? FIELDS_SCCT : FIELDS_UPS;
+
+/* ================= almacenamiento ================= */
+const LS = "bitacora-ups-standalone-v1", LSD = LS + "-borrador";
+let lsOk = true;
+function migrate(r){
+  if (!r) return r;
+  const o = {...r};
+  if (!o.rama) o.rama = "A";
+  if (!o.equipo) o.equipo = o.ups ? "UPS "+o.ups : "UPS 1";
+  if (!isScct(o.equipo) && !o.ups) o.ups = +o.equipo.replace(/\D/g,"") || 1;
+  return o;
+}
+function load(){
+  try{ const o = JSON.parse(localStorage.getItem(LS) || "{}"); readings = (o.lecturas||[]).map(migrate); P = {...DEFAULTS, ...(o.cfg||{})}; }
+  catch{ lsOk = false; }
+  sortR();
+}
+function persist(){ try{ localStorage.setItem(LS, JSON.stringify({lecturas:readings, cfg:P})); return true; }catch{ return false; } }
+const sortR = () => readings.sort((a,b)=>b.ts.localeCompare(a.ts) || String(b.id).localeCompare(String(a.id)));
+
+/* Fotos en IndexedDB guardadas como ArrayBuffer (más compatible que Blob en algunos navegadores). */
+const DRAFT_KEY = "__borrador__";
+const idbReady = new Promise(res => {
+  try{
+    const rq = indexedDB.open("bitacora-ups-fotos", 1);
+    rq.onupgradeneeded = () => { if (!rq.result.objectStoreNames.contains("fotos")) rq.result.createObjectStore("fotos"); };
+    rq.onsuccess = () => res(rq.result);
+    rq.onerror = () => res(null);
+    rq.onblocked = () => res(null);
+    setTimeout(() => res(null), 5000);
+  }catch{ res(null); }
+});
+async function idbPut(k, blob){
+  const db = await idbReady; if (!db) throw new Error("sin IndexedDB");
+  const buf = await blob.arrayBuffer();
+  await new Promise((res,rej)=>{ const t=db.transaction("fotos","readwrite"); t.objectStore("fotos").put({type:blob.type||"image/jpeg", buf}, k); t.oncomplete=res; t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error); });
+}
+async function idbGet(k){
+  const db = await idbReady; if (!db) return null;
+  const v = await new Promise(res=>{ try{ const r=db.transaction("fotos").objectStore("fotos").get(k); r.onsuccess=()=>res(r.result||null); r.onerror=()=>res(null); }catch{ res(null); } });
+  if (!v) return null;
+  if (v instanceof Blob) return v;                       // fotos guardadas por la versión anterior
+  return v.buf ? new Blob([v.buf], {type:v.type}) : null;
+}
+async function idbDel(k){
+  const db = await idbReady; if (!db) return;
+  await new Promise(res=>{ try{ const t=db.transaction("fotos","readwrite"); t.objectStore("fotos").delete(k); t.oncomplete=res; t.onerror=res; }catch{ res(); } });
+}
+
+/* ================= cálculos ================= */
+const num = v => (v === null || v === undefined || v === "" || isNaN(+v)) ? null : +v;
+const avg = a => { const v = a.map(num); return v.every(x=>x!==null) ? v.reduce((s,x)=>s+x,0)/v.length : null; };
+const unb = a => { const m = avg(a); if (m===null || m===0) return null; const v=a.map(num); return Math.max(Math.max(...v)-m, m-Math.min(...v))/m; };
+const kwMod = () => P.kva * P.fp;
+function calc(r){
+  const sc = isScct(r.equipo);
+  const i=r.in||{}, byp=r.byp||{}, o=r.out||{}, l=r.load||{}, b=r.bat||{}, s=r.sys||{};
+  const vout=avg([o.vab,o.vbc,o.vca]), iout=avg([l.ia,l.ib,l.ic]);
+  const kvaCalc = (vout!==null && iout!==null) ? Math.sqrt(3)*vout*iout/1000 : null;
+  const enl = num(s.enlinea);
+  const cap = sc ? kwMod()*(enl ?? P.modulos) : kwMod();
+  const c = {
+    sc, enlinea: enl,
+    fp: (num(l.kw)!==null && num(l.kva)) ? l.kw/l.kva : null,
+    pctKw: num(l.kw)!==null ? l.kw/cap : null,
+    unbVin: sc ? unb([byp.vab,byp.vbc,byp.vca]) : unb([i.vab,i.vbc,i.vca]),
+    unbIin: sc ? null : unb([i.ia,i.ib,i.ic]),
+    unbVout: unb([o.vab,o.vbc,o.vca]), unbIout: unb([l.ia,l.ib,l.ic]),
+    vout, dev: vout!==null ? (vout-P.vnom)/P.vnom : null,
+    kvaCalc, kvaDiff: (kvaCalc!==null && num(l.kva)) ? (kvaCalc-l.kva)/l.kva : null,
+    vCell: (!sc && num(b.v)!==null) ? b.v/P.celdas : null, batA: sc ? null : num(b.a), hz: num(o.hz)
+  };
+  c.flags = []; c.det = [];
+  const flag = (n, d) => { c.flags.push(n); c.det.push(d ? `${n} (${d})` : n); };
+  if (c.pctKw!==null && c.pctKw>P.limCarga) flag("Carga alta", pct(c.pctKw));
+  if ((c.unbVin??0)>P.limV || (c.unbVout??0)>P.limV) flag("Desbalance de voltaje", `${sc?"bypass":"entrada"} ${pct(c.unbVin,2)}, salida ${pct(c.unbVout,2)}`);
+  if ((c.unbIin??0)>P.limI || (c.unbIout??0)>P.limI) flag("Desbalance de corriente", sc ? `carga ${pct(c.unbIout)}` : `entrada ${pct(c.unbIin)}, carga ${pct(c.unbIout)}`);
+  if (c.dev!==null && Math.abs(c.dev)>P.limDev) flag("Voltaje fuera de rango", `${fx(c.vout)} V`);
+  if (c.hz!==null && Math.abs(c.hz-60)>0.5) flag("Frecuencia fuera de rango", `${fx(c.hz)} Hz`);
+  if (c.batA!==null && c.batA!==0) flag("Batería con corriente", `${c.batA} A`);
+  if (c.kvaDiff!==null && Math.abs(c.kvaDiff)>0.10) flag("kVA no cuadra con V×I", `${fx(c.kvaCalc)} vs ${fx(l.kva,0)} kVA`);
+  if (sc && enl!==null && enl<P.modulos) flag(`Solo ${enl} de ${P.modulos} UPS en línea`);
+  c.ok = c.flags.length===0;
+  return c;
+}
+const pct = (x,d=1) => x===null||x===undefined||!isFinite(x) ? "—" : (x*100).toFixed(d)+" %";
+const fx = (x,d=1) => x===null||x===undefined||!isFinite(x) ? "—" : (+x).toFixed(d);
+const fdate = iso => { const d=new Date(iso); return isNaN(d) ? iso : d.toLocaleString("es-MX",{dateStyle:"short",timeStyle:"short"}); };
+const nowLocal = () => { const d=new Date(); return new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,16); };
+const confTxt = (red) => red<0 ? "Sobrecarga" : red===0 ? "N" : "N+"+red;
+
+/* ================= pestañas ================= */
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button").forEach(x=>x.setAttribute("aria-selected", x===b));
+  document.querySelectorAll("section").forEach(s=>s.classList.toggle("on", s.id===b.dataset.tab));
+  if (b.dataset.tab==="ten") renderChart();
+  if (b.dataset.tab==="cfg") renderUsage();
+});
+
+/* ================= captura ================= */
+function chip(txt, pressed, fn){ const b=document.createElement("button"); b.className="chip"; b.textContent=txt; b.setAttribute("aria-pressed", pressed); b.onclick=fn; return b; }
+function renderChips(){
+  if (!equipos().includes(selEq)) selEq = "UPS 1";
+  const rc = $("#ramaChips"); rc.innerHTML="";
+  RAMAS.forEach(r => rc.append(chip("Rama "+r, r===selRama, ()=>{ selRama=r; renderChips(); saveDraft(); })));
+  const ec = $("#eqChips"); ec.innerHTML="";
+  equipos().forEach(e => ec.append(chip(e, e===selEq, ()=>{
+    const cambiaTipo = isScct(e)!==isScct(selEq); selEq=e;
+    if (cambiaTipo) newDraft(true);
+    renderChips(); renderLcd(); saveDraft();
+  })));
+}
+function newDraft(keepMeta){ draft = {in:{}, byp:{}, out:{}, load:{}, bat:{}, sys:{}}; if(!keepMeta){} }
+function renderLcd(){
+  let h = `<div class="meta">Rama ${selRama} | ${esc(selEq)}</div>`;
+  for (const grp of fieldsFor(selEq)){
+    h += `<div class="grp"><h4>${grp.g}</h4><div class="g${grp.cols}">`;
+    for (const [k,lab] of grp.f){
+      if (k==="x"){ h += "<div></div>"; continue; }
+      const v = draft[grp.k][k];
+      h += `<div><label for="f-${grp.k}-${k}">${lab}</label><input id="f-${grp.k}-${k}" type="number" step="any" inputmode="decimal" enterkeyhint="next" data-g="${grp.k}" data-k="${k}" value="${v??""}"></div>`;
+    }
+    h += `</div></div>`;
+  }
+  $("#lcd").innerHTML = h;
+  const inputs = [...$("#lcd").querySelectorAll("input")];
+  inputs.forEach((inp, idx) => {
+    inp.oninput = () => { draft[inp.dataset.g][inp.dataset.k] = num(inp.value); renderChecks(); saveDraft(); };
+    inp.onkeydown = e => { if (e.key==="Enter"){ e.preventDefault(); (inputs[idx+1] || $("#nota")).focus(); } };
+  });
+  renderChecks();
+}
+function renderChecks(){
+  const c = calc({...draft, equipo:selEq});
+  const rows = [
+    [c.sc ? "Carga de la rama (vs UPS en línea)" : "Carga del módulo (kW)", pct(c.pctKw), c.pctKw===null?null:c.pctKw<=P.limCarga],
+    ["Factor de potencia de la carga", fx(c.fp,2), c.fp===null?null:true],
+    ["kVA calculado con V×I", c.kvaCalc===null?"—":`${fx(c.kvaCalc)} kVA (${c.kvaDiff===null?"—":(c.kvaDiff>0?"+":"")+pct(c.kvaDiff)} vs display)`, c.kvaDiff===null?null:Math.abs(c.kvaDiff)<=0.10],
+    [c.sc ? "Desbalance V bypass / salida" : "Desbalance V entrada / salida", `${pct(c.unbVin,2)} / ${pct(c.unbVout,2)}`, (c.unbVin===null&&c.unbVout===null)?null:((c.unbVin??0)<=P.limV && (c.unbVout??0)<=P.limV)],
+    [c.sc ? "Desbalance I de carga" : "Desbalance I entrada / carga", c.sc ? pct(c.unbIout) : `${pct(c.unbIin)} / ${pct(c.unbIout)}`, (c.unbIin===null&&c.unbIout===null)?null:((c.unbIin??0)<=P.limI && (c.unbIout??0)<=P.limI)],
+    ["Voltaje salida vs nominal", c.dev===null?"—":`${fx(c.vout)} V (${(c.dev>0?"+":"")+pct(c.dev,2)})`, c.dev===null?null:Math.abs(c.dev)<=P.limDev],
+    ["Frecuencia", c.hz===null?"—":fx(c.hz)+" Hz", c.hz===null?null:Math.abs(c.hz-60)<=0.5],
+    c.sc ? ["UPS en línea", c.enlinea===null?"—":`${c.enlinea} de ${P.modulos}`, c.enlinea===null?null:c.enlinea>=P.modulos]
+         : ["Batería", c.vCell===null?"—":`${fx(c.vCell,3)} V/celda, ${c.batA===0?"flotación":(c.batA??"—")+" A"}`, c.batA===null?null:c.batA===0]
+  ];
+  $("#checks").innerHTML = rows.map(([a,b,ok]) => `<div class="chk ${ok===null?"na":ok?"ok":"bad"}"><span>${a}</span><b>${b}</b></div>`).join("");
+}
+
+/* Borrador: se guarda en cada cambio para sobrevivir si el navegador recarga la página al volver de la cámara */
+function saveDraft(){
+  try{ localStorage.setItem(LSD, JSON.stringify({rama:selRama, equipo:selEq, draft, nota:$("#nota").value, ts:$("#ts").value, foto:!!photoBlob})); }catch{}
+}
+async function loadDraft(){
+  try{
+    const d = JSON.parse(localStorage.getItem(LSD) || "null"); if (!d) return false;
+    selRama = RAMAS.includes(d.rama) ? d.rama : "A"; selEq = d.equipo || "UPS 1";
+    draft = {in:{}, byp:{}, out:{}, load:{}, bat:{}, sys:{}, ...(d.draft||{})};
+    $("#nota").value = d.nota || ""; $("#ts").value = d.ts || nowLocal();
+    const hayDatos = Object.values(draft).some(g => Object.values(g||{}).some(v => v!==null && v!==undefined));
+    if (d.foto){ const b = await idbGet(DRAFT_KEY); if (b) setPhoto(b); }
+    if (hayDatos || d.foto){ const n=$("#draftNote"); n.textContent="Se recuperó la captura que tenías en proceso."; n.classList.remove("hidden"); setTimeout(()=>n.classList.add("hidden"),6000); }
+    return true;
+  }catch{ return false; }
+}
+$("#nota").oninput = saveDraft; $("#ts").onchange = saveDraft;
+
+/* ================= fotos ================= */
+async function reducir(file){
+  let bmp = null;
+  try{ bmp = await createImageBitmap(file, {imageOrientation:"from-image"}); }catch{}
+  let w, h, src;
+  if (bmp){ w=bmp.width; h=bmp.height; src=bmp; }
+  else {
+    const url = URL.createObjectURL(file);
+    try{ src = await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>rej(new Error("decodificar")); i.src=url; }); }
+    finally{ setTimeout(()=>URL.revokeObjectURL(url), 1000); }
+    w=src.naturalWidth; h=src.naturalHeight;
+  }
+  const s = Math.min(1, 1280/Math.max(w,h));
+  const c = document.createElement("canvas"); c.width=Math.max(1,Math.round(w*s)); c.height=Math.max(1,Math.round(h*s));
+  c.getContext("2d").drawImage(src,0,0,c.width,c.height);
+  if (bmp) bmp.close?.();
+  const out = await new Promise(res=>c.toBlob(b=>res(b),"image/jpeg",0.72));
+  if (!out || out.size < 1000) throw new Error("comprimir");
+  return out;
+}
+function setPhoto(b){
+  photoBlob = b;
+  const img = $("#preview"); if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+  const url = URL.createObjectURL(b); img.dataset.url = url; img.src = url;
+  img.classList.remove("hidden"); $("#photoDel").classList.remove("hidden");
+}
+function clearPhoto(){
+  photoBlob = null; photoPending = null;
+  const img = $("#preview"); if (img.dataset.url) URL.revokeObjectURL(img.dataset.url); img.removeAttribute("src"); img.classList.add("hidden");
+  $("#photoDel").classList.add("hidden"); $("#photoStatus").textContent=""; $("#photoStatus").classList.remove("err");
+  $("#photoCam").value=""; $("#photoGal").value=""; idbDel(DRAFT_KEY);
+}
+function onPhoto(e){
+  const f = e.target.files && e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  const st = $("#photoStatus"); st.classList.remove("err"); st.textContent = "Procesando foto…";
+  $("#saveBtn").disabled = true;
+  photoPending = (async () => {
+    try{
+      const b = await reducir(f);
+      setPhoto(b);
+      try{ await idbPut(DRAFT_KEY, b); }catch{}
+      saveDraft();
+      st.textContent = `Foto lista (${Math.round(b.size/1024)} KB).`;
+    }catch(err){
+      photoBlob = null;
+      st.classList.add("err");
+      st.textContent = /heic|heif/i.test(f.type+f.name)
+        ? "Formato HEIC no compatible. En la cámara del teléfono cambia el formato a JPG o elige otra foto."
+        : "No se pudo abrir la foto. Intenta con otra o elígela desde la galería.";
+    }finally{
+      $("#saveBtn").disabled = false;
+    }
+  })();
+}
+$("#photoCam").onchange = onPhoto; $("#photoGal").onchange = onPhoto;
+$("#photoDel").onclick = () => { clearPhoto(); saveDraft(); };
+
+function clearForm(){
+  newDraft(); $("#nota").value=""; $("#ts").value=nowLocal(); clearPhoto(); renderLcd();
+  try{ localStorage.removeItem(LSD); }catch{}
+}
+$("#clearBtn").onclick = () => { clearForm(); $("#saveStatus").textContent=""; };
+function siguiente(){
+  const eqs = equipos(); const i = eqs.indexOf(selEq);
+  if (i < eqs.length-1) return [selRama, eqs[i+1]];
+  const ri = RAMAS.indexOf(selRama);
+  return ri < RAMAS.length-1 ? [RAMAS[ri+1], eqs[0]] : [selRama, selEq];
+}
+$("#saveBtn").onclick = async () => {
+  const st = $("#saveStatus"); st.classList.remove("err"); st.textContent = "";
+  if (photoPending){ st.textContent = "Esperando a que termine la foto…"; await photoPending; }
+  if (num(draft.load.kw)===null || num(draft.load.kva)===null){ st.classList.add("err"); st.textContent = "Faltan kVA y kW de carga: son necesarios para el cálculo del sistema."; return; }
+  $("#saveBtn").disabled = true;
+  const tsv = $("#ts").value; const ts = tsv ? new Date(tsv).toISOString() : new Date().toISOString();
+  const id = "l" + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+  const sc = isScct(selEq);
+  const r = {id, rama:selRama, equipo:selEq, ups: sc ? null : +selEq.replace(/\D/g,""), ts,
+    in: sc ? {} : {...draft.in}, byp: sc ? {...draft.byp} : {}, out:{...draft.out}, load:{...draft.load},
+    bat: sc ? {} : {...draft.bat}, sys: sc ? {...draft.sys} : {}, nota:$("#nota").value.trim(), foto:false};
+  let msgFoto = "";
+  if (photoBlob){
+    try{
+      await idbPut(id, photoBlob);
+      const check = await idbGet(id);
+      if (check && check.size > 0){ r.foto = true; msgFoto = " con foto"; }
+      else throw new Error("verificación");
+    }catch{ msgFoto = ". La foto NO se guardó: este navegador no permite guardar imágenes al abrir el archivo así"; }
+  }
+  readings.push(r); sortR();
+  if (!persist()){
+    readings = readings.filter(x=>x.id!==r.id); if (r.foto) idbDel(r.id);
+    st.classList.add("err"); st.textContent = "No se pudo guardar: el almacenamiento del navegador está lleno o bloqueado. Descarga un respaldo desde Ajustes.";
+    $("#saveBtn").disabled = false; return;
+  }
+  st.textContent = `Rama ${r.rama} ${r.equipo} guardado${msgFoto}.`;
+  if (msgFoto.startsWith(".")) st.classList.add("err");
+  const [nr, ne] = siguiente();
+  const fin = (nr===selRama && ne===selEq);
+  clearForm(); selRama = nr; selEq = ne; newDraft(); renderLcd(); renderAll();
+  if (fin) avisoRonda(st);
+  $("#saveBtn").disabled = false;
+  window.scrollTo({top:0, behavior:"smooth"});
+};
+
+/* ================= sistema ================= */
+function ultimos(rama){
+  const m = {};
+  for (const r of readings){ if (r.rama===rama && equipos().includes(r.equipo) && !m[r.equipo]) m[r.equipo]=r; }
+  return m;
+}
+function estadoRama(rama){
+  const L = ultimos(rama);
+  const ups = equipos().filter(e=>!isScct(e) && L[e]);
+  const sumKw = ups.reduce((s,e)=>s+(num(L[e].load?.kw)||0),0);
+  const sumKva = ups.reduce((s,e)=>s+(num(L[e].load?.kva)||0),0);
+  const sc = L["SCCT"];
+  const scKw = sc ? num(sc.load?.kw) : null, scKva = sc ? num(sc.load?.kva) : null;
+  const enl = sc && num(sc.sys?.enlinea)!==null ? num(sc.sys.enlinea) : P.modulos;
+  const kw = scKw ?? (ups.length ? sumKw : null), kva = scKva ?? (ups.length ? sumKva : null);
+  const fuente = scKw!==null ? "SCCT" : "suma de módulos";
+  const N = kw!==null ? Math.max(1, Math.ceil(kw/kwMod())) : null;
+  const warns = [];
+  const faltan = P.modulos - ups.length;
+  if (!sc) warns.push("Sin lectura del SCCT: la carga se toma de la suma de módulos.");
+  if (faltan>0) warns.push(`Faltan lecturas de ${faltan} UPS.`);
+  if (scKw!==null && ups.length===P.modulos && scKw>0 && Math.abs(sumKw-scKw)/scKw>0.10) warns.push(`La suma de módulos (${Math.round(sumKw)} kW) difiere más de 10 % del SCCT (${Math.round(scKw)} kW).`);
+  if (enl<P.modulos) warns.push(`Solo ${enl} de ${P.modulos} UPS en línea según el SCCT.`);
+  const fechas = Object.values(L).map(r=>+new Date(r.ts));
+  if (fechas.length>1 && (Math.max(...fechas)-Math.min(...fechas))>86400000) warns.push(`Las lecturas usadas tienen hasta ${Math.round((Math.max(...fechas)-Math.min(...fechas))/86400000)} día(s) de diferencia.`);
+  return {rama, L, ups, kw, kva, sumKw, fuente, enl, N, red: N!==null ? enl-N : null, warns, hay: Object.keys(L).length>0};
+}
+function renderSys(){
+  const E = RAMAS.map(estadoRama);
+  $("#ramas").innerHTML = E.map(e => {
+    const lf = k => (e.kw===null || e.enl-k<=0) ? "—" : pct(e.kw/(kwMod()*(e.enl-k)));
+    let u = "";
+    for (const eq of equipos()){
+      const r = e.L[eq];
+      if (!r){ u += `<div class="unit"><div class="n">${eq}</div><div class="muted">Sin lectura</div></div>`; continue; }
+      const c = calc(r);
+      u += `<div class="unit"><div class="row" style="justify-content:space-between"><span class="n">${eq}</span><span class="pill ${c.ok?"ok":"bad"}">${c.ok?"OK":"Revisar"}</span></div>
+        <div>${fx(r.load?.kw,0)} kW, ${pct(c.pctKw)}</div><div class="muted">${fdate(r.ts)}</div>${c.ok?"":`<div class="muted">${esc(c.flags.join(", "))}</div>`}</div>`;
+    }
+    return `<div class="rama"><h3>Rama ${e.rama}</h3>
+      <div class="row" style="justify-content:space-between;align-items:flex-end">
+        <div><div class="muted">Configuración</div><div class="big">${e.kw===null?"—":confTxt(e.red)}</div></div>
+        <div style="text-align:right"><div class="muted">Carga (${e.fuente})</div><div class="big">${e.kw===null?"—":Math.round(e.kw)+" kW"}</div></div>
+      </div>
+      ${e.warns.length?`<div class="note">${e.warns.map(esc).join("<br>")}</div>`:""}
+      <div class="kv" style="margin-top:8px">
+        <span>UPS en línea</span><span>${e.enl} de ${P.modulos}</span>
+        <span>Capacidad en línea</span><span>${fx(kwMod()*e.enl,0)} kW</span>
+        <span>Factor de potencia</span><span>${e.kw!==null&&e.kva?fx(e.kw/e.kva,2):"—"}</span>
+        <span>Módulos requeridos (N)</span><span>${e.N??"—"}</span>
+        <span>Carga por módulo, todos en línea</span><span>${lf(0)}</span>
+        <span>Si falla 1 UPS</span><span>${lf(1)}</span>
+        <span>Si fallan 2 UPS</span><span>${lf(2)}</span>
+      </div>
+      <div class="units">${u}</div></div>`;
+  }).join("");
+  // análisis cruzado
+  const [A,B] = E;
+  if (A.kw===null || B.kw===null){
+    $("#cruce").innerHTML = `<p class="muted" style="margin:0">Captura al menos una lectura de cada rama para ver qué pasa si se pierde una de ellas.</p>`; return;
+  }
+  const tot = A.kw + B.kw;
+  const esc2 = (queda, pierde) => {
+    const cap = kwMod()*queda.enl; const N = Math.max(1, Math.ceil(tot/kwMod())); const red = queda.enl - N;
+    const p = tot/cap; const ok = red>=0 && p<=P.limCarga;
+    return `<div class="rama"><div class="muted">Si se pierde la Rama ${pierde.rama}</div>
+      <div class="row" style="justify-content:space-between;align-items:flex-end">
+        <div><div class="muted">Rama ${queda.rama} quedaría en</div><div class="big">${confTxt(red)}</div></div>
+        <div style="text-align:right"><div class="muted">Carga por módulo</div><div class="big" style="color:${ok?"var(--ok)":"var(--bad)"}">${pct(p,0)}</div></div>
+      </div>
+      <div class="muted">${Math.round(tot)} kW sobre ${fx(cap,0)} kW en línea de la Rama ${queda.rama}.</div></div>`;
+  };
+  $("#cruce").innerHTML = `<p style="margin-top:0">Carga total del sistema: <b>${Math.round(tot)} kW</b> (A ${Math.round(A.kw)} + B ${Math.round(B.kw)}).</p>
+    <div class="cmp">${esc2(B,A)}${esc2(A,B)}</div>
+    <p class="muted">Supone que toda la carga es de doble alimentación y se transfiere completa a la otra rama. Las cargas de un solo cordón se pierden con su rama.</p>`;
+}
+
+/* ================= tendencias ================= */
+const METRICS = [
+  ["kw","Carga (kW)", r=>num(r.load?.kw), null, false, true],
+  ["pctKw","Carga (% de capacidad)", r=>calc(r).pctKw, ()=>P.limCarga, true, true],
+  ["unbIout","Desbalance de corriente de carga (%)", r=>calc(r).unbIout, ()=>P.limI, true, true],
+  ["unbIin","Desbalance de corriente de entrada (%)", r=>calc(r).unbIin, ()=>P.limI, true, false],
+  ["vout","Voltaje de salida promedio (V)", r=>calc(r).vout, null, false, true],
+  ["vCell","Batería, voltaje por celda (V)", r=>calc(r).vCell, null, false, false],
+  ["fp","Factor de potencia de la carga", r=>calc(r).fp, null, false, true]
+];
+$("#metric").innerHTML = METRICS.map(([k,l])=>`<option value="${k}">${l}</option>`).join("");
+$("#tenRama").innerHTML = RAMAS.map(r=>`<option value="${r}">Rama ${r}</option>`).join("");
+$("#metric").onchange = renderChart; $("#tenRama").onchange = renderChart;
+function renderChart(){
+  const m = METRICS.find(x=>x[0]===$("#metric").value); const isPct = !!m[4]; const rama = $("#tenRama").value;
+  const series = [];
+  equipos().forEach((eq, idx) => {
+    if (isScct(eq) && !m[5]) return;
+    const pts = readings.filter(r=>r.rama===rama && r.equipo===eq).map(r=>({t:+new Date(r.ts), v:m[2](r)})).filter(p=>p.v!==null && isFinite(p.v) && !isNaN(p.t)).sort((a,b)=>a.t-b.t);
+    if (pts.length) series.push({eq, idx, pts});
+  });
+  if (!series.length){ $("#chartBox").innerHTML = `<p class="muted">Sin lecturas de esta variable en la Rama ${rama}.</p>`; $("#legend").innerHTML=""; return; }
+  const all = series.flatMap(s=>s.pts); const lim = m[3] ? m[3]() : null;
+  let t0=Math.min(...all.map(p=>p.t)), t1=Math.max(...all.map(p=>p.t)); if (t0===t1){ t0-=43200000; t1+=43200000; }
+  let v0=Math.min(...all.map(p=>p.v)), v1=Math.max(...all.map(p=>p.v)); if (lim!==null){ v1=Math.max(v1,lim); v0=Math.min(v0,lim); }
+  const pad=(v1-v0)*0.12 || Math.abs(v1)*0.05 || 1; v0-=pad; v1+=pad; if (isPct) v0=Math.max(0,v0);
+  const W=700,H=320,L=56,R=14,T=14,B=40;
+  const X=t=>L+(t-t0)/(t1-t0)*(W-L-R), Y=v=>T+(1-(v-v0)/(v1-v0))*(H-T-B);
+  const fmt = v => isPct ? (v*100).toFixed(1)+"%" : (Math.abs(v)<10 ? v.toFixed(2) : v.toFixed(0));
+  let g = "";
+  for (let i=0;i<=4;i++){ const v=v0+(v1-v0)*i/4; g+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end" font-size="12" fill="var(--muted)">${fmt(v)}</text>`; }
+  for (let i=0;i<=3;i++){ const t=t0+(t1-t0)*i/3; g+=`<text x="${X(t)}" y="${H-14}" text-anchor="middle" font-size="12" fill="var(--muted)">${new Date(t).toLocaleDateString("es-MX",{day:"2-digit",month:"short"})}</text>`; }
+  if (lim!==null) g+=`<line x1="${L}" x2="${W-R}" y1="${Y(lim)}" y2="${Y(lim)}" stroke="var(--bad)" stroke-dasharray="6 5"/><text x="${W-R}" y="${Y(lim)-5}" text-anchor="end" font-size="12" fill="var(--bad)">Límite ${fmt(lim)}</text>`;
+  for (const s of series){
+    const c = COLORS[s.idx%COLORS.length]; const dash = isScct(s.eq) ? ` stroke-dasharray="8 4"` : "";
+    if (s.pts.length>1) g+=`<polyline fill="none" stroke="${c}" stroke-width="2.5"${dash} points="${s.pts.map(p=>X(p.t)+","+Y(p.v)).join(" ")}"/>`;
+    for (const p of s.pts) g+=`<circle cx="${X(p.t)}" cy="${Y(p.v)}" r="4" fill="${c}"><title>${s.eq}: ${fmt(p.v)} (${fdate(new Date(p.t).toISOString())})</title></circle>`;
+  }
+  $("#chartBox").innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(m[1])}, Rama ${rama}">${g}</svg>`;
+  $("#legend").innerHTML = series.map(s=>`<span><i style="background:${COLORS[s.idx%COLORS.length]}"></i>${s.eq}</span>`).join("");
+}
+
+/* ================= historial ================= */
+function renderHis(){
+  const sr = $("#hisRama"), se = $("#hisEq"); const cr = sr.value || "all", ce = se.value || "all";
+  sr.innerHTML = `<option value="all">Ambas ramas</option>` + RAMAS.map(r=>`<option value="${r}">Rama ${r}</option>`).join("");
+  se.innerHTML = `<option value="all">Todos los equipos</option>` + equipos().map(e=>`<option value="${e}">${e}</option>`).join("");
+  sr.value = [...sr.options].some(o=>o.value===cr) ? cr : "all"; se.value = [...se.options].some(o=>o.value===ce) ? ce : "all";
+  const rows = readings.filter(r => (sr.value==="all" || r.rama===sr.value) && (se.value==="all" || r.equipo===se.value));
+  if (!rows.length){ $("#hisTbl").innerHTML = `<tr><td class="muted">Sin lecturas guardadas.</td></tr>`; return; }
+  $("#hisTbl").innerHTML = `<thead><tr><th>Fecha</th><th>Rama</th><th>Equipo</th><th>kW</th><th>kVA</th><th>% carga</th><th>Estado</th><th>Foto</th><th></th></tr></thead><tbody>` +
+    rows.map(r => { const c = calc(r); return `<tr><td>${fdate(r.ts)}</td><td>${esc(r.rama)}</td><td>${esc(r.equipo)}</td><td>${fx(r.load?.kw,0)}</td><td>${fx(r.load?.kva,0)}</td><td>${pct(c.pctKw)}</td>
+      <td><span class="pill ${c.ok?"ok":"bad"}" title="${esc(c.flags.join(", "))}">${c.ok?"OK":"Revisar"}</span></td>
+      <td>${r.foto?`<button class="linkbtn" data-foto="${esc(r.id)}">Ver</button>`:""}</td>
+      <td><button class="btn danger" data-del="${esc(r.id)}">Borrar</button></td></tr>`; }).join("") + `</tbody>`;
+  $("#hisTbl").querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    if (!confirm("¿Borrar esta lectura? No se puede deshacer.")) return;
+    readings = readings.filter(x=>x.id!==b.dataset.del); persist(); await idbDel(b.dataset.del); renderAll();
+  });
+  $("#hisTbl").querySelectorAll("[data-foto]").forEach(b => b.onclick = async () => {
+    const blob = await idbGet(b.dataset.foto);
+    if (!blob){ alert("La foto no está en este navegador."); return; }
+    const img = $("#dlgImg"); if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+    img.dataset.url = URL.createObjectURL(blob); img.src = img.dataset.url; $("#dlg").showModal();
+  });
+}
+$("#dlgClose").onclick = () => $("#dlg").close();
+$("#hisRama").onchange = renderHis; $("#hisEq").onchange = renderHis;
+function download(name, data, type){
+  const url = URL.createObjectURL(new Blob([data], {type}));
+  const a = document.createElement("a"); a.href=url; a.download=name; document.body.append(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+const stamp = () => new Date().toISOString().slice(0,10);
+$("#csvBtn").onclick = () => {
+  const head = ["fecha","rama","equipo","in_vab","in_vbc","in_vca","in_ia","in_ib","in_ic","byp_vab","byp_vbc","byp_vca","out_vab","out_vbc","out_vca","hz","load_kva","load_kw","load_ia","load_ib","load_ic","bat_v","bat_a","ups_en_linea","fp","pct_carga","desb_i_carga","desb_i_entrada","v_celda","estado","observaciones","nota","foto"];
+  const q = v => { const s = v===null||v===undefined ? "" : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
+  const lines = [head.join(",")].concat([...readings].reverse().map(r => { const c=calc(r), i=r.in||{}, y=r.byp||{}, o=r.out||{}, l=r.load||{}, b=r.bat||{}, s=r.sys||{};
+    const d = new Date(r.ts); const f = new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,16).replace("T"," ");
+    return [f,r.rama,r.equipo,i.vab,i.vbc,i.vca,i.ia,i.ib,i.ic,y.vab,y.vbc,y.vca,o.vab,o.vbc,o.vca,o.hz,l.kva,l.kw,l.ia,l.ib,l.ic,b.v,b.a,s.enlinea,
+      c.fp?.toFixed(3),c.pctKw?.toFixed(4),c.unbIout?.toFixed(4),c.unbIin?.toFixed(4),c.vCell?.toFixed(3),c.ok?"OK":"REVISAR",c.flags.join("; "),r.nota,r.foto?"sí":""].map(q).join(","); }));
+  download(`lecturas_ups_${stamp()}.csv`, "\ufeff"+lines.join("\r\n"), "text/csv;charset=utf-8");
+};
+
+/* ================= ajustes y respaldo ================= */
+function renderCfg(){
+  $("#cfgForm").innerHTML = CFG_FIELDS.map(([k,l,s]) => `<label for="c-${k}">${l}</label><input class="plain" type="number" id="c-${k}" step="${s}" value="${P[k]}">`).join("");
+}
+$("#cfgSave").onclick = () => {
+  const c = {}; for (const [k] of CFG_FIELDS){ const v = num($("#c-"+k).value); c[k] = v===null ? DEFAULTS[k] : v; }
+  c.modulos = Math.max(1, Math.min(8, Math.round(c.modulos)));
+  P = {...DEFAULTS, ...P, ...c};
+  const st=$("#cfgStatus"); st.classList.remove("err");
+  if (persist()) st.textContent = "Parámetros guardados."; else { st.classList.add("err"); st.textContent="No se pudieron guardar."; }
+  renderCfg(); renderChips(); renderLcd(); renderAll();
+};
+$("#bakBtn").onclick = () => {
+  download(`respaldo_bitacora_ups_${stamp()}.json`, JSON.stringify({app:"bitacora-ups", version:2, exportado:new Date().toISOString(), cfg:P, lecturas:readings}, null, 1), "application/json");
+  $("#bakStatus").textContent = "Respaldo descargado. Guárdalo en Drive o en tu PC.";
+  marcarRespaldo();
+};
+$("#restore").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const st = $("#bakStatus"); st.classList.remove("err");
+  try{
+    const o = JSON.parse(await f.text());
+    if (o.app!=="bitacora-ups" || !Array.isArray(o.lecturas)) throw 0;
+    const ids = new Set(readings.map(r=>r.id)); let added = 0;
+    for (const raw of o.lecturas){
+      if (!raw || !raw.id || !raw.ts || !raw.load || ids.has(raw.id)) continue;
+      const r = migrate(raw); r.foto = !!(r.foto && await idbGet(r.id));
+      readings.push(r); added++;
+    }
+    if (o.cfg && confirm("¿Usar también los parámetros del respaldo?")) P = {...DEFAULTS, ...o.cfg};
+    sortR(); persist(); renderCfg(); renderAll();
+    st.textContent = `Respaldo restaurado: ${added} lectura(s) nuevas, ${o.lecturas.length-added} ya existían. Las lecturas sin rama se asignaron a la Rama A.`;
+  }catch{ st.classList.add("err"); st.textContent = "Ese archivo no es un respaldo válido de la bitácora."; }
+  e.target.value = "";
+};
+function parseCSV(t){
+  t = t.replace(/^\ufeff/, ""); const rows = []; let row = [], f = "", q = false;
+  for (let i=0;i<t.length;i++){
+    const c = t[i];
+    if (q){ if (c==='"'){ if (t[i+1]==='"'){ f+='"'; i++; } else q=false; } else f+=c; }
+    else if (c==='"') q = true;
+    else if (c===','){ row.push(f); f=""; }
+    else if (c==='\n' || c==='\r'){ if (c==='\r' && t[i+1]==='\n') i++; row.push(f); rows.push(row); row=[]; f=""; }
+    else f+=c;
+  }
+  if (f!=="" || row.length){ row.push(f); rows.push(row); }
+  return rows.filter(r => r.some(x => x.trim()!==""));
+}
+function fechaCSV(v){
+  if (!v) return null; v = v.trim();
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (m && !/Z|[+-]\d{2}:?\d{2}$/.test(v)) return new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5]).toISOString();
+  const d = new Date(v); return isNaN(d) ? null : d.toISOString();
+}
+$("#csvIn").onchange = async ev => {
+  const f = ev.target.files[0]; if (!f) return; const st = $("#bakStatus"); st.classList.remove("err");
+  try{
+    const rows = parseCSV(await f.text()); const H = rows.shift().map(h => h.trim().toLowerCase());
+    const col = n => H.indexOf(n);
+    if (col("fecha")<0 || (col("load_kw")<0)) throw new Error("formato");
+    const ids = new Set(readings.map(r=>r.id)); let add = 0, dup = 0, bad = 0;
+    for (const row of rows){
+      const g = n => { const i = col(n); return i<0 ? null : num(row[i]); };
+      const gs = n => { const i = col(n); return i<0 ? "" : (row[i]||"").trim(); };
+      const ts = fechaCSV(gs("fecha")); if (!ts || g("load_kw")===null){ bad++; continue; }
+      const rama = /^[AB]$/i.test(gs("rama")) ? gs("rama").toUpperCase() : "A";
+      const equipo = gs("equipo") || (g("ups") ? "UPS "+g("ups") : "UPS 1");
+      const id = "c" + (Date.parse(ts)).toString(36) + (rama+equipo).replace(/\W/g,"");
+      if (ids.has(id)){ dup++; continue; }
+      const sc = equipo==="SCCT";
+      readings.push({id, rama, equipo, ups: sc?null:(+equipo.replace(/\D/g,"")||1), ts,
+        in:{vab:g("in_vab"),vbc:g("in_vbc"),vca:g("in_vca"),ia:g("in_ia"),ib:g("in_ib"),ic:g("in_ic")},
+        byp:{vab:g("byp_vab"),vbc:g("byp_vbc"),vca:g("byp_vca")},
+        out:{vab:g("out_vab"),vbc:g("out_vbc"),vca:g("out_vca"),hz:g("hz")},
+        load:{kva:g("load_kva"),kw:g("load_kw"),ia:g("load_ia"),ib:g("load_ib"),ic:g("load_ic")},
+        bat:{v:g("bat_v"),a:g("bat_a")}, sys:{enlinea:g("ups_en_linea")}, nota:gs("nota"), foto:false});
+      ids.add(id); add++;
+    }
+    sortR(); if (!persist()) throw new Error("guardar"); renderAll();
+    st.textContent = `CSV importado: ${add} lectura(s) nuevas${dup?`, ${dup} ya existían`:""}${bad?`, ${bad} fila(s) sin fecha o sin kW`:""}. Las fotos no vienen en el CSV.`;
+  }catch{ st.classList.add("err"); st.textContent = "No pude leer ese CSV. Debe ser uno exportado desde esta bitácora."; }
+  ev.target.value = "";
+};
+async function renderUsage(){
+  let t = `${readings.length} lectura(s) guardadas, ${readings.filter(r=>r.foto).length} con foto.`;
+  try{ const e = await navigator.storage?.estimate?.(); if (e?.usage) t += ` Espacio usado: ${(e.usage/1048576).toFixed(1)} MB.`; }catch{}
+  $("#usage").textContent = t;
+}
+
+/* ================= informe ================= */
+const REP_CSS = `
+.rep{background:#fff;color:#16202a;font:13px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;border:1px solid #c9d2db;border-radius:8px;padding:18px}
+.rep h1{font:700 22px/1.15 "Roboto Condensed","Arial Narrow",sans-serif;margin:0}
+.rep h2{font:700 16px/1.2 system-ui,sans-serif;margin:18px 0 6px;padding-bottom:3px;border-bottom:2px solid #2438b5;color:#1f2d6b}
+.rep .hd{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:3px solid #16202a;padding-bottom:8px}
+.rep .hd .m{text-align:right;color:#4a5866;font-size:12px}
+.rep .est{display:inline-block;padding:3px 10px;border-radius:4px;font-weight:700;margin-top:6px}
+.rep .ok{background:#dcf1e3;color:#1b6b3d}.rep .bad{background:#fbe3d8;color:#a3330b}.rep .warn{background:#fff2c2;color:#6b5200}
+.rep .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.rep .kpi{border:1px solid #d7dee5;border-radius:6px;padding:8px}
+.rep .kpi .l{font-size:11px;color:#4a5866;text-transform:uppercase;letter-spacing:.3px}
+.rep .kpi .v{font:700 22px/1.1 "Roboto Condensed","Arial Narrow",sans-serif}
+.rep table{border-collapse:collapse;width:100%;font-size:12px;font-variant-numeric:tabular-nums}
+.rep th,.rep td{border-bottom:1px solid #e1e6eb;padding:5px 4px;text-align:left;white-space:nowrap}
+.rep th{background:#eef1f5;font-weight:600}
+.rep .tw{overflow-x:auto}
+.rep ul{margin:4px 0;padding-left:18px}
+.rep .fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.rep figure{margin:0;border:1px solid #d7dee5;border-radius:6px;padding:4px;break-inside:avoid}
+.rep figure img{width:100%;display:block;border-radius:4px}
+.rep figcaption{font-size:11px;color:#4a5866;margin-top:3px}
+.rep .firma{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:36px}
+.rep .firma div{border-top:1px solid #16202a;padding-top:4px;text-align:center;font-size:12px}
+.rep .pie{margin-top:14px;font-size:11px;color:#6a7784}
+.rep section,.rep .kpis,.rep table{break-inside:auto}
+.rep h2{break-after:avoid}
+`;
+(() => { const st = document.createElement("style"); st.textContent = REP_CSS; document.head.append(st); })();
+let repTexto = "", repHtmlDoc = "";
+const blobToDataURL = b => new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => res(null); fr.readAsDataURL(b); });
+function anterior(r){ return readings.find(x => x.rama===r.rama && x.equipo===r.equipo && x.ts < r.ts) || null; }
+
+async function generarInforme(){
+  const incFotos = $("#repFotos").checked, incNotas = $("#repNotas").checked;
+  const sitio = $("#repSitio").value.trim(), elab = $("#repElab").value.trim();
+  const E = RAMAS.map(estadoRama);
+  const ahora = new Date();
+  const usadas = E.flatMap(e => Object.values(e.L));
+  if (!usadas.length) return null;
+  const fechas = usadas.map(r => +new Date(r.ts));
+  const periodo = `${fdate(new Date(Math.min(...fechas)).toISOString())} a ${fdate(new Date(Math.max(...fechas)).toISOString())}`;
+
+  // hallazgos
+  const hall = [], faltan = [];
+  for (const e of E){
+    for (const eq of equipos()){
+      const r = e.L[eq];
+      if (!r){ faltan.push(`Rama ${e.rama} ${eq}`); continue; }
+      const c = calc(r);
+      c.det.forEach(d => hall.push({eq:`Rama ${e.rama} ${eq}`, d, f:fdate(r.ts)}));
+    }
+    if (e.red!==null && e.red<1) hall.push({eq:`Rama ${e.rama}`, d: e.red<0 ? "Sobrecarga: la carga supera la capacidad en línea" : "Sin redundancia (N)", f:""});
+    e.warns.filter(w => /difiere/.test(w)).forEach(w => hall.push({eq:`Rama ${e.rama}`, d:w, f:""}));
+  }
+  // análisis cruzado
+  let cruce = null;
+  const [A,B] = E;
+  if (A.kw!==null && B.kw!==null){
+    const tot = A.kw + B.kw;
+    const escen = q => { const cap=kwMod()*q.enl, N=Math.max(1,Math.ceil(tot/kwMod())), red=q.enl-N, p=tot/cap; return {rama:q.rama, red, p, ok: red>=0 && p<=P.limCarga}; };
+    cruce = {tot, pierdeA: escen(B), pierdeB: escen(A)};
+    [cruce.pierdeA, cruce.pierdeB].forEach((x,i) => { if (!x.ok) hall.push({eq:`Rama ${x.rama}`, d:`Si se pierde la Rama ${i===0?"A":"B"}, quedaría en ${confTxt(x.red)} al ${pct(x.p,0)} por módulo`, f:""}); });
+  }
+  const estadoGlobal = hall.length ? {t:`${hall.length} hallazgo(s) que requieren atención`, c:"bad"} : faltan.length ? {t:"Sin hallazgos, con lecturas incompletas", c:"warn"} : {t:"Sin hallazgos", c:"ok"};
+
+  // tablas por rama
+  const filas = e => equipos().map(eq => {
+    const r = e.L[eq]; if (!r) return `<tr><td>${eq}</td><td colspan="9" style="color:#6a7784">Sin lectura</td></tr>`;
+    const c = calc(r), prev = anterior(r);
+    const d = prev && num(prev.load?.kw)!==null && num(r.load?.kw)!==null ? r.load.kw - prev.load.kw : null;
+    return `<tr><td><b>${eq}</b></td><td>${fdate(r.ts)}</td><td>${fx(r.load?.kw,0)}</td><td>${d===null?"—":(d>0?"+":"")+fx(d,0)}</td><td>${fx(r.load?.kva,0)}</td><td>${pct(c.pctKw)}</td><td>${fx(c.fp,2)}</td><td>${fx(c.vout,0)}</td><td>${pct(c.unbIout)}</td><td>${c.sc ? (c.enlinea??"—")+" en línea" : fx(c.vCell,3)}</td><td><span class="est ${c.ok?"ok":"bad"}" style="margin:0;padding:1px 6px">${c.ok?"OK":"Revisar"}</span></td></tr>`;
+  }).join("");
+  const kpiRama = e => `<div class="kpi"><div class="l">Rama ${e.rama}</div><div class="v">${e.kw===null?"—":confTxt(e.red)}</div><div>${e.kw===null?"Sin datos":Math.round(e.kw)+" kW ("+e.fuente+")"}</div><div style="color:#4a5866">${e.enl} de ${P.modulos} UPS en línea${e.kw!==null?`, ${pct(e.kw/(kwMod()*e.enl))} de capacidad`:""}</div></div>`;
+
+  // notas
+  const notas = incNotas ? usadas.filter(r => r.nota).map(r => `<li><b>Rama ${r.rama} ${esc(r.equipo)}</b> (${fdate(r.ts)}): ${esc(r.nota)}</li>`).join("") : "";
+  // fotos
+  let fotos = "";
+  if (incFotos){
+    for (const e of E) for (const eq of equipos()){
+      const r = e.L[eq]; if (!r?.foto) continue;
+      const b = await idbGet(r.id); if (!b) continue;
+      const u = await blobToDataURL(b); if (!u) continue;
+      fotos += `<figure><img src="${u}" alt="Display Rama ${e.rama} ${eq}"><figcaption>Rama ${e.rama} ${eq}, ${fdate(r.ts)}</figcaption></figure>`;
+    }
+  }
+
+  const html = `<div class="rep">
+  <div class="hd"><div><h1>Informe de sistemas UPS</h1><div>${sitio?esc(sitio):"Rama A y Rama B"}</div>
+    <div class="est ${estadoGlobal.c}">${estadoGlobal.t}</div></div>
+    <div class="m">Generado: ${fdate(ahora.toISOString())}<br>Lecturas: ${periodo}${elab?`<br>Elaboró: ${esc(elab)}`:""}</div></div>
+  <h2>Resumen</h2>
+  <div class="kpis">${E.map(kpiRama).join("")}
+    ${cruce?`<div class="kpi"><div class="l">Carga total del sistema</div><div class="v">${Math.round(cruce.tot)} kW</div><div style="color:#4a5866">A ${Math.round(A.kw)} + B ${Math.round(B.kw)} kW</div></div>`:""}</div>
+  ${cruce?`<h2>Si se pierde una rama</h2><table><tr><th>Escenario</th><th>Rama que queda</th><th>Configuración</th><th>Carga por módulo</th></tr>
+    <tr><td>Se pierde la Rama A</td><td>B</td><td>${confTxt(cruce.pierdeA.red)}</td><td>${pct(cruce.pierdeA.p,0)}</td></tr>
+    <tr><td>Se pierde la Rama B</td><td>A</td><td>${confTxt(cruce.pierdeB.red)}</td><td>${pct(cruce.pierdeB.p,0)}</td></tr></table>
+    <div style="font-size:11px;color:#6a7784;margin-top:4px">Supone carga de doble alimentación que se transfiere completa a la otra rama.</div>`:""}
+  <h2>Hallazgos</h2>
+  ${hall.length?`<ul>${hall.map(h=>`<li><b>${esc(h.eq)}</b>: ${esc(h.d)}${h.f?` <span style="color:#6a7784">(${h.f})</span>`:""}</li>`).join("")}</ul>`:"<p>No se detectaron parámetros fuera de límite.</p>"}
+  ${faltan.length?`<p style="color:#6b5200"><b>Sin lectura:</b> ${faltan.map(esc).join(", ")}.</p>`:""}
+  ${E.map(e=>`<h2>Detalle Rama ${e.rama}</h2><div class="tw"><table><tr><th>Equipo</th><th>Lectura</th><th>kW</th><th>Δ kW</th><th>kVA</th><th>% carga</th><th>FP</th><th>V salida</th><th>Desb. I</th><th>V/celda</th><th>Estado</th></tr>${filas(e)}</table></div>`).join("")}
+  <div style="font-size:11px;color:#6a7784;margin-top:4px">Δ kW: cambio respecto a la lectura anterior del mismo equipo. % carga de UPS contra ${fx(kwMod(),0)} kW por módulo; del SCCT contra la capacidad de los UPS en línea.</div>
+  ${notas?`<h2>Notas de campo</h2><ul>${notas}</ul>`:""}
+  ${fotos?`<h2>Evidencia fotográfica</h2><div class="fotos">${fotos}</div>`:""}
+  <h2>Criterios</h2>
+  <div style="font-size:12px">Módulo ${P.kva} kVA, FP ${P.fp}. Límites: carga ${pct(P.limCarga,0)}, desbalance de voltaje ${pct(P.limV,1)}, desbalance de corriente ${pct(P.limI,0)}, desviación de voltaje ${pct(P.limDev,0)} sobre ${P.vnom} V, frecuencia 60 ± 0.5 Hz, kVA vs V×I ±10 %.</div>
+  <div class="firma"><div>Elaboró${elab?`<br>${esc(elab)}`:""}</div><div>Revisó</div></div>
+  <div class="pie">Generado con Bitácora de UPS. Valores capturados de los displays de los equipos; la inspección es pasiva y no incluye intervención en equipos.</div>
+  </div>`;
+
+  // resumen de texto
+  const L = [];
+  L.push(`*Informe UPS${sitio?" – "+sitio:""}*`);
+  L.push(`${fdate(ahora.toISOString())} | Lecturas: ${periodo}`);
+  L.push("");
+  E.forEach(e => L.push(`Rama ${e.rama}: ${e.kw===null?"sin datos":`${confTxt(e.red)} | ${Math.round(e.kw)} kW | ${pct(e.kw/(kwMod()*e.enl))} | ${e.enl}/${P.modulos} UPS en línea`}`));
+  if (cruce) L.push(`Si se pierde A: B en ${confTxt(cruce.pierdeA.red)} al ${pct(cruce.pierdeA.p,0)}. Si se pierde B: A en ${confTxt(cruce.pierdeB.red)} al ${pct(cruce.pierdeB.p,0)}.`);
+  L.push("");
+  L.push(hall.length ? `Hallazgos (${hall.length}):` : "Sin hallazgos.");
+  hall.forEach(h => L.push(`• ${h.eq}: ${h.d}`));
+  if (faltan.length) L.push(`Sin lectura: ${faltan.join(", ")}`);
+  if (elab) { L.push(""); L.push(`Elaboró: ${elab}`); }
+  repTexto = L.join("\n");
+  repHtmlDoc = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Informe UPS ${fdate(ahora.toISOString())}</title><style>body{margin:0;padding:12px;background:#eef1f4}${REP_CSS}@media print{body{background:#fff;padding:0}.rep{border:0;padding:0}@page{size:letter;margin:12mm}}</style></head><body>${html}</body></html>`;
+  return html;
+}
+$("#repGen").onclick = async () => {
+  const st = $("#repStatus"); st.classList.remove("err"); st.textContent = "Generando…";
+  $("#repGen").disabled = true;
+  try{
+    P.sitio = $("#repSitio").value.trim(); P.elaboro = $("#repElab").value.trim(); persist();
+    const h = await generarInforme();
+    if (!h){ st.classList.add("err"); st.textContent = "No hay lecturas guardadas para generar el informe."; $("#rep").innerHTML=""; $("#repAcc").classList.add("hidden"); return; }
+    $("#rep").innerHTML = h; $("#repAcc").classList.remove("hidden"); st.textContent = "Informe listo.";
+    $("#repShare").classList.toggle("hidden", !navigator.share);
+  }catch(e){ st.classList.add("err"); st.textContent = "No se pudo generar el informe."; }
+  finally{ $("#repGen").disabled = false; }
+};
+$("#repPrint").onclick = () => window.print();
+$("#repHtml").onclick = () => { const d=new Date(); download(`informe_ups_${stamp()}_${String(d.getHours()).padStart(2,"0")}${String(d.getMinutes()).padStart(2,"0")}.html`, repHtmlDoc, "text/html;charset=utf-8"); };
+$("#repShare").onclick = async () => { try{ await navigator.share({title:"Informe UPS", text:repTexto}); }catch{} };
+$("#repCopy").onclick = async () => {
+  const st = $("#repStatus"); st.classList.remove("err");
+  try{ await navigator.clipboard.writeText(repTexto); st.textContent = "Resumen copiado. Pégalo en WhatsApp o en un correo."; }
+  catch{
+    const t = document.createElement("textarea"); t.value = repTexto; document.body.append(t); t.select();
+    const ok = document.execCommand && document.execCommand("copy"); t.remove();
+    if (ok) st.textContent = "Resumen copiado."; else { st.classList.add("err"); st.textContent = "No se pudo copiar automáticamente."; }
+  }
+};
+
+
+/* ================= protección de datos ================= */
+const creado = r => { const n = parseInt(String(r.id||"").slice(1,9), 36); return isFinite(n) ? n : +new Date(r.ts); };
+function renderBakWarn(){
+  const L = (() => readings)(); const w = $("#bakWarn"); const lb = P.lastBackup ? +new Date(P.lastBackup) : 0;
+  const pend = L.filter(r => creado(r) > lb).length;
+  const dias = lb ? Math.floor((Date.now()-lb)/86400000) : null;
+  $("#lastBak").textContent = lb ? `Último respaldo: ${fdate(P.lastBackup)} (hace ${dias} día(s)). ${pend} lectura(s) nuevas desde entonces.` : "Aún no has descargado ningún respaldo.";
+  if (!L.length || (lb && dias < 7 && pend < 30)){ w.classList.add("hidden"); return; }
+  w.innerHTML = `${lb ? `Último respaldo hace ${dias} día(s)` : "Nunca has descargado un respaldo"}: ${pend} lectura(s) solo existen en este teléfono. <button class="linkbtn" id="bakNow">Respaldar ahora</button>`;
+  w.classList.remove("hidden"); $("#bakNow").onclick = () => $("#bakBtn").click();
+}
+function marcarRespaldo(){ P.lastBackup = new Date().toISOString(); persist(); renderBakWarn(); }
+function avisoRonda(st){
+  const b = document.createElement("button"); b.className = "btn"; b.style.marginTop = "8px"; b.textContent = "Ronda completa: descargar respaldo";
+  b.onclick = () => { $("#bakBtn").click(); b.remove(); };
+  st.append(document.createElement("br"), b);
+}
+function avisosEntorno(notes){
+  const pr = location.protocol;
+  if (pr === "file:" || pr === "content:") notes.push("Estás usando la app como archivo local. Los datos quedan ligados a esta dirección exacta: si la abres por otro camino (WhatsApp, Drive, otra carpeta) aparecerá vacía. Usa la versión publicada o respalda al terminar cada ronda.");
+  if ("serviceWorker" in navigator && (pr === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+
+function renderAll(){ renderBakWarn(); renderChips(); renderSys(); renderHis(); if ($("#ten").classList.contains("on")) renderChart(); }
+
+/* ================= arranque ================= */
+(async () => {
+  load();
+  const notes = [];
+  avisosEntorno(notes);
+  if (!lsOk || !persist()) notes.push("Este navegador no permite guardar datos al abrir el archivo así: las lecturas se perderán al cerrar.");
+  const db = await idbReady;
+  if (!db) notes.push("Este navegador no permite guardar fotos al abrir el archivo así. Las lecturas sí se guardan; para las fotos, publica la app en GitHub Pages o ábrela en otro navegador.");
+  else { try{ await idbPut("__prueba__", new Blob(["x"],{type:"text/plain"})); await idbDel("__prueba__"); }catch{ notes.push("El almacenamiento de fotos de este navegador falló la prueba de escritura. Las fotos podrían no guardarse."); } }
+  if (notes.length){ const n=$("#storeNote"); n.innerHTML = notes.map(esc).join("<br>"); n.classList.remove("hidden"); }
+  try{ navigator.storage?.persist?.(); }catch{}
+  renderCfg();
+  $("#repSitio").value = P.sitio || ""; $("#repElab").value = P.elaboro || "";
+  newDraft();
+  if (!(await loadDraft())) $("#ts").value = nowLocal();
+  renderChips(); renderLcd(); renderAll();
+})();
+})();
+
+</script>
+</body>
+</html>

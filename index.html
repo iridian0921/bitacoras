@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#23484b">
+<title>Bitácoras de inspección</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+:root{
+  --fb:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --fc:"Roboto Condensed","Arial Narrow",sans-serif-condensed,system-ui,sans-serif;
+  --bg:#e9edf1; --surface:#f8fafb; --ink:#18212b; --muted:#5a6878; --line:#c9d2db;
+  --steel:#3c4c5e; --lcd:#2438b5; --lcd2:#3b2fa8; --lcdtext:#f3e9b5; --lcdline:#c9bf8a;
+  --ok:#237a47; --okbg:#dcf1e3; --bad:#b4390f; --badbg:#fbe3d8; --warnbg:#fff2c2;
+  --accent:#2438b5;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#10161d; --surface:#18212b; --ink:#e6ebf0; --muted:#9aa8b6; --line:#2e3b48;
+    --steel:#b8c5d2; --ok:#5cc98a; --okbg:#173325; --bad:#ff8a5c; --badbg:#3a1f14; --warnbg:#3a3214;
+    --accent:#8c9bff;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10161d; --surface:#18212b; --ink:#e6ebf0; --muted:#9aa8b6; --line:#2e3b48;
+  --steel:#b8c5d2; --ok:#5cc98a; --okbg:#173325; --bad:#ff8a5c; --badbg:#3a1f14; --warnbg:#3a3214;
+  --accent:#8c9bff;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 var(--fb);font-variant-numeric:tabular-nums}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px 48px}
+header{padding:20px 0 8px}
+h1{font:700 30px/1.05 var(--fc);margin:0;letter-spacing:.2px}
+.sub{color:var(--muted);font-size:14px;margin-top:4px}
+nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:10px 0;display:flex;gap:6px;overflow-x:auto}
+nav button{flex:1 0 auto;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 15px var(--fb);padding:9px 14px;border-radius:8px;cursor:pointer}
+nav button[aria-selected="true"]{background:var(--steel);color:var(--bg);border-color:var(--steel)}
+section{display:none}
+section.on{display:block}
+h2{font:600 22px/1.2 var(--fc);margin:18px 0 10px}
+h3{font:600 17px/1.2 var(--fb);margin:16px 0 8px}
+p{margin:6px 0}
+.muted{color:var(--muted);font-size:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;margin:10px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{border:0;border-radius:8px;padding:11px 16px;font:600 16px var(--fb);cursor:pointer;background:var(--accent);color:#fff}
+.btn.sec{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.danger{background:transparent;color:var(--bad);border:1px solid var(--bad);padding:6px 10px;font-size:14px}
+.btn:disabled{opacity:.5;cursor:default}
+button:focus-visible,input:focus-visible,select:focus-visible,label.file:focus-within{outline:3px solid var(--accent);outline-offset:2px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:8px 16px;font:600 15px var(--fb);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+label.file{display:flex;align-items:center;justify-content:center;gap:10px;border:2px dashed var(--line);border-radius:10px;padding:22px;cursor:pointer;color:var(--muted);font-weight:600;text-align:center}
+label.file input{position:absolute;opacity:0;width:1px;height:1px}
+#preview{max-width:100%;border-radius:8px;display:none;margin-top:10px;max-height:320px;object-fit:contain;background:#000}
+.status{font-size:14px;color:var(--muted);margin-top:8px;min-height:1.2em}
+.status.err{color:var(--bad)}
+
+/* LCD review panel: echoes the Liebert display */
+.lcd{background:linear-gradient(135deg,var(--lcd),var(--lcd2));color:var(--lcdtext);border-radius:10px;padding:14px;margin:12px 0;border:6px solid #4b5563}
+.lcd h4{margin:0 0 6px;font:600 15px var(--fb);border-bottom:1px solid var(--lcdline);padding-bottom:4px}
+.lcd .grp{border:1px solid var(--lcdline);border-radius:4px;padding:8px;margin-bottom:10px}
+.lcd .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.lcd .g2{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.lcd label{display:block;font-size:12px;opacity:.85}
+.lcd input{width:100%;background:rgba(0,0,0,.18);border:1px solid rgba(243,233,181,.35);color:var(--lcdtext);font:600 17px var(--fb);padding:5px 6px;border-radius:4px;font-variant-numeric:tabular-nums}
+.lcd input.miss{background:rgba(255,180,60,.35);border-color:#ffcf6b}
+.lcd .meta{font-size:13px;opacity:.9;margin-bottom:8px}
+.checks{display:grid;gap:6px}
+.chk{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:6px;font-size:15px;background:var(--surface);border:1px solid var(--line)}
+.chk b{font-weight:600}
+.chk.ok{background:var(--okbg);border-color:transparent}
+.chk.bad{background:var(--badbg);border-color:transparent}
+.chk.na{opacity:.7}
+input[type=datetime-local],input[type=number].plain,select,textarea{font:500 16px var(--fb);padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);max-width:100%}
+textarea{width:100%;min-height:60px}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:600;color:var(--muted)}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-weight:600;font-size:13px}
+.pill.ok{background:var(--okbg);color:var(--ok)}
+.pill.bad{background:var(--badbg);color:var(--bad)}
+.big{font:700 44px/1 var(--fc)}
+.kv{display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:15px}
+.kv span:nth-child(even){text-align:right;font-weight:600}
+.units{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
+.unit{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px}
+.unit .n{font:600 18px var(--fc)}
+.chart{width:100%;height:auto;display:block}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:14px;margin-top:6px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.cfg{display:grid;grid-template-columns:1fr 110px;gap:8px;align-items:center;font-size:15px}
+.cfg input{width:100%}
+.note{background:var(--warnbg);padding:8px 10px;border-radius:6px;font-size:14px;margin:8px 0}
+.hidden{display:none !important}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+.thumb{max-width:100%;max-height:260px;border-radius:8px;display:block;margin-top:10px;background:#000;object-fit:contain}
+.linkbtn{background:none;border:0;color:var(--accent);font:600 14px var(--fb);cursor:pointer;padding:4px 6px;text-decoration:underline}
+dialog{border:0;border-radius:10px;padding:12px;max-width:min(92vw,700px);background:var(--surface);color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog img{max-width:100%;max-height:75vh;display:block}
+.filebtn{position:relative;overflow:hidden;display:inline-flex;align-items:center}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}
+.ramas{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.rama{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px}
+.rama h3{margin:0 0 6px;font:700 24px/1.1 var(--fc)}
+.rama .big{font-size:38px}
+.rama .units{margin-top:10px}
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+#rep:empty{display:none}
+#rep{margin-top:12px}
+@media print{
+  @page{size:letter;margin:12mm}
+  body{background:#fff !important}
+  header,nav,.noprint,#storeNote,section:not(#inf){display:none !important}
+  section#inf{display:block !important}
+  .wrap{max-width:none;padding:0}
+  :root{padding:0}
+}
+
+.homelink{display:inline-block;margin-bottom:6px;color:var(--accent);font-weight:600;text-decoration:none;font-size:15px}
+
+.apps{display:grid;gap:12px;margin-top:14px}
+.app{display:flex;gap:14px;align-items:center;text-decoration:none;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.app .ic{font-size:34px;width:56px;height:56px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--bg);flex:0 0 auto}
+.app h3{margin:0;font:700 22px/1.1 var(--fc)}
+.app .muted{margin-top:3px}
+.stt{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;font-size:15px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header><h1>Bitácoras de inspección</h1><div class="sub">Funcionan sin señal y guardan todo en este teléfono.</div></header>
+<div class="apps">
+  <a class="app" href="ups.html"><span class="ic">🔋</span><div><h3>UPS</h3><div class="muted" id="sUps">—</div></div></a>
+  <a class="app" href="interruptores.html"><span class="ic">⚡</span><div><h3>Interruptores ETU45B</h3><div class="muted" id="sEtu">—</div></div></a>
+</div>
+<h2>Estado del teléfono</h2>
+<div class="card"><div class="stt" id="stt"></div></div>
+<p class="muted">Instálala con Chrome: menú ⋮ → "Agregar a pantalla principal" o "Instalar app". Descarga un respaldo en cada bitácora al terminar la ronda.</p>
+</div>
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const fd = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString("es-MX",{day:"2-digit",month:"short",year:"2-digit"}); };
+function info(key, arr){
+  try{
+    const o = JSON.parse(localStorage.getItem(key) || "{}"); const L = o[arr] || []; const lb = o.cfg && o.cfg.lastBackup;
+    if (!L.length) return "Sin lecturas todavía";
+    const ult = L.map(r=>r.ts).sort().pop();
+    const dias = lb ? Math.floor((Date.now() - new Date(lb)) / 86400000) : null;
+    return `${L.length} lecturas · última ${fd(ult)} · ` + (lb ? `respaldo hace ${dias} día(s)` : "sin respaldo") + (lb && dias < 7 ? "" : " ⚠");
+  }catch{ return "No se pudo leer"; }
+}
+$("#sUps").textContent = info("bitacora-ups-standalone-v1", "lecturas");
+$("#sEtu").textContent = info("bitacora-interruptores-v1", "lecturas");
+const rows = [];
+const add = (ok, t) => rows.push(`<span class="dot" style="background:${ok===null?"var(--muted)":ok?"var(--ok)":"var(--bad)"}"></span><span>${t}</span>`);
+const render = () => { $("#stt").innerHTML = rows.join(""); };
+(async () => {
+  const pr = location.protocol;
+  const fija = pr === "https:" || location.hostname === "localhost";
+  add(fija, fija ? "Dirección fija: los datos no se pierden al cerrar Chrome." : "Abierta como archivo: usa la versión publicada.");
+  if ("serviceWorker" in navigator && (pr === "https:" || location.hostname === "localhost")){
+    try{
+      await navigator.serviceWorker.register("sw.js"); await navigator.serviceWorker.ready;
+      add(true, "Lista para usarse sin señal.");
+    }catch{ add(false, "No se pudo preparar el modo sin señal."); }
+  } else add(false, "Modo sin señal no disponible en esta dirección.");
+  try{
+    const p = await navigator.storage?.persist?.();
+    add(p ? true : null, p ? "Almacenamiento protegido: el sistema no lo borrará por falta de espacio." : "Almacenamiento no protegido todavía: instala la app en la pantalla principal para mejorarlo.");
+  }catch{}
+  const inst = matchMedia("(display-mode: standalone)").matches;
+  add(inst ? true : null, inst ? "Abierta como app instalada." : "Abierta en el navegador. Instálala desde el menú ⋮ de Chrome.");
+  render();
+})();
+})();
+</script>
+</body>
+</html>
