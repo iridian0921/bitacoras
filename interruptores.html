@@ -61,6 +61,7 @@
 </nav>
 <div id="storeNote" class="note hidden"></div>
 <div id="bakWarn" class="note hidden"></div>
+<button type="button" id="syncBar" class="sync-bar noprint hidden"></button>
 
 <section id="cap" class="on">
   <h2>Nueva lectura</h2>
@@ -192,6 +193,8 @@
     <div class="row" style="margin-top:12px"><button class="btn" id="cfgSave">Guardar límites</button></div>
     <div class="status" id="cfgStatus"></div>
   </div>
+  <h2>Compartir con el equipo</h2>
+  <div class="card" id="syncCard"></div>
   <h2>Respaldo</h2>
   <div class="card">
     <p class="muted" style="margin-top:0">Los datos viven solo en este navegador. Descarga un respaldo cada semana. Las fotos no se incluyen.</p>
@@ -430,13 +433,14 @@ $("#saveBtn").onclick = async () => {
   $("#saveBtn").disabled = true;
   const tsv = $("#ts").value; const ts = tsv ? new Date(tsv).toISOString() : new Date().toISOString();
   const id = Comun.nuevoId("r");
-  const r = {id, eq:selEq, ts, cur:{...draft.cur}, set:{...draft.set}, ind:{...draft.ind}, nota:$("#nota").value.trim(), foto:false};
+  const r = {id, eq:selEq, ts, cur:{...draft.cur}, set:{...draft.set}, ind:{...draft.ind}, nota:$("#nota").value.trim(), foto:false, autor:sync.autor()};
   const gf = await foto.guardar(id); r.foto = gf.ok;
   lecturas.push(r); sortL();
   if (!persist()){ lecturas = lecturas.filter(q=>q.id!==id); if (r.foto) fotos.del(id); estado(st, "No se pudo guardar: almacenamiento lleno o bloqueado. Descarga un respaldo.", true); $("#saveBtn").disabled=false; return; }
   let msg = `${eqName(e)} guardado${gf.msg}.`;
   if (!e.base) msg += " Este interruptor no tiene línea base: puedes marcar esta lectura como línea base en Equipos.";
   estado(st, msg, gf.msg.startsWith("."));
+  sync.sincronizar();
   const list = sortedEq(); const i = list.findIndex(q=>q.id===selEq);
   clearForm(); if (i>=0 && i<list.length-1) selEq = list[i+1].id;
   renderAll(); renderTU();
@@ -473,14 +477,15 @@ const accionesEquipo = {
     if (falt.length){ alert(`La última lectura no tiene todos los ajustes (faltan: ${falt.map(k=>SET_NAMES[k]).join(", ")}). Captura una lectura completa primero.`); return; }
     const ref = prompt(`Línea base de ${e.tag} con la lectura del ${fdate(ult.ts)}:\n${ajustesTxt(ult.set,e)}\n\nReferencia (opcional), por ejemplo "Estudio de coordinación rev. 2":`, e.base?.ref||"");
     if (ref===null) return;
-    e.base = {set:{...ult.set}, fecha:ult.ts, ref:ref.trim(), lectura:ult.id}; persist(); renderAll();
+    e.base = {set:{...ult.set}, fecha:ult.ts, ref:ref.trim(), lectura:ult.id}; e.upd = Date.now(); persist(); renderAll(); sync.sincronizar();
   },
-  nobase(e){ if (!confirm("¿Quitar la línea base de este interruptor?")) return; e.base = null; persist(); renderAll(); },
+  nobase(e){ if (!confirm("¿Quitar la línea base de este interruptor?")) return; e.base = null; e.upd = Date.now(); persist(); renderAll(); sync.sincronizar(); },
   del(e){
     const n = lecturas.filter(r=>r.eq===e.id).length;
     if (!confirm(`¿Borrar ${e.tag}${n?` y sus ${n} lectura(s)`:""}? No se puede deshacer.`)) return;
-    lecturas.filter(r=>r.eq===e.id && r.foto).forEach(r=>fotos.del(r.id));
-    lecturas = lecturas.filter(r=>r.eq!==e.id); equipos = equipos.filter(q=>q.id!==e.id); persist(); renderAll();
+    lecturas.filter(r=>r.eq===e.id).forEach(r => { sync.borrada(r); if (r.foto) fotos.del(r.id); });
+    sync.equipoBorrado(e);
+    lecturas = lecturas.filter(r=>r.eq!==e.id); equipos = equipos.filter(q=>q.id!==e.id); persist(); renderAll(); sync.sincronizar();
   }
 };
 $("#eqList").addEventListener("click", ev => {
@@ -495,9 +500,9 @@ $("#eqSave").onclick = () => {
   if (!tag || !In){ estado(st, "El identificador y la In son obligatorios.", true); return; }
   if (equipos.some(e=>e.tag.toLowerCase()===tag.toLowerCase() && e.id!==editId)){ estado(st, "Ya existe un interruptor con ese identificador.", true); return; }
   const data = {tag, tablero:$("#fTab").value.trim(), rama:$("#fRama").value, in:In, desc:$("#fDesc").value.trim(), gf:$("#fGf").value==="1"};
-  if (editId){ Object.assign(eqById(editId), data); st.textContent = "Interruptor actualizado."; }
-  else { const e = {id:"e"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), ...data, base:null}; equipos.push(e); if (!selEq) selEq = e.id; st.textContent = `${tag} agregado.`; }
-  persist(); resetEqForm(); renderAll(); renderTU();
+  if (editId){ Object.assign(eqById(editId), data, {upd:Date.now()}); st.textContent = "Interruptor actualizado."; }
+  else { const e = {id:"e"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), ...data, base:null, upd:Date.now()}; equipos.push(e); if (!selEq) selEq = e.id; st.textContent = `${tag} agregado.`; }
+  persist(); resetEqForm(); renderAll(); renderTU(); sync.sincronizar();
 };
 
 /* ================= resumen ================= */
@@ -559,7 +564,8 @@ function renderHis(){
 $("#hisTbl").addEventListener("click", async ev => {
   const b = ev.target.closest("[data-del]"); if (!b) return;
   if (!confirm("¿Borrar esta lectura? No se puede deshacer.")) return;
-  lecturas = lecturas.filter(q=>q.id!==b.dataset.del); persist(); await fotos.del(b.dataset.del); renderAll();
+  sync.borrada(lecturas.find(q=>q.id===b.dataset.del));
+  lecturas = lecturas.filter(q=>q.id!==b.dataset.del); persist(); await fotos.del(b.dataset.del); renderAll(); sync.sincronizar();
 });
 Comun.visorFotos(fotos, $("#hisTbl"));
 $("#hisEq").onchange = renderHis;
@@ -673,18 +679,26 @@ $("#cfgSave").onclick = () => {
   renderCfg(); renderAll(); renderChecks();
 };
 const bak = Comun.respaldo({lecturas:()=>lecturas, cfg:()=>P, persist});
+const sync = Comun.compartir({bitacora:"interruptores", fotos,
+  lecturas:()=>lecturas, setLecturas:a=>{ lecturas = a; },
+  equipos:()=>equipos, setEquipos:a=>{ equipos = a; },
+  fila: r => { const x = calc(r), e = eqById(r.eq), c = r.cur||{};
+    return {Fecha:r.ts, Interruptor:e?.tag||"", Tablero:e?.tablero||"", "I1 (A)":num(c.i1), "I2 (A)":num(c.i2), "I3 (A)":num(c.i3), "IN (A)":num(c.in), Estado:x.ok?"OK":"Revisar: "+x.flags.join(", "), Nota:r.nota||""}; },
+  filaEquipo: e => ({Identificador:e.tag, Tablero:e.tablero||"", Rama:e.rama==="-"?"Sin rama":e.rama, "In (A)":e.in, "Descripción":e.desc||"",
+    "Línea base":e.base?`${ajustesTxt(e.base.set,e)} (${fdate(e.base.fecha)}${e.base.ref?", "+e.base.ref:""})`:""}),
+  alCambiar(){ const antes = selEq; sortL(); persist(); renderAll(); if (selEq !== antes) renderTU(); else renderChecks(); }});
 $("#bakBtn").onclick = () => { download(`respaldo_interruptores_${stamp()}.json`, JSON.stringify({app:"bitacora-interruptores", version:1, exportado:new Date().toISOString(), cfg:P, equipos, lecturas}, null, 1), "application/json"); $("#bakStatus").textContent = "Respaldo descargado. Guárdalo en Drive o en tu PC."; bak.marcar(); };
 $("#restore").onchange = async ev => {
   const f = ev.target.files[0]; if (!f) return; const st = $("#bakStatus"); estado(st, "");
   try{
     const o = JSON.parse(await f.text()); if (o.app!=="bitacora-interruptores" || !Array.isArray(o.lecturas) || !Array.isArray(o.equipos)) throw 0;
     let ne=0, nl=0; const ide = new Set(equipos.map(e=>e.id)), idl = new Set(lecturas.map(r=>r.id));
-    for (const e of o.equipos){ if (e && e.id && e.tag && !ide.has(e.id)){ equipos.push(e); ne++; } }
+    for (const e of o.equipos){ if (e && e.id && e.tag && !ide.has(e.id)){ delete e.srvUpd; equipos.push(e); ne++; } }
     const nuevas = o.lecturas.filter(r => r && r.id && r.eq && r.ts && !idl.has(r.id));
     const conFoto = await Promise.all(nuevas.map(r => r.foto ? fotos.has(r.id) : false));
-    nuevas.forEach((r, i) => { lecturas.push({...r, foto: conFoto[i]}); nl++; });
+    nuevas.forEach((r, i) => { const x = {...r, foto: conFoto[i]}; delete x.srv; delete x.fotoSrv; lecturas.push(x); nl++; });
     if (o.cfg && confirm("¿Usar también los límites del respaldo?")) P = {...DEFAULTS, ...P, ...o.cfg, lastBackup:P.lastBackup};
-    sortL(); persist(); renderCfg(); renderAll(); renderTU();
+    sortL(); persist(); renderCfg(); renderAll(); renderTU(); sync.sincronizar();
     st.textContent = `Respaldo restaurado: ${ne} interruptor(es) y ${nl} lectura(s) nuevas.`;
   }catch{ estado(st, "Ese archivo no es un respaldo válido de la bitácora de interruptores.", true); }
   ev.target.value = "";
@@ -705,6 +719,7 @@ function renderAll(){ bak.aviso(); renderEqSel(); tabs.renderVisible(); }
   if (!(await loadDraft())) $("#ts").value = nowLocal();
   fillCur(); renderAll(); renderTU();
   if (!equipos.length) tabs.ir("equ");
+  sync.sincronizar();
 })();
 })();
 </script>
