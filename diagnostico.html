@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagnóstico de compatibilidad</title>
+<style>
+body{margin:0;background:#e9edf1;color:#18212b;font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding:16px}
+h1{font-size:26px;margin:4px 0}
+.sub{color:#5a6878;font-size:14px}
+.ver{border-radius:10px;padding:14px;margin:14px 0;font-weight:700;font-size:18px}
+.ok{background:#dcf1e3;color:#1b6b3d}.warn{background:#fff2c2;color:#6b5200}.bad{background:#fbe3d8;color:#a3330b}
+.card{background:#f8fafb;border:1px solid #c9d2db;border-radius:10px;padding:6px 12px}
+.it{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #e1e6eb}
+.it:last-child{border-bottom:0}
+.ic{width:24px;flex:0 0 24px;text-align:center;font-weight:700}
+.it small{display:block;color:#5a6878}
+button{border:0;border-radius:8px;padding:11px 16px;font:600 16px system-ui,sans-serif;background:#2438b5;color:#fff;margin:12px 8px 0 0}
+button.sec{background:#fff;color:#18212b;border:1px solid #c9d2db}
+textarea{width:100%;min-height:150px;margin-top:10px;font:12px monospace;box-sizing:border-box}
+a{color:#2438b5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="index.html">← Bitácoras</a>
+  <h1>Diagnóstico de compatibilidad</h1>
+  <div class="sub">Abre esta página en el navegador que quieres probar. No guarda ni borra tus lecturas.</div>
+  <div id="ver" class="ver warn">Ejecutando pruebas…</div>
+  <div class="card" id="list"></div>
+  <button id="copy">Copiar reporte</button><button class="sec" id="again">Repetir</button>
+  <div id="msg" class="sub"></div>
+  <textarea id="rep" readonly></textarea>
+</div>
+<script>
+/* Escrito en JavaScript antiguo a propósito, para que corra incluso en navegadores viejos. */
+(function(){
+  var R = [], list = document.getElementById("list");
+  function add(estado, titulo, detalle, critico){ R.push({e:estado, t:titulo, d:detalle || "", c:!!critico}); }
+  function render(){
+    var h = "", i, bad = 0, warn = 0;
+    for (i = 0; i < R.length; i++){
+      var r = R[i], ic = r.e === "ok" ? "✓" : r.e === "bad" ? "✗" : "!";
+      var col = r.e === "ok" ? "#1b6b3d" : r.e === "bad" ? "#a3330b" : "#6b5200";
+      if (r.e === "bad" && r.c) bad++; else if (r.e !== "ok") warn++;
+      h += '<div class="it"><span class="ic" style="color:' + col + '">' + ic + '</span><span>' + r.t + (r.d ? "<small>" + r.d + "</small>" : "") + "</span></div>";
+    }
+    list.innerHTML = h;
+    var v = document.getElementById("ver");
+    if (bad){ v.className = "ver bad"; v.innerHTML = "No compatible: " + bad + " falla(s) crítica(s). Ábrela en Chrome actualizado."; }
+    else if (warn){ v.className = "ver warn"; v.innerHTML = "Funciona con limitaciones (" + warn + "). Revisa los puntos marcados con !"; }
+    else { v.className = "ver ok"; v.innerHTML = "Compatible: las bitácoras deben funcionar completas aquí."; }
+    var t = "DIAGNÓSTICO BITÁCORAS\n" + new Date().toString() + "\n" + navigator.userAgent + "\n" + location.href + "\n\n";
+    for (i = 0; i < R.length; i++) t += (R[i].e === "ok" ? "[OK] " : R[i].e === "bad" ? "[FALLA] " : "[AVISO] ") + R[i].t + (R[i].d ? " — " + R[i].d.replace(/<[^>]+>/g, "") : "") + "\n";
+    document.getElementById("rep").value = t;
+  }
+
+  function run(){
+    R = []; var ua = navigator.userAgent;
+    // Navegador
+    var nav = "Desconocido", m;
+    if ((m = ua.match(/SamsungBrowser\/([\d.]+)/))) nav = "Samsung Internet " + m[1];
+    else if ((m = ua.match(/EdgA?\/([\d.]+)/))) nav = "Edge " + m[1];
+    else if ((m = ua.match(/OPR\/([\d.]+)/))) nav = "Opera " + m[1];
+    else if ((m = ua.match(/(?:Firefox|FxiOS)\/([\d.]+)/))) nav = "Firefox " + m[1];
+    else if ((m = ua.match(/CriOS\/([\d.]+)/))) nav = "Chrome iOS " + m[1];
+    else if ((m = ua.match(/Chrome\/([\d.]+)/))) nav = "Chrome " + m[1];
+    else if ((m = ua.match(/Version\/([\d.]+).*Safari/))) nav = "Safari " + m[1];
+    var so = (m = ua.match(/Android ([\d.]+)/)) ? "Android " + m[1] : (m = ua.match(/OS (\d+[_\d]*) like Mac/)) ? "iOS " + m[1].replace(/_/g, ".") : /Windows/.test(ua) ? "Windows" : /Mac OS X/.test(ua) ? "macOS" : "Otro";
+    add("ok", "Navegador: " + nav, "Sistema: " + so);
+
+    // Navegador dentro de otra app
+    var inapp = /FBAN|FBAV|Instagram|WhatsApp|Line\/|GSA\/|Teams|; wv\)|MicroMessenger|Snapchat|TikTok/i.test(ua);
+    add(inapp ? "bad" : "ok", inapp ? "Abierta dentro de otra app (WhatsApp, Gmail, Teams…)" : "Navegador independiente",
+        inapp ? "Toca ⋮ y elige «Abrir en Chrome». Estos navegadores internos bloquean almacenamiento y descargas." : "", true);
+
+    // JavaScript moderno
+    var js = true; try { new Function("var a={b:{c:1}}; return (a?.b?.c ?? 0) + [1].map(x=>x)[0];")(); } catch(e){ js = false; }
+    add(js ? "ok" : "bad", js ? "JavaScript moderno" : "JavaScript moderno no soportado",
+        js ? "" : "El navegador es demasiado viejo: por eso la app se queda en blanco. Actualiza Chrome o el sistema.", true);
+    var asy = true; try { new Function("return (async()=>{ for await (const x of []) {} })"); } catch(e){ asy = false; }
+    if (!asy) add("bad", "Funciones asíncronas no soportadas", "Actualiza el navegador.", true);
+
+    // Dirección
+    var pr = location.protocol;
+    add(pr === "https:" ? "ok" : "warn", pr === "https:" ? "Dirección fija (https)" : "Abierta como " + pr,
+        pr === "https:" ? "" : "Usa https://iridian0921.github.io/bitacoras/ para que los datos no se pierdan.");
+
+    // localStorage
+    var ls = false; try { localStorage.setItem("__diag__", "1"); ls = localStorage.getItem("__diag__") === "1"; localStorage.removeItem("__diag__"); } catch(e){}
+    add(ls ? "ok" : "bad", ls ? "Puede guardar lecturas" : "No puede guardar lecturas",
+        ls ? "" : "Modo incógnito, navegador de privacidad o almacenamiento bloqueado.", true);
+
+    // Elementos usados por la interfaz
+    var dlg = typeof HTMLDialogElement === "function";
+    add(dlg ? "ok" : "warn", dlg ? "Ventanas de foto" : "Ventanas de foto no soportadas", dlg ? "" : "No podrás ver las fotos en el Historial (Safari menor a 15.4).");
+    var dt = (function(){ var i = document.createElement("input"); i.setAttribute("type", "datetime-local"); return i.type === "datetime-local"; })();
+    add(dt ? "ok" : "warn", dt ? "Selector de fecha y hora" : "Selector de fecha y hora no soportado", dt ? "" : "Tendrás que escribir la fecha a mano.");
+    var cssOk = window.CSS && CSS.supports && CSS.supports("inset", "0") && CSS.supports("display", "grid");
+    add(cssOk ? "ok" : "warn", cssOk ? "Diseño de pantalla" : "Diseño de pantalla parcial", cssOk ? "" : "Algunos botones pueden verse desacomodados.");
+
+    // Fotos
+    var ab = !!(window.Blob && Blob.prototype.arrayBuffer);
+    var cnv = !!document.createElement("canvas").toBlob;
+    add(ab && cnv ? "ok" : "warn", ab && cnv ? "Procesar fotos" : "Procesar fotos limitado", ab && cnv ? "" : "Las fotos podrían no guardarse.");
+
+    // Descargas, compartir, copiar
+    var dl = "download" in document.createElement("a");
+    add(dl ? "ok" : "warn", dl ? "Descargar respaldos, CSV e informes" : "Descargas limitadas", dl ? "" : "Los respaldos podrían abrirse en pantalla en vez de descargarse.");
+    add(navigator.share ? "ok" : "warn", navigator.share ? "Compartir resumen" : "Compartir no disponible", navigator.share ? "" : "Usa «Copiar resumen» en su lugar.");
+
+    // Instalación
+    var sa = window.matchMedia && matchMedia("(display-mode: standalone)").matches;
+    add(sa ? "ok" : "warn", sa ? "Abierta como app instalada" : "Abierta en el navegador", sa ? "" : "Instálala con ⋮ → Instalar app para mejor protección de datos.");
+
+    render();
+
+    // Pruebas asíncronas
+    var pend = 0; function fin(){ pend--; if (pend <= 0) render(); }
+    if (window.indexedDB){
+      pend++;
+      try {
+        var rq = indexedDB.open("__diag__", 1), t = setTimeout(function(){ add("bad", "Almacén de fotos sin respuesta", "IndexedDB bloqueado.", false); fin(); t = null; }, 4000);
+        rq.onupgradeneeded = function(){ rq.result.createObjectStore("x"); };
+        rq.onsuccess = function(){
+          try {
+            var db = rq.result, tx = db.transaction("x", "readwrite"); tx.objectStore("x").put(new ArrayBuffer(8), "k");
+            tx.oncomplete = function(){ if (t){ clearTimeout(t); add("ok", "Puede guardar fotos"); db.close(); try{ indexedDB.deleteDatabase("__diag__"); }catch(e){} fin(); } };
+            tx.onerror = function(){ if (t){ clearTimeout(t); add("warn", "No puede guardar fotos", "Las lecturas sí se guardan."); fin(); } };
+          } catch(e){ if (t){ clearTimeout(t); add("warn", "No puede guardar fotos", String(e)); fin(); } }
+        };
+        rq.onerror = function(){ if (t){ clearTimeout(t); add("warn", "No puede guardar fotos", "Probablemente modo privado."); fin(); } };
+      } catch(e){ add("warn", "No puede guardar fotos", String(e)); fin(); }
+    } else add("warn", "No puede guardar fotos", "IndexedDB no existe en este navegador.");
+
+    if ("serviceWorker" in navigator && pr === "https:"){
+      pend++;
+      navigator.serviceWorker.getRegistration("./").then(function(reg){
+        add(reg && reg.active ? "ok" : "warn", reg && reg.active ? "Lista para usarse sin señal" : "Modo sin señal todavía no activo",
+            reg && reg.active ? "" : "Abre la pantalla de inicio de las bitácoras una vez con internet.");
+        fin();
+      }, function(){ add("warn", "No se pudo revisar el modo sin señal"); fin(); });
+    } else add("warn", "Modo sin señal no disponible", pr === "https:" ? "Este navegador no soporta service workers." : "Solo funciona desde la dirección https.");
+
+    if (navigator.storage && navigator.storage.estimate){
+      pend++;
+      navigator.storage.estimate().then(function(e){
+        var q = e.quota || 0;
+        add(q && q < 120 * 1048576 ? "warn" : "ok", "Espacio disponible: " + (q ? Math.round(q / 1048576) + " MB" : "desconocido"),
+            q && q < 120 * 1048576 ? "Espacio muy limitado: típico del modo incógnito. Las fotos llenarán rápido." : "");
+        fin();
+      }, function(){ fin(); });
+    }
+
+    if (window.fetch && pr === "https:"){
+      var pags = ["ups.html", "interruptores.html", "sw.js"];
+      for (var k = 0; k < pags.length; k++) (function(p){
+        pend++;
+        fetch(p, {cache: "no-store"}).then(function(r){
+          add(r.ok ? "ok" : "bad", (r.ok ? "Archivo encontrado: " : "Falta en el servidor: ") + p, r.ok ? "" : "Súbelo a la raíz del repositorio en GitHub.", !r.ok);
+          fin();
+        }, function(){ add("warn", "Sin conexión para revisar " + p, "Si estás sin señal es normal; se usa la copia guardada."); fin(); });
+      })(pags[k]);
+    }
+    if (!pend) render();
+  }
+
+  document.getElementById("again").onclick = run;
+  document.getElementById("copy").onclick = function(){
+    var t = document.getElementById("rep"), msg = document.getElementById("msg");
+    function okc(){ msg.innerHTML = "Reporte copiado. Pégalo en el chat."; }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t.value).then(okc, function(){ t.select(); try { document.execCommand("copy"); okc(); } catch(e){ msg.innerHTML = "Selecciona el texto de abajo y cópialo a mano."; } });
+    else { t.select(); try { document.execCommand("copy"); okc(); } catch(e){ msg.innerHTML = "Selecciona el texto de abajo y cópialo a mano."; } }
+  };
+  run();
+})();
+</script>
+</body>
+</html>
