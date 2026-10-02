@@ -37,10 +37,10 @@
 .eqlist .unit{display:flex;flex-direction:column;gap:4px}
 .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;background:var(--line);color:var(--ink)}
 .badge.ok{background:var(--okbg);color:var(--ok)}.badge.bad{background:var(--badbg);color:var(--bad)}.badge.warn{background:var(--warnbg);color:var(--ink)}
-.formg{display:grid;grid-template-columns:120px 1fr;gap:8px;align-items:center}
-.formg input,.formg select{width:100%}
+.formg{display:grid;grid-template-columns:120px minmax(0,1fr);gap:8px;align-items:center}
+.formg input,.formg select{width:100%;min-width:0;text-overflow:ellipsis}
 
-@media (max-width:480px){.etu-lcd .g4{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:480px){.etu-lcd .g4{grid-template-columns:repeat(2,1fr)}.formg{grid-template-columns:minmax(0,1fr);gap:4px}.formg label{margin-top:6px;font-size:14px;color:var(--muted)}}
 </style>
 </head>
 <body>
