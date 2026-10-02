@@ -15,7 +15,7 @@ Lo que se publica es solo el programa. **Tus lecturas nunca se suben a internet*
 
 1. Descomprime el ZIP en tu PC.
 2. En el repositorio: **Add file → Upload files**.
-3. Arrastra **todo el contenido** de la carpeta `bitacoras` (index.html, ups.html, interruptores.html, sw.js, manifest.webmanifest y la carpeta icons). Deben quedar en la raíz del repositorio, no dentro de otra carpeta.
+3. Arrastra **todo el contenido** de la carpeta `bitacoras` (index.html, ups.html, interruptores.html, diagnostico.html, comun.css, comun.js, sw.js, manifest.webmanifest y la carpeta icons). Deben quedar en la raíz del repositorio, no dentro de otra carpeta.
 4. Abajo presiona **Commit changes**.
 
 ## 3. Activar GitHub Pages
@@ -50,7 +50,7 @@ Si solo tienes CSV exportados de la bitácora de UPS: **Ajustes → Importar CSV
 ## 7. Publicar una actualización
 
 1. Sube los archivos nuevos al repositorio (Add file → Upload files, reemplazan a los anteriores).
-2. En `sw.js` cambia `const VERSION = "bitacoras-v1";` por `"bitacoras-v2"` (y así sucesivamente). Sin este cambio, los teléfonos seguirán usando la copia guardada.
+2. En `sw.js` cambia el número de `const VERSION = "bitacoras-v2";` por el siguiente (`"bitacoras-v3"`, y así sucesivamente). Sin este cambio, los teléfonos seguirán usando la copia guardada.
 3. En el teléfono, abre la app con internet dos veces: la primera descarga la versión nueva y la segunda la usa. Tus datos no se tocan.
 
 ## Notas
