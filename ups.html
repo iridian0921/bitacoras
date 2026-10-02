@@ -27,6 +27,7 @@
 </nav>
 <div id="storeNote" class="note hidden"></div>
 <div id="bakWarn" class="note hidden"></div>
+<button type="button" id="syncBar" class="sync-bar noprint hidden"></button>
 
 <section id="cap" class="on">
   <h2>Nueva lectura</h2>
@@ -125,6 +126,8 @@
     <div class="row" style="margin-top:12px"><button class="btn" id="cfgSave">Guardar parámetros</button></div>
     <div class="status" id="cfgStatus"></div>
   </div>
+  <h2>Compartir con el equipo</h2>
+  <div class="card" id="syncCard"></div>
   <h2>Respaldo</h2>
   <div class="card">
     <p class="muted" style="margin-top:0">Los datos viven solo en este navegador. Descarga un respaldo cada semana y guárdalo en tu PC o en Drive. Las fotos no se incluyen en el respaldo.</p>
@@ -341,7 +344,7 @@ $("#saveBtn").onclick = async () => {
   const sc = isScct(selEq);
   const r = {id, rama:selRama, equipo:selEq, ups: sc ? null : +selEq.replace(/\D/g,""), ts,
     in: sc ? {} : {...draft.in}, byp: sc ? {...draft.byp} : {}, out:{...draft.out}, load:{...draft.load},
-    bat: sc ? {} : {...draft.bat}, sys: sc ? {...draft.sys} : {}, nota:$("#nota").value.trim(), foto:false};
+    bat: sc ? {} : {...draft.bat}, sys: sc ? {...draft.sys} : {}, nota:$("#nota").value.trim(), foto:false, autor:sync.autor()};
   const gf = await foto.guardar(id); r.foto = gf.ok;
   readings.push(r); sortR();
   if (!persist()){
@@ -350,6 +353,7 @@ $("#saveBtn").onclick = async () => {
     $("#saveBtn").disabled = false; return;
   }
   estado(st, `Rama ${r.rama} ${r.equipo} guardado${gf.msg}.`, gf.msg.startsWith("."));
+  sync.sincronizar();
   const [nr, ne] = siguiente();
   const fin = (nr===selRama && ne===selEq);
   selRama = nr; selEq = ne; clearForm(); renderAll();
@@ -491,7 +495,8 @@ function renderHis(){
 $("#hisTbl").addEventListener("click", async e => {
   const b = e.target.closest("[data-del]"); if (!b) return;
   if (!confirm("¿Borrar esta lectura? No se puede deshacer.")) return;
-  readings = readings.filter(x=>x.id!==b.dataset.del); persist(); await fotos.del(b.dataset.del); renderAll();
+  sync.borrada(readings.find(x=>x.id===b.dataset.del));
+  readings = readings.filter(x=>x.id!==b.dataset.del); persist(); await fotos.del(b.dataset.del); renderAll(); sync.sincronizar();
 });
 Comun.visorFotos(fotos, $("#hisTbl"));
 $("#hisRama").onchange = renderHis; $("#hisEq").onchange = renderHis;
@@ -516,6 +521,10 @@ $("#cfgSave").onclick = () => {
   renderCfg(); renderLcd(); renderAll();
 };
 const bak = Comun.respaldo({lecturas:()=>readings, cfg:()=>P, persist});
+const sync = Comun.compartir({bitacora:"ups", fotos, migrar:migrate,
+  lecturas:()=>readings, setLecturas:a=>{ readings = a; },
+  fila: r => { const c = calc(r); return {Fecha:r.ts, Rama:r.rama, Equipo:r.equipo, kW:num(r.load?.kw), kVA:num(r.load?.kva), Estado:c.ok?"OK":"Revisar: "+c.flags.join(", "), Nota:r.nota||""}; },
+  alCambiar(){ sortR(); persist(); renderAll(); }});
 $("#bakBtn").onclick = () => {
   download(`respaldo_bitacora_ups_${stamp()}.json`, JSON.stringify({app:"bitacora-ups", version:2, exportado:new Date().toISOString(), cfg:P, lecturas:readings}, null, 1), "application/json");
   $("#bakStatus").textContent = "Respaldo descargado. Guárdalo en Drive o en tu PC.";
@@ -532,9 +541,9 @@ $("#restore").onchange = async e => {
     const ids = new Set(readings.map(r=>r.id)); let added = 0;
     const nuevas = o.lecturas.filter(raw => raw && raw.id && raw.ts && raw.load && !ids.has(raw.id)).map(migrate);
     const conFoto = await Promise.all(nuevas.map(r => r.foto ? fotos.has(r.id) : false));
-    nuevas.forEach((r, i) => { r.foto = conFoto[i]; readings.push(r); added++; });
+    nuevas.forEach((r, i) => { r.foto = conFoto[i]; delete r.srv; delete r.fotoSrv; readings.push(r); added++; });
     if (o.cfg && confirm("¿Usar también los parámetros del respaldo?")) P = {...DEFAULTS, ...o.cfg, lastBackup:P.lastBackup};
-    cambioParametros(); sortR(); persist(); renderCfg(); renderAll();
+    cambioParametros(); sortR(); persist(); renderCfg(); renderAll(); sync.sincronizar();
     st.textContent = `Respaldo restaurado: ${added} lectura(s) nuevas, ${o.lecturas.length-added} ya existían. Las lecturas sin rama se asignaron a la Rama A.`;
   }catch{ estado(st, "Ese archivo no es un respaldo válido de la bitácora.", true); }
   e.target.value = "";
@@ -584,7 +593,7 @@ $("#csvIn").onchange = async ev => {
         bat:{v:g("bat_v"),a:g("bat_a")}, sys:{enlinea:g("ups_en_linea")}, nota:gs("nota"), foto:false});
       ids.add(id); claves.add(clave); add++;
     }
-    sortR(); if (!persist()) throw new Error("guardar"); renderAll();
+    sortR(); if (!persist()) throw new Error("guardar"); renderAll(); sync.sincronizar();
     st.textContent = `CSV importado: ${add} lectura(s) nuevas${dup?`, ${dup} ya existían`:""}${bad?`, ${bad} fila(s) sin fecha o sin kW`:""}. Las fotos no vienen en el CSV.`;
   }catch{ estado(st, "No pude leer ese CSV. Debe ser uno exportado desde esta bitácora.", true); }
   ev.target.value = "";
@@ -725,6 +734,7 @@ function renderAll(){ bak.aviso(); renderChips(); renderLcdMeta(); tabs.renderVi
   newDraft();
   if (!(await loadDraft())) $("#ts").value = nowLocal();
   renderChips(); renderLcd(); renderAll();
+  sync.sincronizar();
 })();
 })();
 </script>

@@ -62,6 +62,8 @@ const render = () => { $("#stt").innerHTML = rows.join(""); };
     const p = await navigator.storage?.persist?.();
     add(p ? true : null, p ? "Almacenamiento protegido: el sistema no lo borrará por falta de espacio." : "Almacenamiento no protegido todavía: instala la app en la pantalla principal para mejorarlo.");
   }catch{}
+  let sc = {}; try{ sc = JSON.parse(localStorage.getItem("bitacoras-sync") || "{}"); }catch{}
+  add(sc.url && sc.clave ? true : null, sc.url && sc.clave ? `Compartiendo con el equipo en Google Sheets${sc.autor ? " como " + sc.autor : ""}.` : "Las lecturas solo están en este teléfono. Puedes compartirlas desde Ajustes de cada bitácora.");
   const inst = matchMedia("(display-mode: standalone)").matches;
   add(inst ? true : null, inst ? "Abierta como app instalada." : "Abierta en el navegador. Instálala desde el menú ⋮ de Chrome.");
   render();

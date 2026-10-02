@@ -9,7 +9,7 @@ const num = v => (v === null || v === undefined || v === "" || isNaN(+v)) ? null
 const pct = (x,d=1) => x===null||x===undefined||!isFinite(x) ? "—" : (x*100).toFixed(d)+" %";
 const fx = (x,d=1) => x===null||x===undefined||!isFinite(x) ? "—" : (+x).toFixed(d);
 const fmtFecha = new Intl.DateTimeFormat("es-MX", {dateStyle:"short", timeStyle:"short"});
-const fdate = iso => { const d = new Date(iso); return isNaN(d) ? iso : fmtFecha.format(d); };
+const fdate = iso => { const d = new Date(iso); return isNaN(d) ? esc(iso) : fmtFecha.format(d); };
 /* "AAAA-MM-DDTHH:MM" en hora local, para inputs datetime-local y CSV. */
 const isoLocal = (d = new Date()) => new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
 const nowLocal = () => isoLocal();
@@ -43,12 +43,17 @@ function fotosDB(nombre){
     const buf = await blob.arrayBuffer();
     await new Promise((res,rej)=>{ const t=db.transaction("fotos","readwrite"); t.objectStore("fotos").put({type:blob.type||"image/jpeg", buf}, k); t.oncomplete=res; t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error); });
   }
-  async function get(k){
+  async function getLocal(k){
     const db = await ready; if (!db) return null;
     const v = await new Promise(res=>{ try{ const r=db.transaction("fotos").objectStore("fotos").get(k); r.onsuccess=()=>res(r.result||null); r.onerror=()=>res(null); }catch{ res(null); } });
     if (!v) return null;
     if (v instanceof Blob) return v;                       // fotos guardadas por la versión anterior
     return v.buf ? new Blob([v.buf], {type:v.type}) : null;
+  }
+  /* Si la foto no está en este teléfono y la bitácora está compartida, se baja del servidor. */
+  async function get(k){
+    const b = await getLocal(k);
+    return b || (api.remoto && !String(k).startsWith("__") ? api.remoto(k) : null);
   }
   async function has(k){
     const db = await ready; if (!db) return false;
@@ -58,7 +63,8 @@ function fotosDB(nombre){
     const db = await ready; if (!db) return;
     await new Promise(res=>{ try{ const t=db.transaction("fotos","readwrite"); t.objectStore("fotos").delete(k); t.oncomplete=res; t.onerror=res; }catch{ res(); } });
   }
-  return {ready, put, get, has, del};
+  const api = {ready, put, get, getLocal, has, del, remoto:null};
+  return api;
 }
 
 async function reducir(file, maxLado, calidad){
@@ -275,8 +281,216 @@ async function revisarEntorno({lsOk, persist, fotos, sinFotos}){
 function avisoBorrador(){ const n=$("#draftNote"); n.textContent="Se recuperó la captura que tenías en proceso."; n.classList.remove("hidden"); setTimeout(()=>n.classList.add("hidden"),6000); }
 const nuevoId = letra => letra + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 
+/* ================= compartir con el equipo (Google Sheets) =================
+   Las lecturas se guardan primero en el teléfono; cuando hay señal se suben al script de
+   Google Apps Script (apps-script/Codigo.gs) y se bajan las que capturaron los demás.
+   Marcas locales: r.srv (lectura ya en la hoja), r.fotoSrv (foto ya en Drive),
+   e.srvUpd (versión del equipo que ya está en la hoja). */
+const SYNC_CFG = "bitacoras-sync";
+const leerLS = (k, def) => { try{ return {...def, ...JSON.parse(localStorage.getItem(k) || "{}")}; }catch{ return {...def}; } };
+const escribirLS = (k, v) => { try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} };
+const syncConfig = () => leerLS(SYNC_CFG, {url:"", clave:"", autor:""});
+const blobAB64 = b => blobToDataURL(b).then(u => { if (!u) throw new Error("foto"); return u.slice(u.indexOf(",")+1); });
+const b64ABytes = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const sinLocales = (o, ...k) => { const c = {...o}; k.forEach(x => delete c[x]); return c; };
+function haceTxt(iso){
+  const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  return m < 1 ? "hace un momento" : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m/60)} h` : `el ${fdate(iso)}`;
+}
+/* Sin encabezado Content-Type la solicitud es "simple" y Apps Script la acepta sin CORS previo. */
+async function llamarScript(cfg, cuerpo){
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 90000);
+  let r;
+  try{ r = await fetch(cfg.url, {method:"POST", body:JSON.stringify({...cuerpo, clave:cfg.clave}), signal:ctl.signal}); }
+  catch{ throw new Error(navigator.onLine === false ? "Sin conexión: se subirán al volver la señal." : "No se pudo contactar el script. Revisa la dirección o la señal."); }
+  finally{ clearTimeout(t); }
+  let o; try{ o = await r.json(); }catch{ throw new Error("La dirección no responde como el script de las bitácoras. Revisa que el acceso sea \"Cualquier persona\"."); }
+  if (!o.ok) throw new Error(o.error || "Error del script.");
+  return o;
+}
+
+/* o: {bitacora, fotos, lecturas(), setLecturas(arr), fila(r), alCambiar(), migrar?(r),
+       equipos?(), setEquipos?(arr), filaEquipo?(e)} */
+function compartir(o){
+  const KEY = "bitacoras-sync-" + o.bitacora;
+  const st = leerLS(KEY, {url:"", cursor:0, borrar:[], borrarEq:[], ultima:null});
+  const guardarSt = () => escribirLS(KEY, st);
+  let enCurso = null, otraVez = false, error = "";
+  const activo = () => { const c = syncConfig(); return !!(c.url && c.clave); };
+
+  o.fotos.remoto = async id => {
+    const cfg = syncConfig(); if (!activo()) return null;
+    try{
+      const r = await llamarScript(cfg, {accion:"foto", bitacora:o.bitacora, id});
+      const b = new Blob([b64ABytes(r.b64)], {type:r.tipo || "image/jpeg"});
+      try{ await o.fotos.put(id, b); }catch{}
+      return b;
+    }catch{ return null; }
+  };
+
+  const pendientes = () => {
+    let n = 0; for (const r of o.lecturas()) if (!r.srv || (r.foto && !r.fotoSrv)) n++;
+    return n + st.borrar.length;
+  };
+
+  function estadoUI(){
+    const bar = $("#syncBar"), sts = $("#syStatus");
+    if (!activo()){
+      bar?.classList.add("hidden");
+      if (sts) estado(sts, "No conectada: las lecturas solo están en este teléfono.");
+      return;
+    }
+    const pend = pendientes();
+    const txt = enCurso ? "Sincronizando…"
+      : error ? `${error}${pend ? ` ${pend} cambio(s) por subir.` : ""}`
+      : `Compartida con el equipo${st.ultima ? ", actualizada " + haceTxt(st.ultima) : ""}${pend ? ` · ${pend} por subir` : ""}`;
+    if (bar){ bar.textContent = "☁ " + txt; bar.classList.toggle("warn", !!error && !enCurso); bar.classList.remove("hidden"); }
+    if (sts) estado(sts, txt, !!error && !enCurso);
+  }
+
+  /* Al cambiar de hoja, todo se vuelve a subir a la nueva. */
+  function cambioDeHoja(url){
+    for (const r of o.lecturas()){ delete r.srv; delete r.fotoSrv; }
+    if (o.equipos) for (const e of o.equipos()) delete e.srvUpd;
+    Object.assign(st, {url, cursor:0, borrar:[], borrarEq:[], ultima:null});
+  }
+
+  function aplicar(res){
+    let cambio = false;
+    if (o.equipos){
+      const remap = res.remap || {};
+      if (Object.keys(remap).length){
+        // otro usuario ya había registrado ese identificador: se usa el suyo
+        o.setEquipos(o.equipos().filter(e => !remap[e.id]));
+        for (const r of o.lecturas()) if (remap[r.eq]) r.eq = remap[r.eq];
+        cambio = true;
+      }
+      const porId = new Map(o.equipos().map(e => [e.id, e])), quitar = new Set();
+      for (const x of res.equipos || []){
+        if (typeof x.id !== "string" || !x.datos) continue;
+        const loc = porId.get(x.id);
+        if (x.borrado){ if (loc) quitar.add(x.id); continue; }
+        if (st.borrarEq.includes(x.id)) continue;
+        x.datos = {...x.datos, id:x.id, tag:String(x.datos.tag ?? ""), in:num(x.datos.in)};
+        const upd = x.datos.upd || 0;
+        if (!loc){ o.equipos().push({...x.datos, srvUpd:upd}); cambio = true; }
+        else if (upd > (loc.upd || 0)){ Object.assign(loc, x.datos, {srvUpd:upd}); cambio = true; }
+        else if (upd === (loc.upd || 0)) loc.srvUpd = upd;
+      }
+      if (quitar.size){
+        o.setEquipos(o.equipos().filter(e => !quitar.has(e.id)));
+        o.setLecturas(o.lecturas().filter(r => !quitar.has(r.eq)));
+        cambio = true;
+      }
+    }
+    const L = o.lecturas(), porId = new Map(L.map(r => [r.id, r])), quitar = new Set();
+    for (const x of res.lecturas || []){
+      if (typeof x.id !== "string" || !x.datos) continue;
+      const loc = porId.get(x.id);
+      if (x.borrado){ if (loc){ quitar.add(x.id); if (loc.foto) o.fotos.del(x.id); } continue; }
+      if (loc){ loc.srv = true; if (x.foto && !loc.fotoSrv){ loc.foto = true; loc.fotoSrv = true; cambio = true; } continue; }
+      if (st.borrar.includes(x.id)) continue;     // la borraste aquí y el borrado aún no se sube
+      const t = Date.parse(x.datos.ts); if (isNaN(t)) continue;
+      const r = {...x.datos, id:x.id, ts:new Date(t).toISOString(), srv:true, foto:!!x.foto, fotoSrv:!!x.foto};
+      if (x.autor && !r.autor) r.autor = x.autor;
+      L.push(o.migrar ? o.migrar(r) : r); cambio = true;
+    }
+    if (quitar.size){ o.setLecturas(o.lecturas().filter(r => !quitar.has(r.id))); cambio = true; }
+    return cambio;
+  }
+
+  async function ronda(){
+    const cfg = syncConfig();
+    if (st.url !== cfg.url) cambioDeHoja(cfg.url);
+    let pend = o.lecturas().filter(r => !r.srv), primera = true;
+    while (primera || pend.length){
+      primera = false;
+      const lote = pend.slice(0, 100), borrar = st.borrar.slice(), borrarEq = st.borrarEq.slice();
+      const eqs = o.equipos ? o.equipos().filter(e => e.srvUpd === undefined || e.srvUpd !== (e.upd || 0)) : [];
+      const res = await llamarScript(cfg, {accion:"sync", bitacora:o.bitacora, desde:st.cursor, borrar, borrarEq,
+        subir: lote.map(r => ({id:r.id, autor:r.autor || cfg.autor, datos:sinLocales(r, "srv", "fotoSrv", "foto"), vista:o.fila(r)})),
+        equipos: eqs.map(e => ({id:e.id, autor:cfg.autor, datos:sinLocales(e, "srvUpd"), vista:o.filaEquipo(e)}))});
+      lote.forEach(r => r.srv = true);
+      eqs.forEach(e => e.srvUpd = e.upd || 0);
+      st.borrar = st.borrar.filter(id => !borrar.includes(id));
+      st.borrarEq = st.borrarEq.filter(id => !borrarEq.includes(id));
+      const cambio = aplicar(res);
+      st.cursor = Math.max(st.cursor, res.cursor || 0); st.ultima = new Date().toISOString();
+      guardarSt();
+      if (cambio || lote.length || eqs.length) o.alCambiar();
+      pend = pend.slice(100);
+    }
+    // fotos propias que aún no están en Drive
+    for (const r of o.lecturas().filter(r => r.srv && r.foto && !r.fotoSrv)){
+      const b = await o.fotos.getLocal(r.id); if (!b) continue;
+      await llamarScript(cfg, {accion:"subirFoto", bitacora:o.bitacora, id:r.id, tipo:b.type || "image/jpeg", b64:await blobAB64(b)});
+      r.fotoSrv = true; o.alCambiar(); estadoUI();
+    }
+  }
+
+  function sincronizar(){
+    if (!activo()) return Promise.resolve();
+    if (enCurso){ otraVez = true; return enCurso; }
+    enCurso = (async () => {
+      try{
+        do { otraVez = false; await ronda(); } while (otraVez);
+        error = "";
+      }catch(e){ error = e.message; }
+      finally{ enCurso = null; estadoUI(); }
+    })();
+    estadoUI();
+    return enCurso;
+  }
+
+  /* Tarjeta de Ajustes */
+  const card = $("#syncCard");
+  if (card){
+    const c = syncConfig();
+    card.innerHTML = `<p class="muted" style="margin-top:0">Sube tus lecturas a la hoja de Google Sheets del equipo y recibe las de los demás. Sin señal se guardan aquí y se suben cuando vuelve. La configuración aplica a las dos bitácoras.</p>
+      <div class="campos">
+        <label for="syUrl">Dirección del script (termina en /exec)</label><input class="plain" id="syUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(c.url)}">
+        <label for="syClave">Clave del equipo</label><input class="plain" id="syClave" type="password" autocomplete="off" value="${esc(c.clave)}">
+        <label for="syAutor">Tu nombre (aparece en la hoja como quien capturó)</label><input class="plain" id="syAutor" autocomplete="name" placeholder="Ej. Iridian J." value="${esc(c.autor)}">
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="sySave">Conectar y sincronizar</button>
+        <button class="btn sec" id="syOff">Desconectar</button>
+      </div>
+      <div class="status" id="syStatus"></div>`;
+    $("#sySave").onclick = async () => {
+      const nueva = {url:$("#syUrl").value.trim(), clave:$("#syClave").value.trim(), autor:$("#syAutor").value.trim()};
+      const sts = $("#syStatus");
+      if (!/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(nueva.url) && !/^http:\/\/localhost[:/]/.test(nueva.url)){ estado(sts, "La dirección debe ser la de la implementación del script: https://script.google.com/macros/s/…/exec", true); return; }
+      if (!nueva.clave || !nueva.autor){ estado(sts, "Escribe la clave del equipo y tu nombre.", true); return; }
+      estado(sts, "Probando la conexión…"); $("#sySave").disabled = true;
+      try{ await llamarScript(nueva, {accion:"ping", bitacora:o.bitacora}); }
+      catch(e){ estado(sts, e.message, true); $("#sySave").disabled = false; return; }
+      escribirLS(SYNC_CFG, nueva); error = "";
+      $("#sySave").disabled = false;
+      await sincronizar();
+    };
+    $("#syOff").onclick = () => {
+      if (!activo() || !confirm("¿Dejar de compartir en este teléfono? Las lecturas guardadas aquí no se borran.")) return;
+      escribirLS(SYNC_CFG, {...syncConfig(), url:"", clave:""}); $("#syUrl").value = ""; $("#syClave").value = ""; estadoUI();
+    };
+  }
+  $("#syncBar")?.addEventListener("click", () => { error = ""; sincronizar(); });
+
+  addEventListener("online", () => sincronizar());
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") sincronizar(); });
+  setInterval(() => { if (document.visibilityState === "visible") sincronizar(); else estadoUI(); }, 120000);
+
+  return {
+    sincronizar, estadoUI,
+    autor: () => activo() ? syncConfig().autor : undefined,
+    /* Borrados que deben llegar a la hoja (solo si la lectura o el equipo ya estaban ahí). */
+    borrada(r){ if (r?.srv && !st.borrar.includes(r.id)){ st.borrar.push(r.id); guardarSt(); } },
+    equipoBorrado(e){ if (e?.srvUpd !== undefined && !st.borrarEq.includes(e.id)){ st.borrarEq.push(e.id); guardarSt(); } }
+  };
+}
+
 return {$, esc, num, pct, fx, fdate, isoLocal, nowLocal, stamp, download, descargarCSV, estado,
   fotosDB, capturaFoto, visorFotos, DRAFT_KEY, pestanas, grafica,
   cssInforme, docInforme, figurasInforme, accionesInforme,
-  respaldo, renderUso, revisarEntorno, avisoBorrador, nuevoId};
+  respaldo, renderUso, revisarEntorno, avisoBorrador, nuevoId, compartir, syncConfig};
 })();
