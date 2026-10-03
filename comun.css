@@ -111,7 +111,7 @@ dialog img{max-width:100%;max-height:75vh;display:block}
 @media print{
   @page{size:letter;margin:12mm}
   body{background:#fff !important}
-  header,nav,.noprint,#storeNote,section:not(#inf){display:none !important}
+  header,nav,.noprint,#storeNote,#bakWarn,#syncBar,#versionNueva,#draftNote,section:not(#inf){display:none !important}
   section#inf{display:block !important}
   .wrap{max-width:none;padding:0}
   :root{padding:0}

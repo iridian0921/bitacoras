@@ -159,6 +159,7 @@
     <div class="formg">
       <label for="repSitio">Sitio</label><input class="plain" id="repSitio" placeholder="Ej. Data center, sala eléctrica">
       <label for="repElab">Elaboró</label><input class="plain" id="repElab" placeholder="Nombre y puesto">
+      <label for="repRevi">Revisó</label><input class="plain" id="repRevi" placeholder="Nombre y puesto">
       <label for="repRama">Alcance</label><select id="repRama"></select>
     </div>
     <div class="row" style="margin-top:10px;gap:16px">
@@ -611,7 +612,7 @@ const REP_CSS = `
 Comun.cssInforme(REP_CSS);
 async function generarInforme(){
   const rama = $("#repRama").value, incF = $("#repFotos").checked, incN = $("#repNotas").checked;
-  const sitio = $("#repSitio").value.trim(), elab = $("#repElab").value.trim();
+  const sitio = $("#repSitio").value.trim(), elab = $("#repElab").value.trim(), revi = $("#repRevi").value.trim();
   const E = sortedEq().filter(e => rama==="all" || e.rama===rama);
   const ult = ultimas();
   const U = E.map(e => ({e, r: ult.get(e.id)||null}));
@@ -627,9 +628,10 @@ async function generarInforme(){
   const filas = U.map(({e,r}) => {
     if (!r) return `<tr><td><b>${esc(e.tag)}</b><br><span style="color:#6a7784">${esc(e.tablero||"")}</span></td><td colspan="6" style="color:#6a7784">Sin lectura</td></tr>`;
     const x = calc(r), b = estadoBase(e,r);
+    const rojo = (fuera, txt) => fuera ? `<span class="mal">${txt}</span>` : txt;   // fuera de límite: en rojo
     return `<tr><td><b>${esc(e.tag)}</b><br><span style="color:#6a7784">${esc(e.tablero||"")}${e.rama!=="-"?" · Rama "+esc(e.rama):""}</span></td><td>${fdate(r.ts)}</td>
-      <td>${fx(num(r.cur?.i1),0)} / ${fx(num(r.cur?.i2),0)} / ${fx(num(r.cur?.i3),0)}<br>IN ${fx(num(r.cur?.in),0)} A</td>
-      <td>${pct(x.pctIR)} de IR<br><span style="color:#6a7784">IR ${fx(x.irA,0)} A · desb. ${pct(x.desb)}</span></td>
+      <td>${fx(num(r.cur?.i1),0)} / ${fx(num(r.cur?.i2),0)} / ${fx(num(r.cur?.i3),0)}<br>${rojo(x.pctN>P.limNeutro, `IN ${fx(num(r.cur?.in),0)} A`)}</td>
+      <td>${rojo(x.pctIR>P.limCargaIR, `${pct(x.pctIR)} de IR`)}<br><span style="color:#6a7784">IR ${fx(x.irA,0)} A · desb. ${rojo(x.desb>P.limDesb, pct(x.desb))}</span></td>
       <td>${esc(ajustesTxt(r.set,e))}</td><td><span class="est ${b.c||""}" style="margin:0;padding:1px 6px;font-weight:600">${esc(b.t)}</span></td>
       <td><span class="est ${x.ok?"ok":"bad"}" style="margin:0;padding:1px 6px">${x.ok?"OK":"Revisar"}</span></td></tr>`;
   }).join("");
@@ -652,12 +654,12 @@ async function generarInforme(){
   ${sinBase.length?`<p style="color:#6b5200"><b>Sin línea base de ajustes:</b> ${sinBase.map(esc).join(", ")}.</p>`:""}
   <h2>Detalle por interruptor</h2>
   <div class="tw"><table class="det"><colgroup><col style="width:14%"><col style="width:12%"><col style="width:13%"><col style="width:15%"><col style="width:21%"><col style="width:13%"><col style="width:12%"></colgroup><tr><th>Interruptor</th><th>Lectura</th><th>I1 / I2 / I3 (A)</th><th>Carga</th><th>Ajustes</th><th>Línea base</th><th>Estado</th></tr>${filas}</table></div>
-  <div style="font-size:11px;color:#6a7784;margin-top:4px">Ajustes en múltiplos de In (rating plug). Carga: fase más cargada contra IR = IR × In.</div>
+  <div style="font-size:11px;color:#6a7784;margin-top:4px">Ajustes en múltiplos de In (rating plug). Carga: fase más cargada contra IR = IR × In. En rojo, los valores fuera de límite.</div>
   ${notas?`<h2>Notas de campo</h2><ul>${notas}</ul>`:""}
   ${fotosInf?`<h2>Evidencia fotográfica</h2><div class="fotos">${fotosInf}</div>`:""}
   <h2>Criterios</h2>
   <div style="font-size:12px">Carga máxima ${pct(P.limCargaIR,0)} de IR; desbalance de corriente ${pct(P.limDesb,0)}; corriente de neutro ${pct(P.limNeutro,0)} del promedio. Se reporta cualquier ajuste distinto a la línea base registrada, LED de alarma o de error del disparador encendido e indicador de disparo activo. La coherencia verifica IR &lt; Isd &lt; Ii.</div>
-  <div class="firma"><div>Elaboró${elab?`<br>${esc(elab)}`:""}</div><div>Revisó</div></div>
+  <div class="firma"><div>Elaboró${elab?`<br>${esc(elab)}`:""}</div><div>Revisó${revi?`<br>${esc(revi)}`:""}</div></div>
   <div class="pie">Generado con Bitácora de interruptores. Valores tomados de la pantalla y diales del disparador por inspección visual; no se modificó ningún ajuste.</div></div>`;
   const L = [`*Informe de interruptores${sitio?" – "+sitio:""}*`, `${alcance} | ${fdate(ahora)}`, `Inspeccionados ${con.length}/${E.length} | Con hallazgos ${nRevisar} | Ajustes cambiados ${nCambios}`, ""];
   L.push(hall.length ? `Hallazgos (${hall.length}):` : "Sin hallazgos.");
@@ -665,11 +667,12 @@ async function generarInforme(){
   if (sinLect.length) L.push(`Sin lectura: ${sinLect.join(", ")}`);
   if (sinBase.length) L.push(`Sin línea base: ${sinBase.join(", ")}`);
   if (elab){ L.push(""); L.push(`Elaboró: ${elab}`); }
-  return {html, texto:L.join("\n"), doc:Comun.docInforme(`Informe interruptores ${fdate(ahora)}`, REP_CSS, html)};
+  const pie = `Informe de interruptores${sitio?" · "+sitio:""} · ${alcance} · ${fdate(ahora)}`;
+  return {html, pie, texto:L.join("\n"), doc:Comun.docInforme(`Informe interruptores ${fdate(ahora)}`, REP_CSS, html, pie)};
 }
 Comun.accionesInforme({generar:generarInforme, archivo:"informe_interruptores", titulo:"Informe de interruptores",
   vacio:"No hay lecturas en este alcance.",
-  guardarDatos(){ P.sitio = $("#repSitio").value.trim(); P.elaboro = $("#repElab").value.trim(); persist(); }});
+  guardarDatos(){ P.sitio = $("#repSitio").value.trim(); P.elaboro = $("#repElab").value.trim(); P.reviso = $("#repRevi").value.trim(); persist(); }});
 
 /* ================= ajustes y respaldo ================= */
 function renderCfg(){ $("#cfgForm").innerHTML = CFG_FIELDS.map(([k,l,s]) => `<label for="p-${k}">${l}</label><input class="plain" type="number" id="p-${k}" step="${s}" value="${P[k]}">`).join(""); }
@@ -714,7 +717,7 @@ function renderAll(){ bak.aviso(); renderEqSel(); tabs.renderVisible(); }
 (async () => {
   load();
   await Comun.revisarEntorno({lsOk, persist, fotos, sinFotos:"Este navegador no permite guardar fotos al abrir el archivo así. Las lecturas sí se guardan."});
-  renderCfg(); $("#repSitio").value = P.sitio||""; $("#repElab").value = P.elaboro||"";
+  renderCfg(); $("#repSitio").value = P.sitio||""; $("#repElab").value = P.elaboro||""; $("#repRevi").value = P.reviso||"";
   newDraft();
   if (!(await loadDraft())) $("#ts").value = nowLocal();
   fillCur(); renderAll(); renderTU();
