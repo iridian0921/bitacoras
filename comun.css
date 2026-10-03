@@ -125,3 +125,6 @@ dialog img{max-width:100%;max-height:75vh;display:block}
 .campos input{width:100%;min-width:0}
 .sync-bar{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin:0 0 8px;font:500 14px var(--fb);color:var(--muted);cursor:pointer}
 .sync-bar.warn{background:var(--warnbg);color:var(--ink);border-color:transparent}
+
+/* Aviso de versión nueva */
+.version-nueva{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:20;display:flex;gap:12px;align-items:center;justify-content:space-between;background:var(--ink);color:var(--bg);border-radius:10px;padding:10px 12px;box-shadow:0 4px 16px rgba(0,0,0,.3);font-weight:600;max-width:736px;margin:0 auto}
