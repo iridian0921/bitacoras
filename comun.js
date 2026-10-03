@@ -200,8 +200,17 @@ function grafica(series, {lim = null, fmt, min0 = false, label}){
 }
 
 /* ================= informe ================= */
-function cssInforme(css){ const st = document.createElement("style"); st.textContent = css; document.head.append(st); }
-const docInforme = (titulo, css, html) => `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(titulo)}</title><style>body{margin:0;padding:12px;background:#eef1f4}${css}@media print{body{background:#fff;padding:0}.rep{border:0;padding:0}@page{size:letter;margin:12mm}}</style></head><body>${html}</body></html>`;
+/* Impresión común de los informes: sin recuadro, sin renglones partidos y valores fuera de límite en rojo. */
+const CSS_IMPRESION = `
+.rep .mal{color:#a3330b;font-weight:700}
+@media print{.rep{border:0!important;padding:0!important;border-radius:0!important}.rep .tw{overflow:visible}
+  .rep tr,.rep .bloque,.rep .kpi,.rep figure,.rep .firma{break-inside:avoid}.rep h2{break-after:avoid}}`;
+/* Pie de cada hoja impresa: nombre del informe y "Página X de Y" (márgenes de página de CSS). */
+const piePagina = texto => `@page{size:letter;margin:12mm 12mm 16mm;
+  @bottom-left{content:"${String(texto).replace(/[<>"\\\n]/g, "")}";font:9px system-ui,sans-serif;color:#6a7784}
+  @bottom-right{content:"Página " counter(page) " de " counter(pages);font:9px system-ui,sans-serif;color:#6a7784}}`;
+function cssInforme(css){ const st = document.createElement("style"); st.textContent = css + CSS_IMPRESION; document.head.append(st); }
+const docInforme = (titulo, css, html, pie = titulo) => `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(titulo)}</title><style>body{margin:0;padding:12px;background:#eef1f4}${css}${CSS_IMPRESION}@media print{body{background:#fff;padding:0}}${piePagina(pie)}</style></head><body>${html}</body></html>`;
 /* Carga en paralelo las fotos [{id, alt, pie}] y devuelve las <figure> del informe. */
 async function figurasInforme(fotos, lista){
   const urls = await Promise.all(lista.map(async f => { const b = await fotos.get(f.id); return b ? blobToDataURL(b) : null; }));
@@ -218,6 +227,8 @@ function accionesInforme({generar, guardarDatos, vacio, archivo, titulo}){
       rep = await generar();
       if (!rep){ estado(st, vacio, true); $("#rep").innerHTML=""; $("#repAcc").classList.add("hidden"); return; }
       $("#rep").innerHTML = rep.html; $("#repAcc").classList.remove("hidden");
+      let pp = $("#repPagina"); if (!pp){ pp = document.createElement("style"); pp.id = "repPagina"; document.head.append(pp); }
+      pp.textContent = piePagina(rep.pie || titulo);
       $("#repShare").classList.toggle("hidden", !navigator.share);
       estado(st, "Informe listo.");
     }catch{ estado(st, "No se pudo generar el informe.", true); }

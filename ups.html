@@ -90,6 +90,7 @@
     <div class="cfg">
       <label for="repSitio">Sitio</label><input class="plain" id="repSitio" placeholder="Ej. Data center, sala eléctrica">
       <label for="repElab">Elaboró</label><input class="plain" id="repElab" placeholder="Nombre y puesto">
+      <label for="repRevi">Revisó</label><input class="plain" id="repRevi" placeholder="Nombre y puesto">
     </div>
     <div class="row" style="margin-top:10px;gap:16px">
       <label><input type="checkbox" id="repFotos" checked> Incluir fotos</label>
@@ -635,7 +636,7 @@ function anterior(r){ return readings.find(x => x.rama===r.rama && x.equipo===r.
 
 async function generarInforme(){
   const incFotos = $("#repFotos").checked, incNotas = $("#repNotas").checked;
-  const sitio = $("#repSitio").value.trim(), elab = $("#repElab").value.trim();
+  const sitio = $("#repSitio").value.trim(), elab = $("#repElab").value.trim(), revi = $("#repRevi").value.trim();
   const E = RAMAS.map(estadoRama);
   const ahora = new Date();
   const usadas = E.flatMap(e => Object.values(e.L));
@@ -669,7 +670,10 @@ async function generarInforme(){
     const r = e.L[eq]; if (!r) return `<tr><td>${eq}</td><td colspan="9" style="color:#6a7784">Sin lectura</td></tr>`;
     const c = calc(r), prev = anterior(r);
     const d = prev && num(prev.load?.kw)!==null && num(r.load?.kw)!==null ? r.load.kw - prev.load.kw : null;
-    return `<tr><td><b>${eq}</b></td><td>${fdate(r.ts)}</td><td>${fx(r.load?.kw,0)}</td><td>${d===null?"—":(d>0?"+":"")+fx(d,0)}</td><td>${fx(r.load?.kva,0)}</td><td>${pct(c.pctKw)}</td><td>${fx(c.fp,2)}</td><td>${fx(c.vout,0)}</td><td>${pct(c.unbIout)}</td><td>${c.sc ? (c.enlinea??"—")+" en línea" : fx(c.vCell,3)}</td><td><span class="est ${c.ok?"ok":"bad"}" style="margin:0;padding:1px 6px">${c.ok?"OK":"Revisar"}</span></td></tr>`;
+    const td = (fuera, txt) => `<td${fuera ? ' class="mal"' : ""}>${txt}</td>`;   // fuera de límite: en rojo
+    const bat = c.sc ? td(c.enlinea!==null && c.enlinea<P.modulos, (c.enlinea??"—")+" en línea")
+      : td(c.batA!==null && c.batA!==0, `${fx(c.vCell,3)} V/c${c.batA ? ` · ${c.batA} A` : ""}`);
+    return `<tr><td><b>${eq}</b></td><td>${fdate(r.ts)}</td><td>${fx(r.load?.kw,0)}</td><td>${d===null?"—":(d>0?"+":"")+fx(d,0)}</td><td>${fx(r.load?.kva,0)}</td>${td(c.pctKw>P.limCarga, pct(c.pctKw))}<td>${fx(c.fp,2)}</td>${td(c.dev!==null && Math.abs(c.dev)>P.limDev, fx(c.vout,0))}${td(c.unbIout>P.limI, pct(c.unbIout))}${bat}<td><span class="est ${c.ok?"ok":"bad"}" style="margin:0;padding:1px 6px">${c.ok?"OK":"Revisar"}</span></td></tr>`;
   }).join("");
   const kpiRama = e => `<div class="kpi"><div class="l">Rama ${e.rama}</div><div class="v">${e.kw===null?"—":confTxt(e.red)}</div><div>${e.kw===null?"Sin datos":Math.round(e.kw)+" kW ("+e.fuente+")"}</div><div style="color:#4a5866">${e.enl} de ${P.modulos} UPS en línea${e.kw!==null?`, ${pct(e.kw/(kwMod()*e.enl))} de capacidad`:""}</div></div>`;
 
@@ -693,13 +697,13 @@ async function generarInforme(){
   <h2>Hallazgos</h2>
   ${hall.length?`<ul>${hall.map(h=>`<li><b>${esc(h.eq)}</b>: ${esc(h.d)}${h.f?` <span style="color:#6a7784">(${h.f})</span>`:""}</li>`).join("")}</ul>`:"<p>No se detectaron parámetros fuera de límite.</p>"}
   ${faltan.length?`<p style="color:#6b5200"><b>Sin lectura:</b> ${faltan.map(esc).join(", ")}.</p>`:""}
-  ${E.map(e=>`<h2>Detalle Rama ${e.rama}</h2><div class="tw"><table><tr><th>Equipo</th><th>Lectura</th><th>kW</th><th>Δ kW</th><th>kVA</th><th>% carga</th><th>FP</th><th>V salida</th><th>Desb. I</th><th>V/celda</th><th>Estado</th></tr>${filas(e)}</table></div>`).join("")}
-  <div style="font-size:11px;color:#6a7784;margin-top:4px">Δ kW: cambio respecto a la lectura anterior del mismo equipo. % carga de UPS contra ${fx(kwMod(),0)} kW por módulo; del SCCT contra la capacidad de los UPS en línea.</div>
+  ${E.map(e=>`<div class="bloque"><h2>Detalle Rama ${e.rama}</h2><div class="tw"><table><tr><th>Equipo</th><th>Lectura</th><th>kW</th><th>Δ kW</th><th>kVA</th><th>% carga</th><th>FP</th><th>V salida</th><th>Desb. I</th><th>Batería</th><th>Estado</th></tr>${filas(e)}</table></div></div>`).join("")}
+  <div style="font-size:11px;color:#6a7784;margin-top:4px">Δ kW: cambio respecto a la lectura anterior del mismo equipo. % carga de UPS contra ${fx(kwMod(),0)} kW por módulo; del SCCT contra la capacidad de los UPS en línea. Batería: voltaje por celda y corriente (en flotación debe ser 0 A); en el SCCT, UPS en línea. En rojo, los valores fuera de límite.</div>
   ${notas?`<h2>Notas de campo</h2><ul>${notas}</ul>`:""}
   ${fotosInf?`<h2>Evidencia fotográfica</h2><div class="fotos">${fotosInf}</div>`:""}
   <h2>Criterios</h2>
   <div style="font-size:12px">Módulo ${P.kva} kVA, FP ${P.fp}. Límites: carga ${pct(P.limCarga,0)}, desbalance de voltaje ${pct(P.limV,1)}, desbalance de corriente ${pct(P.limI,0)}, desviación de voltaje ${pct(P.limDev,0)} sobre ${P.vnom} V, frecuencia 60 ± 0.5 Hz, kVA vs V×I ±10 %.</div>
-  <div class="firma"><div>Elaboró${elab?`<br>${esc(elab)}`:""}</div><div>Revisó</div></div>
+  <div class="firma"><div>Elaboró${elab?`<br>${esc(elab)}`:""}</div><div>Revisó${revi?`<br>${esc(revi)}`:""}</div></div>
   <div class="pie">Generado con Bitácora de UPS. Valores capturados de los displays de los equipos; la inspección es pasiva y no incluye intervención en equipos.</div>
   </div>`;
 
@@ -715,11 +719,12 @@ async function generarInforme(){
   hall.forEach(h => L.push(`• ${h.eq}: ${h.d}`));
   if (faltan.length) L.push(`Sin lectura: ${faltan.join(", ")}`);
   if (elab) { L.push(""); L.push(`Elaboró: ${elab}`); }
-  return {html, texto:L.join("\n"), doc:Comun.docInforme(`Informe UPS ${fdate(ahora)}`, REP_CSS, html)};
+  const pie = `Informe de sistemas UPS${sitio?" · "+sitio:""} · ${fdate(ahora)}`;
+  return {html, pie, texto:L.join("\n"), doc:Comun.docInforme(`Informe UPS ${fdate(ahora)}`, REP_CSS, html, pie)};
 }
 Comun.accionesInforme({generar:generarInforme, archivo:"informe_ups", titulo:"Informe UPS",
   vacio:"No hay lecturas guardadas para generar el informe.",
-  guardarDatos(){ P.sitio = $("#repSitio").value.trim(); P.elaboro = $("#repElab").value.trim(); persist(); }});
+  guardarDatos(){ P.sitio = $("#repSitio").value.trim(); P.elaboro = $("#repElab").value.trim(); P.reviso = $("#repRevi").value.trim(); persist(); }});
 
 /* Dibuja lo que siempre está a la vista y la pestaña abierta; las demás se dibujan al abrirlas. */
 function renderAll(){ bak.aviso(); renderChips(); renderLcdMeta(); tabs.renderVisible(); }
@@ -730,7 +735,7 @@ function renderAll(){ bak.aviso(); renderChips(); renderLcdMeta(); tabs.renderVi
   await Comun.revisarEntorno({lsOk, persist, fotos,
     sinFotos:"Este navegador no permite guardar fotos al abrir el archivo así. Las lecturas sí se guardan; para las fotos, publica la app en GitHub Pages o ábrela en otro navegador."});
   renderCfg();
-  $("#repSitio").value = P.sitio || ""; $("#repElab").value = P.elaboro || "";
+  $("#repSitio").value = P.sitio || ""; $("#repElab").value = P.elaboro || ""; $("#repRevi").value = P.reviso || "";
   newDraft();
   if (!(await loadDraft())) $("#ts").value = nowLocal();
   renderChips(); renderLcd(); renderAll();
