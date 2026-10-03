@@ -265,11 +265,27 @@ async function renderUso(texto){
   $("#usage").textContent = texto;
 }
 
+/* Registra el modo sin señal y avisa cuando llega una versión nueva. Una app instalada que se
+   reanuda no vuelve a cargar la página, así que también se busca versión al volver a ella. */
+function vigilarVersion(){
+  const sw = navigator.serviceWorker, habia = !!sw.controller;
+  sw.register("sw.js").then(reg => {
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reg.update().catch(()=>{}); });
+  }).catch(()=>{});
+  sw.addEventListener("controllerchange", () => {
+    if (!habia || document.getElementById("versionNueva")) return;
+    const d = document.createElement("div"); d.id = "versionNueva"; d.className = "version-nueva noprint";
+    d.innerHTML = `<span>Hay una versión nueva de la app.</span><button class="btn" type="button">Actualizar</button>`;
+    d.querySelector("button").onclick = () => location.reload();
+    document.body.append(d);
+  });
+}
+
 /* Revisa almacenamiento, registra el modo sin señal y muestra los avisos en #storeNote. */
 async function revisarEntorno({lsOk, persist, fotos, sinFotos}){
   const notes = [], pr = location.protocol;
   if (pr === "file:" || pr === "content:") notes.push("Estás usando la app como archivo local. Los datos quedan ligados a esta dirección exacta: si la abres por otro camino (WhatsApp, Drive, otra carpeta) aparecerá vacía. Usa la versión publicada o respalda al terminar cada ronda.");
-  if ("serviceWorker" in navigator && (pr === "https:" || location.hostname === "localhost")) navigator.serviceWorker.register("sw.js").catch(()=>{});
+  if ("serviceWorker" in navigator && (pr === "https:" || location.hostname === "localhost")) vigilarVersion();
   if (!lsOk || !persist()) notes.push("Este navegador no permite guardar datos al abrir el archivo así: la información se perderá al cerrar.");
   const db = await fotos.ready;
   if (!db) notes.push(sinFotos);
@@ -489,7 +505,7 @@ function compartir(o){
   };
 }
 
-return {$, esc, num, pct, fx, fdate, isoLocal, nowLocal, stamp, download, descargarCSV, estado,
+return {vigilarVersion, $, esc, num, pct, fx, fdate, isoLocal, nowLocal, stamp, download, descargarCSV, estado,
   fotosDB, capturaFoto, visorFotos, DRAFT_KEY, pestanas, grafica,
   cssInforme, docInforme, figurasInforme, accionesInforme,
   respaldo, renderUso, revisarEntorno, avisoBorrador, nuevoId, compartir, syncConfig};

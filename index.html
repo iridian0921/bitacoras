@@ -30,6 +30,7 @@
 <div class="card"><div class="stt" id="stt"></div></div>
 <p class="muted">Instálala con Chrome: menú ⋮ → "Agregar a pantalla principal" o "Instalar app". Descarga un respaldo en cada bitácora al terminar la ronda.</p>
 </div>
+<script src="comun.js"></script>
 <script>
 (() => {
 const $ = s => document.querySelector(s);
@@ -54,7 +55,7 @@ const render = () => { $("#stt").innerHTML = rows.join(""); };
   add(fija, fija ? "Dirección fija: los datos no se pierden al cerrar Chrome." : "Abierta como archivo: usa la versión publicada.");
   if ("serviceWorker" in navigator && (pr === "https:" || location.hostname === "localhost")){
     try{
-      await navigator.serviceWorker.register("sw.js"); await navigator.serviceWorker.ready;
+      Comun.vigilarVersion(); await navigator.serviceWorker.ready;
       add(true, "Lista para usarse sin señal.");
     }catch{ add(false, "No se pudo preparar el modo sin señal."); }
   } else add(false, "Modo sin señal no disponible en esta dirección.");
@@ -64,6 +65,7 @@ const render = () => { $("#stt").innerHTML = rows.join(""); };
   }catch{}
   let sc = {}; try{ sc = JSON.parse(localStorage.getItem("bitacoras-sync") || "{}"); }catch{}
   add(sc.url && sc.clave ? true : null, sc.url && sc.clave ? `Compartiendo con el equipo en Google Sheets${sc.autor ? " como " + sc.autor : ""}.` : "Las lecturas solo están en este teléfono. Puedes compartirlas desde Ajustes de cada bitácora.");
+  try{ const v = (await caches.keys()).find(k => k.startsWith("bitacoras-")); if (v) add(null, `Versión instalada: ${v.replace("bitacoras-", "")}.`); }catch{}
   const inst = matchMedia("(display-mode: standalone)").matches;
   add(inst ? true : null, inst ? "Abierta como app instalada." : "Abierta en el navegador. Instálala desde el menú ⋮ de Chrome.");
   render();
