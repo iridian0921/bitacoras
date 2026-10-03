@@ -1,6 +1,6 @@
 /* Service worker: guarda la app en el teléfono para que abra sin señal.
    Al publicar una versión nueva, cambia VERSION para que los teléfonos la descarguen. */
-const VERSION = "bitacoras-v7";
+const VERSION = "bitacoras-v8";
 const ARCHIVOS = ["./", "index.html", "ups.html", "interruptores.html", "diagnostico.html", "comun.css", "comun.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png", "icons/apple-touch-icon.png"];
 /* cache:"reload" evita la caché HTTP del navegador (GitHub Pages la guarda 10 min): sin esto, una versión
@@ -8,7 +8,9 @@ const ARCHIVOS = ["./", "index.html", "ups.html", "interruptores.html", "diagnos
 self.addEventListener("install", e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(ARCHIVOS.map(u => new Request(u, {cache:"reload"})))).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", e => {
-  if (e.request.method !== "GET" || new URL(e.request.url).origin !== location.origin) return;
+  const url = new URL(e.request.url);
+  if (e.request.method !== "GET" || url.origin !== location.origin) return;
+  if (url.pathname.endsWith("/reparar.html")) return;   // siempre del servidor: es la salida cuando la copia se atora
   // Primero la copia guardada (abre al instante y sin señal); en segundo plano se actualiza si hay red.
   e.respondWith(caches.open(VERSION).then(async c => {
     const cached = await c.match(e.request, {ignoreSearch: true});

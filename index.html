@@ -91,7 +91,7 @@ $("#reparar").onclick = async () => {
   // también se refresca la caché del navegador, para no volver a tomar archivos viejos
   await Promise.all(["./", "index.html", "ups.html", "interruptores.html", "diagnostico.html", "comun.css", "comun.js", "sw.js"]
     .map(u => fetch(u, {cache:"reload"}).catch(() => null)));
-  location.replace("index.html?r=" + Date.now());
+  location.replace("reparar.html?fase=2&t=" + Date.now());
 };
 })();
 </script>
