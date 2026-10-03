@@ -50,8 +50,9 @@ Si solo tienes CSV exportados de la bitácora de UPS: **Ajustes → Importar CSV
 ## 7. Publicar una actualización
 
 1. Sube los archivos nuevos al repositorio (Add file → Upload files, reemplazan a los anteriores).
-2. En `sw.js` cambia el número de `const VERSION = "bitacoras-v6";` por el siguiente (`"bitacoras-v7"`, y así sucesivamente). Sin este cambio, los teléfonos seguirán usando la copia guardada.
+2. En `sw.js` cambia el número de `const VERSION = "bitacoras-v7";` por el siguiente (`"bitacoras-v8"`, y así sucesivamente). Sin este cambio, los teléfonos seguirán usando la copia guardada.
 3. En el teléfono, abre la app con internet. Cuando termine de descargar la versión nueva aparece abajo el aviso **"Hay una versión nueva de la app"**: toca **Actualizar**. Tus datos no se tocan. La pantalla de inicio muestra la versión instalada.
+4. Si el teléfono se queda con una versión vieja: en la pantalla de inicio toca **Reparar actualización**. Vuelve a descargar el programa sin borrar lecturas, fotos ni ajustes.
 
 ## 8. Compartir con el equipo (Google Sheets)
 
