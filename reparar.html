@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reparar actualización</title>
+<!-- Esta página no está en la copia sin señal (sw.js) a propósito: así siempre se baja fresca del servidor,
+     aunque el service worker se haya quedado con una versión vieja. No usa comun.css ni comun.js por la misma razón. -->
+<style>
+body{margin:0;background:#e9edf1;color:#18212b;font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding:16px}
+h1{font-size:26px;margin:4px 0}
+.sub{color:#5a6878;font-size:14px}
+.card{background:#f8fafb;border:1px solid #c9d2db;border-radius:10px;padding:6px 12px;margin:12px 0}
+.it{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #e1e6eb}
+.it:last-child{border-bottom:0}
+.ic{width:22px;flex:0 0 22px;text-align:center;font-weight:700}
+.ok{color:#1b6b3d}.bad{color:#a3330b}.warn{color:#6b5200}
+.it small{display:block;color:#5a6878;word-break:break-all}
+.ver{border-radius:10px;padding:12px 14px;margin:12px 0;font-weight:700}
+.ver.ok{background:#dcf1e3}.ver.bad{background:#fbe3d8}.ver.warn{background:#fff2c2}
+button{border:0;border-radius:8px;padding:12px 16px;font:600 16px system-ui,sans-serif;background:#2438b5;color:#fff;margin:8px 8px 0 0}
+button.sec{background:#fff;color:#18212b;border:1px solid #c9d2db}
+button:disabled{opacity:.5}
+a{color:#2438b5;font-weight:600}
+textarea{width:100%;min-height:120px;margin-top:10px;font:12px monospace;box-sizing:border-box}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="index.html">← Bitácoras</a>
+  <h1>Reparar actualización</h1>
+  <div class="sub">Úsala si la app sigue mostrando una versión vieja. Tus lecturas, fotos y ajustes <b>no se borran</b>: solo se vuelve a descargar el programa.</div>
+  <div id="ver" class="ver warn">Revisando…</div>
+  <div class="card" id="list"></div>
+  <button id="reparar">Reparar ahora</button><button class="sec" id="copiar">Copiar diagnóstico</button>
+  <div id="fin"></div>
+  <textarea id="rep" readonly></textarea>
+</div>
+<script>
+(async () => {
+  const $ = s => document.querySelector(s);
+  const R = [];
+  const add = (e, t, d) => R.push({e, t, d: d || ""});
+  const render = () => {
+    $("#list").innerHTML = R.map(r => `<div class="it"><span class="ic ${r.e}">${r.e === "ok" ? "✓" : r.e === "bad" ? "✗" : "!"}</span><span>${r.t}${r.d ? `<small>${r.d}</small>` : ""}</span></div>`).join("");
+    $("#rep").value = "DIAGNÓSTICO DE ACTUALIZACIÓN\n" + new Date().toString() + "\n" + navigator.userAgent + "\n" + location.href + "\n\n" +
+      R.map(r => `[${r.e === "ok" ? "OK" : r.e === "bad" ? "FALLA" : "AVISO"}] ${r.t}${r.d ? " — " + r.d : ""}`).join("\n");
+  };
+  const tiempo = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(null), ms))]);
+  const tieneCompartir = t => /syncCard/.test(t || "");
+  const versionDe = t => ((t || "").match(/const VERSION = "([^"]+)"/) || [])[1] || "?";
+  const fase2 = /fase=2/.test(location.search);
+
+  // ---- service worker
+  let regs = [];
+  try{ regs = (await tiempo(navigator.serviceWorker.getRegistrations(), 3000)) || []; }catch{}
+  const mias = regs.filter(r => r.scope.startsWith(new URL("./", location.href).href));
+  if (!mias.length) add(fase2 ? "ok" : "warn", "Service worker: ninguno registrado", fase2 ? "Normal después de reparar; se vuelve a registrar al abrir la app." : "");
+  for (const r of mias){
+    const w = r.active, n = r.installing || r.waiting;
+    add("ok", `Service worker activo: ${w ? w.state : "ninguno"}`, `${r.scope}${n ? " · hay uno nuevo " + n.state : ""}`);
+  }
+  add(navigator.serviceWorker.controller ? "warn" : "ok", navigator.serviceWorker.controller ? "Esta página la controla el service worker" : "Esta página viene directo del servidor");
+
+  // ---- copia guardada en el teléfono
+  let nombres = [];
+  try{ nombres = ((await tiempo(caches.keys(), 3000)) || []).filter(k => k.startsWith("bitacoras-")); }catch{}
+  if (!nombres.length) add(fase2 ? "ok" : "warn", "Copia sin señal: ninguna guardada", fase2 ? "Se crea de nuevo al abrir la app." : "");
+  for (const k of nombres){
+    try{
+      const c = await caches.open(k);
+      const ups = await c.match("ups.html", {ignoreSearch: true});
+      const sw = await c.match("sw.js", {ignoreSearch: true});
+      const t = ups ? await ups.text() : "";
+      add(tieneCompartir(t) ? "ok" : "bad", `Copia guardada «${k}»: UPS ${ups ? (tieneCompartir(t) ? "con" : "SIN") + " «Compartir con el equipo»" : "no guardado"}`,
+        `${(await c.keys()).length} archivos${sw ? " · sw.js " + versionDe(await sw.text()) : ""}`);
+    }catch(e){ add("warn", `No se pudo revisar la copia «${k}»`, String(e)); }
+  }
+
+  // ---- servidor (solo es confiable cuando la página no está controlada por el service worker)
+  if (!navigator.serviceWorker.controller){
+    try{
+      const [u, s] = await Promise.all(["ups.html", "sw.js"].map(f => fetch(f + "?nc=" + Date.now(), {cache: "reload"}).then(r => r.ok ? r.text() : "")));
+      add(tieneCompartir(u) ? "ok" : "bad", `Servidor: UPS ${tieneCompartir(u) ? "con" : "SIN"} «Compartir con el equipo»`, `sw.js ${versionDe(s)}`);
+    }catch(e){ add("warn", "Sin conexión con el servidor", "Repara con internet."); }
+  }
+
+  const v = $("#ver");
+  const vieja = R.some(r => r.e === "bad");
+  if (fase2 && !vieja){
+    v.className = "ver ok"; v.textContent = "Listo: se descargó la versión nueva. Abre la app desde el ícono o con el enlace de abajo.";
+    $("#fin").innerHTML = `<p><a href="index.html">Abrir Bitácoras</a></p>`;
+  } else if (vieja){
+    v.className = "ver bad"; v.textContent = fase2 ? "La versión nueva todavía no llega. Copia el diagnóstico y mándalo." : "El teléfono tiene una copia vieja. Toca «Reparar ahora».";
+  } else {
+    v.className = "ver ok"; v.textContent = "La copia del teléfono ya es la versión nueva. Si la app se ve vieja, ciérrala por completo y ábrela otra vez.";
+  }
+  render();
+
+  // ---- reparar: fase 1 quita el service worker y la copia; fase 2 (ya sin control) baja todo fresco
+  $("#reparar").onclick = async () => {
+    const b = $("#reparar"); b.disabled = true; b.textContent = "Reparando…";
+    try{ for (const r of await navigator.serviceWorker.getRegistrations()) if (r.scope.startsWith(new URL("./", location.href).href)) await r.unregister(); }catch{}
+    try{ for (const k of await caches.keys()) if (k.startsWith("bitacoras-")) await caches.delete(k); }catch{}
+    location.replace("reparar.html?fase=2&t=" + Date.now());
+  };
+  if (fase2 && !navigator.serviceWorker.controller){
+    // refresca la caché del navegador para que la app no vuelva a tomar archivos viejos
+    await Promise.all(["./", "index.html", "ups.html", "interruptores.html", "diagnostico.html", "comun.css", "comun.js", "sw.js", "manifest.webmanifest"]
+      .map(f => fetch(f, {cache: "reload"}).catch(() => null)));
+  }
+  $("#copiar").onclick = async () => {
+    try{ await navigator.clipboard.writeText($("#rep").value); $("#copiar").textContent = "Copiado"; }
+    catch{ $("#rep").select(); document.execCommand("copy"); $("#copiar").textContent = "Copiado"; }
+  };
+})();
+</script>
+</body>
+</html>
