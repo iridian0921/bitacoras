@@ -404,7 +404,12 @@ function compartir(o){
       if (typeof x.id !== "string" || !x.datos) continue;
       const loc = porId.get(x.id);
       if (x.borrado){ if (loc){ quitar.add(x.id); if (loc.foto) o.fotos.del(x.id); } continue; }
-      if (loc){ loc.srv = true; if (x.foto && !loc.fotoSrv){ loc.foto = true; loc.fotoSrv = true; cambio = true; } continue; }
+      if (loc){
+        loc.srv = true;
+        if (x.foto && !loc.fotoSrv){ loc.foto = true; loc.fotoSrv = true; cambio = true; }
+        if (x.autor && !loc.autor){ loc.autor = x.autor; cambio = true; }   // la hoja sabe quién la capturó
+        continue;
+      }
       if (st.borrar.includes(x.id)) continue;     // la borraste aquí y el borrado aún no se sube
       const t = Date.parse(x.datos.ts); if (isNaN(t)) continue;
       const r = {...x.datos, id:x.id, ts:new Date(t).toISOString(), srv:true, foto:!!x.foto, fotoSrv:!!x.foto};
@@ -418,6 +423,8 @@ function compartir(o){
   async function ronda(){
     const cfg = syncConfig();
     if (st.url !== cfg.url) cambioDeHoja(cfg.url);
+    // una vez: volver a leer toda la hoja para completar quién capturó las lecturas que ya estaban aquí
+    if (!st.autores){ st.cursor = 0; st.autores = 1; }
     let pend = o.lecturas().filter(r => !r.srv), primera = true;
     while (primera || pend.length){
       primera = false;
