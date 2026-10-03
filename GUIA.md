@@ -50,7 +50,7 @@ Si solo tienes CSV exportados de la bitácora de UPS: **Ajustes → Importar CSV
 ## 7. Publicar una actualización
 
 1. Sube los archivos nuevos al repositorio (Add file → Upload files, reemplazan a los anteriores).
-2. En `sw.js` cambia el número de `const VERSION = "bitacoras-v8";` por el siguiente (`"bitacoras-v9"`, y así sucesivamente). Sin este cambio, los teléfonos seguirán usando la copia guardada.
+2. En `sw.js` cambia el número de `const VERSION = "bitacoras-v10";` por el siguiente (`"bitacoras-v11"`, y así sucesivamente). Sin este cambio, los teléfonos seguirán usando la copia guardada.
 3. En el teléfono, abre la app con internet. Cuando termine de descargar la versión nueva aparece abajo el aviso **"Hay una versión nueva de la app"**: toca **Actualizar**. Tus datos no se tocan. La pantalla de inicio muestra la versión instalada.
 4. Si el teléfono se queda con una versión vieja, abre en Chrome `https://tuusuario.github.io/bitacoras/reparar.html` y toca **Reparar ahora** (también está el botón **Reparar actualización** en la pantalla de inicio). Vuelve a descargar el programa sin borrar lecturas, fotos ni ajustes. Esa página siempre se baja del servidor, aunque la copia del teléfono esté atorada, y muestra un diagnóstico que puedes copiar.
 
@@ -82,7 +82,7 @@ La primera vez se suben todas las lecturas que ya tenías en el teléfono. Arrib
 
 ### Cómo funciona
 
-- **Lecturas:** cada una es un renglón con la persona que la capturó. Las de los demás aparecen en tu Historial, Resumen, Tendencias e Informe.
+- **Lecturas:** cada una es un renglón con la persona que la capturó. Las de los demás aparecen en tu Historial (columna **Capturó**), Resumen, Tendencias e Informe.
 - **Fotos:** se bajan de Drive la primera vez que las abres o generas un informe.
 - **Interruptores:** el catálogo y las líneas base también se comparten. Si dos personas dan de alta el mismo identificador, se queda el primero y las lecturas del segundo se pasan a ese.
 - **Borrados:** borra siempre desde la app (Historial → Borrar), no en la hoja; así el borrado llega a todos los teléfonos. En la hoja la lectura queda marcada con la fecha en la columna "Borrado".

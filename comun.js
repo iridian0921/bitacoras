@@ -426,7 +426,8 @@ function compartir(o){
       const res = await llamarScript(cfg, {accion:"sync", bitacora:o.bitacora, desde:st.cursor, borrar, borrarEq,
         subir: lote.map(r => ({id:r.id, autor:r.autor || cfg.autor, datos:sinLocales(r, "srv", "fotoSrv", "foto"), vista:o.fila(r)})),
         equipos: eqs.map(e => ({id:e.id, autor:cfg.autor, datos:sinLocales(e, "srvUpd"), vista:o.filaEquipo(e)}))});
-      lote.forEach(r => r.srv = true);
+      // las capturadas antes de conectar se suben con tu nombre: el teléfono se queda con el mismo
+      lote.forEach(r => { r.srv = true; if (!r.autor && cfg.autor) r.autor = cfg.autor; });
       eqs.forEach(e => e.srvUpd = e.upd || 0);
       st.borrar = st.borrar.filter(id => !borrar.includes(id));
       st.borrarEq = st.borrarEq.filter(id => !borrarEq.includes(id));

@@ -555,8 +555,8 @@ function renderHis(){
   se.value = [...se.options].some(o=>o.value===c) ? c : "all";
   const rows = lecturas.filter(r => se.value==="all" || r.eq===se.value);
   if (!rows.length){ $("#hisTbl").innerHTML = `<tr><td class="muted">Sin lecturas guardadas.</td></tr>`; return; }
-  $("#hisTbl").innerHTML = `<thead><tr><th>Fecha</th><th>Interruptor</th><th>I prom</th><th>% IR</th><th>Ajustes</th><th>Estado</th><th>Foto</th><th></th></tr></thead><tbody>` +
-    rows.map(r => { const x = calc(r), e = eqById(r.eq); return `<tr><td>${fdate(r.ts)}</td><td>${esc(e?.tag||"—")}</td><td>${fx(x.avg,0)} A</td><td>${pct(x.pctIR)}</td><td>${esc(ajustesTxt(r.set,e))}</td>
+  $("#hisTbl").innerHTML = `<thead><tr><th>Fecha</th><th>Capturó</th><th>Interruptor</th><th>I prom</th><th>% IR</th><th>Ajustes</th><th>Estado</th><th>Foto</th><th></th></tr></thead><tbody>` +
+    rows.map(r => { const x = calc(r), e = eqById(r.eq); return `<tr><td>${fdate(r.ts)}</td><td>${esc(r.autor||"—")}</td><td>${esc(e?.tag||"—")}</td><td>${fx(x.avg,0)} A</td><td>${pct(x.pctIR)}</td><td>${esc(ajustesTxt(r.set,e))}</td>
       <td><span class="pill ${x.ok?"ok":"bad"}" title="${esc(x.det.join("; "))}">${x.ok?"OK":"Revisar"}</span></td>
       <td>${r.foto?`<button class="linkbtn" data-foto="${esc(r.id)}">Ver</button>`:""}</td>
       <td><button class="btn danger" data-del="${esc(r.id)}">Borrar</button></td></tr>`; }).join("") + `</tbody>`;
@@ -571,10 +571,10 @@ Comun.visorFotos(fotos, $("#hisTbl"));
 $("#hisEq").onchange = renderHis;
 $("#csvBtn").onclick = () => {
   const keys = SETS.flatMap(g=>g.items.map(i=>i.k));
-  const head = ["fecha","interruptor","tablero","rama","in_A","i1","i2","i3","in_neutro","i_prom","pct_In","IR_A","pct_IR","desbalance","neutro_vs_prom",...keys,"Isd_A","Ii_A",...IND.map(i=>i.k),"cambios_vs_base","estado","observaciones","nota","foto"];
+  const head = ["fecha","interruptor","tablero","rama","in_A","i1","i2","i3","in_neutro","i_prom","pct_In","IR_A","pct_IR","desbalance","neutro_vs_prom",...keys,"Isd_A","Ii_A",...IND.map(i=>i.k),"cambios_vs_base","estado","observaciones","nota","foto","capturo"];
   const filas = [...lecturas].reverse().map(r => { const x=calc(r), e=eqById(r.eq), c=r.cur||{};
     return [isoLocal(new Date(r.ts)).replace("T"," "),e?.tag,e?.tablero,e?.rama,e?.in,c.i1,c.i2,c.i3,c.in,x.avg?.toFixed(1),x.pctIn?.toFixed(4),x.irA,x.pctIR?.toFixed(4),x.desb?.toFixed(4),x.pctN?.toFixed(4),
-      ...keys.map(k=>r.set?.[k]),x.isdA,x.iiA,...IND.map(i=>r.ind?.[i.k]),x.cambios.map(cb=>`${SET_NAMES[cb.k]} ${cb.de}->${cb.a}`).join("; "),x.ok?"OK":"REVISAR",x.det.join("; "),r.nota,r.foto?"sí":""]; });
+      ...keys.map(k=>r.set?.[k]),x.isdA,x.iiA,...IND.map(i=>r.ind?.[i.k]),x.cambios.map(cb=>`${SET_NAMES[cb.k]} ${cb.de}->${cb.a}`).join("; "),x.ok?"OK":"REVISAR",x.det.join("; "),r.nota,r.foto?"sí":"",r.autor]; });
   descargarCSV(`lecturas_interruptores_${stamp()}.csv`, head, filas);
 };
 
