@@ -486,8 +486,8 @@ function renderHis(){
   sr.value = [...sr.options].some(o=>o.value===cr) ? cr : "all"; se.value = [...se.options].some(o=>o.value===ce) ? ce : "all";
   const rows = readings.filter(r => (sr.value==="all" || r.rama===sr.value) && (se.value==="all" || r.equipo===se.value));
   if (!rows.length){ $("#hisTbl").innerHTML = `<tr><td class="muted">Sin lecturas guardadas.</td></tr>`; return; }
-  $("#hisTbl").innerHTML = `<thead><tr><th>Fecha</th><th>Rama</th><th>Equipo</th><th>kW</th><th>kVA</th><th>% carga</th><th>Estado</th><th>Foto</th><th></th></tr></thead><tbody>` +
-    rows.map(r => { const c = calc(r); return `<tr><td>${fdate(r.ts)}</td><td>${esc(r.rama)}</td><td>${esc(r.equipo)}</td><td>${fx(r.load?.kw,0)}</td><td>${fx(r.load?.kva,0)}</td><td>${pct(c.pctKw)}</td>
+  $("#hisTbl").innerHTML = `<thead><tr><th>Fecha</th><th>Capturó</th><th>Rama</th><th>Equipo</th><th>kW</th><th>kVA</th><th>% carga</th><th>Estado</th><th>Foto</th><th></th></tr></thead><tbody>` +
+    rows.map(r => { const c = calc(r); return `<tr><td>${fdate(r.ts)}</td><td>${esc(r.autor||"—")}</td><td>${esc(r.rama)}</td><td>${esc(r.equipo)}</td><td>${fx(r.load?.kw,0)}</td><td>${fx(r.load?.kva,0)}</td><td>${pct(c.pctKw)}</td>
       <td><span class="pill ${c.ok?"ok":"bad"}" title="${esc(c.flags.join(", "))}">${c.ok?"OK":"Revisar"}</span></td>
       <td>${r.foto?`<button class="linkbtn" data-foto="${esc(r.id)}">Ver</button>`:""}</td>
       <td><button class="btn danger" data-del="${esc(r.id)}">Borrar</button></td></tr>`; }).join("") + `</tbody>`;
@@ -501,10 +501,10 @@ $("#hisTbl").addEventListener("click", async e => {
 Comun.visorFotos(fotos, $("#hisTbl"));
 $("#hisRama").onchange = renderHis; $("#hisEq").onchange = renderHis;
 $("#csvBtn").onclick = () => {
-  const head = ["fecha","rama","equipo","in_vab","in_vbc","in_vca","in_ia","in_ib","in_ic","byp_vab","byp_vbc","byp_vca","out_vab","out_vbc","out_vca","hz","load_kva","load_kw","load_ia","load_ib","load_ic","bat_v","bat_a","ups_en_linea","fp","pct_carga","desb_i_carga","desb_i_entrada","v_celda","estado","observaciones","nota","foto"];
+  const head = ["fecha","rama","equipo","in_vab","in_vbc","in_vca","in_ia","in_ib","in_ic","byp_vab","byp_vbc","byp_vca","out_vab","out_vbc","out_vca","hz","load_kva","load_kw","load_ia","load_ib","load_ic","bat_v","bat_a","ups_en_linea","fp","pct_carga","desb_i_carga","desb_i_entrada","v_celda","estado","observaciones","nota","foto","capturo"];
   const filas = [...readings].reverse().map(r => { const c=calc(r), i=r.in||{}, y=r.byp||{}, o=r.out||{}, l=r.load||{}, b=r.bat||{}, s=r.sys||{};
     return [isoLocal(new Date(r.ts)).replace("T"," "),r.rama,r.equipo,i.vab,i.vbc,i.vca,i.ia,i.ib,i.ic,y.vab,y.vbc,y.vca,o.vab,o.vbc,o.vca,o.hz,l.kva,l.kw,l.ia,l.ib,l.ic,b.v,b.a,s.enlinea,
-      c.fp?.toFixed(3),c.pctKw?.toFixed(4),c.unbIout?.toFixed(4),c.unbIin?.toFixed(4),c.vCell?.toFixed(3),c.ok?"OK":"REVISAR",c.flags.join("; "),r.nota,r.foto?"sí":""]; });
+      c.fp?.toFixed(3),c.pctKw?.toFixed(4),c.unbIout?.toFixed(4),c.unbIin?.toFixed(4),c.vCell?.toFixed(3),c.ok?"OK":"REVISAR",c.flags.join("; "),r.nota,r.foto?"sí":"",r.autor]; });
   descargarCSV(`lecturas_ups_${stamp()}.csv`, head, filas);
 };
 

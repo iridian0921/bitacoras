@@ -1,6 +1,6 @@
 /* Service worker: guarda la app en el teléfono para que abra sin señal.
    Al publicar una versión nueva, cambia VERSION para que los teléfonos la descarguen. */
-const VERSION = "bitacoras-v9";
+const VERSION = "bitacoras-v10";
 /* Sin estos la app no abre: si alguno no se puede bajar, la versión nueva no se instala y se queda la anterior. */
 const INDISPENSABLES = ["./", "index.html", "ups.html", "interruptores.html", "comun.css", "comun.js"];
 /* Estos se intentan, pero si fallan la versión se instala igual y se completan después al usarlos. */
