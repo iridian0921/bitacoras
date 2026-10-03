@@ -27,7 +27,9 @@
   <a class="app" href="interruptores.html"><span class="ic">⚡</span><div><h3>Interruptores ETU45B</h3><div class="muted" id="sEtu">—</div></div></a>
 </div>
 <h2>Estado del teléfono</h2>
-<div class="card"><div class="stt" id="stt"></div></div>
+<div class="card"><div class="stt" id="stt"><span></span><span class="muted">Revisando…</span></div></div>
+<div class="row"><button class="btn sec" id="reparar" type="button">Reparar actualización</button></div>
+<p class="muted">Úsalo si la app no muestra la versión más reciente. Vuelve a descargar el programa; tus lecturas, fotos y ajustes no se tocan.</p>
 <p class="muted">Instálala con Chrome: menú ⋮ → "Agregar a pantalla principal" o "Instalar app". Descarga un respaldo en cada bitácora al terminar la ronda.</p>
 </div>
 <script src="comun.js"></script>
@@ -49,27 +51,48 @@ $("#sEtu").textContent = info("bitacora-interruptores-v1", "lecturas");
 const rows = [];
 const add = (ok, t) => rows.push(`<span class="dot" style="background:${ok===null?"var(--muted)":ok?"var(--ok)":"var(--bad)"}"></span><span>${t}</span>`);
 const render = () => { $("#stt").innerHTML = rows.join(""); };
+/* Cada paso tiene límite de tiempo: si algo se atora, el estado se muestra igual. */
+const aTiempo = (pr, ms) => Promise.race([pr, new Promise(r => setTimeout(() => r("__tiempo__"), ms))]);
 (async () => {
   const pr = location.protocol;
-  const fija = pr === "https:" || location.hostname === "localhost";
-  add(fija, fija ? "Dirección fija: los datos no se pierden al cerrar Chrome." : "Abierta como archivo: usa la versión publicada.");
-  if ("serviceWorker" in navigator && (pr === "https:" || location.hostname === "localhost")){
-    try{
-      Comun.vigilarVersion(); await navigator.serviceWorker.ready;
-      add(true, "Lista para usarse sin señal.");
-    }catch{ add(false, "No se pudo preparar el modo sin señal."); }
-  } else add(false, "Modo sin señal no disponible en esta dirección.");
   try{
-    const p = await navigator.storage?.persist?.();
-    add(p ? true : null, p ? "Almacenamiento protegido: el sistema no lo borrará por falta de espacio." : "Almacenamiento no protegido todavía: instala la app en la pantalla principal para mejorarlo.");
-  }catch{}
-  let sc = {}; try{ sc = JSON.parse(localStorage.getItem("bitacoras-sync") || "{}"); }catch{}
-  add(sc.url && sc.clave ? true : null, sc.url && sc.clave ? `Compartiendo con el equipo en Google Sheets${sc.autor ? " como " + sc.autor : ""}.` : "Las lecturas solo están en este teléfono. Puedes compartirlas desde Ajustes de cada bitácora.");
-  try{ const v = (await caches.keys()).find(k => k.startsWith("bitacoras-")); if (v) add(null, `Versión instalada: ${v.replace("bitacoras-", "")}.`); }catch{}
-  const inst = matchMedia("(display-mode: standalone)").matches;
-  add(inst ? true : null, inst ? "Abierta como app instalada." : "Abierta en el navegador. Instálala desde el menú ⋮ de Chrome.");
-  render();
+    const fija = pr === "https:" || location.hostname === "localhost";
+    add(fija, fija ? "Dirección fija: los datos no se pierden al cerrar Chrome." : "Abierta como archivo: usa la versión publicada.");
+    if ("serviceWorker" in navigator && fija){
+      try{ Comun.vigilarVersion(); }catch{ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
+      const listo = await aTiempo(navigator.serviceWorker.ready, 4000).catch(() => "__tiempo__");
+      const reg = await aTiempo(navigator.serviceWorker.getRegistration(), 2000).catch(() => null);
+      if (listo !== "__tiempo__") add(true, "Lista para usarse sin señal.");
+      else add(false, `El modo sin señal no terminó de prepararse${reg?.installing ? " (instalando)" : reg?.waiting ? " (versión nueva en espera)" : !reg ? " (sin registrar)" : ""}. Si ves una versión vieja, usa «Reparar actualización».`);
+    } else add(false, "Modo sin señal no disponible en esta dirección.");
+    try{
+      const v = await aTiempo(caches.keys(), 2000);
+      const ver = Array.isArray(v) ? v.filter(k => k.startsWith("bitacoras-")).map(k => k.replace("bitacoras-", "")) : [];
+      add(null, ver.length ? `Versión instalada: ${ver.join(", ")}.` : "Versión instalada: ninguna guardada todavía.");
+    }catch{}
+    try{
+      const p = await aTiempo(navigator.storage?.persist?.() ?? Promise.resolve(false), 2000);
+      add(p === true ? true : null, p === true ? "Almacenamiento protegido: el sistema no lo borrará por falta de espacio." : "Almacenamiento no protegido todavía: instala la app en la pantalla principal para mejorarlo.");
+    }catch{}
+    let sc = {}; try{ sc = JSON.parse(localStorage.getItem("bitacoras-sync") || "{}"); }catch{}
+    add(sc.url && sc.clave ? true : null, sc.url && sc.clave ? `Compartiendo con el equipo en Google Sheets${sc.autor ? " como " + sc.autor : ""}.` : "Las lecturas solo están en este teléfono. Puedes compartirlas desde Ajustes de cada bitácora.");
+    const inst = matchMedia("(display-mode: standalone)").matches;
+    add(inst ? true : null, inst ? "Abierta como app instalada." : "Abierta en el navegador. Instálala desde el menú ⋮ de Chrome.");
+  }finally{ render(); }
 })();
+
+/* Borra solo la copia del programa (service worker y su caché) y la vuelve a bajar del servidor.
+   Las lecturas (localStorage) y las fotos (IndexedDB) no se tocan. */
+$("#reparar").onclick = async () => {
+  if (!confirm("Se volverá a descargar la app. Tus lecturas, fotos y ajustes no se borran. ¿Continuar?")) return;
+  const b = $("#reparar"); b.disabled = true; b.textContent = "Reparando…";
+  try{ for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); }catch{}
+  try{ for (const k of await caches.keys()) if (k.startsWith("bitacoras-")) await caches.delete(k); }catch{}
+  // también se refresca la caché del navegador, para no volver a tomar archivos viejos
+  await Promise.all(["./", "index.html", "ups.html", "interruptores.html", "diagnostico.html", "comun.css", "comun.js", "sw.js"]
+    .map(u => fetch(u, {cache:"reload"}).catch(() => null)));
+  location.replace("index.html?r=" + Date.now());
+};
 })();
 </script>
 </body>

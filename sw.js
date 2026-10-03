@@ -1,6 +1,6 @@
 /* Service worker: guarda la app en el teléfono para que abra sin señal.
    Al publicar una versión nueva, cambia VERSION para que los teléfonos la descarguen. */
-const VERSION = "bitacoras-v6";
+const VERSION = "bitacoras-v7";
 const ARCHIVOS = ["./", "index.html", "ups.html", "interruptores.html", "diagnostico.html", "comun.css", "comun.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png", "icons/apple-touch-icon.png"];
 /* cache:"reload" evita la caché HTTP del navegador (GitHub Pages la guarda 10 min): sin esto, una versión
