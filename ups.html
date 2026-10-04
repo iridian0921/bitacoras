@@ -150,11 +150,15 @@
 (() => {
 const {$, esc, num, pct, fx, fdate, isoLocal, nowLocal, stamp, download, descargarCSV, estado} = Comun;
 const RAMAS = ["A","B"];
-const DEFAULTS = {kva:500, fp:0.8, modulos:4, celdas:240, vnom:480, limV:0.02, limI:0.10, limDev:0.05, limCarga:0.80};
+/* Flotación por celda: 13.6 ± 0.1 V por batería de 12 V (6 celdas) a 25 °C, EnerSys DataSafe 12HX540-FR. */
+const DEFAULTS = {kva:500, fp:0.9, modulos:4, celdas:240, vnom:480, limV:0.02, limI:0.10, limDev:0.05, limCarga:0.80,
+  limDevIn:0.10, vCeldaMin:2.25, vCeldaMax:2.283, limBatA:0};
 const CFG_FIELDS = [
   ["kva","Capacidad por módulo (kVA)",1],["fp","Factor de potencia nominal",0.01],["modulos","Módulos UPS por rama",1],
   ["celdas","Celdas de batería por módulo",1],["vnom","Voltaje nominal de salida (V)",1],["limV","Límite desbalance de voltaje (fracción)",0.005],
-  ["limI","Límite desbalance de corriente (fracción)",0.01],["limDev","Límite desviación vs nominal (fracción)",0.01],["limCarga","Carga máx. por módulo (fracción)",0.05]
+  ["limI","Límite desbalance de corriente (fracción)",0.01],["limDev","Límite desviación de salida por fase (fracción)",0.01],["limCarga","Carga máx. por módulo (fracción)",0.05],
+  ["limDevIn","Límite desviación de entrada/bypass por fase (fracción)",0.01],["vCeldaMin","Flotación mínima por celda (V)",0.001],
+  ["vCeldaMax","Flotación máxima por celda (V)",0.001],["limBatA","Corriente de batería tolerada (A, 0 = ninguna)",1]
 ];
 const FIELDS_UPS = [
   {g:"UPS INPUT PWR", k:"in", cols:3, f:[["vab","ØA-B V"],["vbc","ØB-C V"],["vca","ØC-A V"],["ia","ØA A"],["ib","ØB A"],["ic","ØC A"]]},
@@ -181,7 +185,7 @@ const fieldsFor = eq => isScct(eq) ? FIELDS_SCCT : FIELDS_UPS;
 
 /* ================= almacenamiento ================= */
 const LS = "bitacora-ups-standalone-v1", LSD = LS + "-borrador";
-let lsOk = true;
+let lsOk = true, fpActualizado = false;
 function migrate(r){
   if (!r) return r;
   const o = {...r};
@@ -191,7 +195,12 @@ function migrate(r){
   return o;
 }
 function load(){
-  try{ const o = JSON.parse(localStorage.getItem(LS) || "{}"); readings = (o.lecturas||[]).map(migrate); P = {...DEFAULTS, ...(o.cfg||{})}; }
+  try{
+    const o = JSON.parse(localStorage.getItem(LS) || "{}"), cfg = o.cfg || {};
+    readings = (o.lecturas||[]).map(migrate); P = {...DEFAULTS, ...cfg};
+    // configuración anterior a los límites de batería: tenía el FP de ejemplo (0.8); los UPS del sitio son de 0.9
+    if (cfg.fp === 0.8 && cfg.vCeldaMin === undefined){ P.fp = 0.9; fpActualizado = true; }
+  }
   catch{ lsOk = false; }
   cambioParametros(); sortR();
 }
@@ -204,6 +213,11 @@ const fotos = Comun.fotosDB("bitacora-ups-fotos");
 const avg = a => { const v = a.map(num); return v.every(x=>x!==null) ? v.reduce((s,x)=>s+x,0)/v.length : null; };
 const unb = a => { const m = avg(a); if (m===null || m===0) return null; const v=a.map(num); return Math.max(Math.max(...v)-m, m-Math.min(...v))/m; };
 const kwMod = () => P.kva * P.fp;
+/* Carga relativa a n módulos: el módulo tiene dos límites (kW = kVA × FP nominal, y kVA); manda el mayor. */
+const cargaRel = (kw, kva, n) => n>0 && kw!==null ? Math.max(kw/(kwMod()*n), num(kva)!==null ? kva/(P.kva*n) : 0) : null;
+const modsNecesarios = (kw, kva) => Math.max(1, Math.ceil(kw/kwMod()), num(kva)!==null ? Math.ceil(kva/P.kva) : 1);
+/* Mayor desviación por fase contra el nominal, con signo: un promedio correcto puede esconder una fase fuera. */
+const devFases = (vs, vnom) => { let m = null; for (const v of vs.map(num)) if (v!==null){ const d = (v-vnom)/vnom; if (m===null || Math.abs(d)>Math.abs(m)) m = d; } return m; };
 /* Las lecturas guardadas no cambian: su cálculo se reutiliza hasta que cambian los parámetros. */
 let calcCache = new WeakMap();
 const cambioParametros = () => { calcCache = new WeakMap(); actualizarEquipos(); };
@@ -218,11 +232,16 @@ function calcularLectura(r){
   const vout=avg([o.vab,o.vbc,o.vca]), iout=avg([l.ia,l.ib,l.ic]);
   const kvaCalc = (vout!==null && iout!==null) ? Math.sqrt(3)*vout*iout/1000 : null;
   const enl = num(s.enlinea);
-  const cap = sc ? kwMod()*(enl ?? P.modulos) : kwMod();
+  const nMods = sc ? (enl ?? P.modulos) : 1;
+  const pKw = num(l.kw)!==null && nMods>0 ? l.kw/(kwMod()*nMods) : null, pKva = num(l.kva)!==null && nMods>0 ? l.kva/(P.kva*nMods) : null;
   const c = {
     sc, enlinea: enl,
     fp: (num(l.kw)!==null && num(l.kva)) ? l.kw/l.kva : null,
-    pctKw: num(l.kw)!==null ? l.kw/cap : null,
+    // % de carga: el mayor entre kW y kVA contra la capacidad (un UPS o los UPS en línea del SCCT)
+    pctKw: pKw===null && pKva===null ? null : Math.max(pKw ?? 0, pKva ?? 0), pKw, pKva,
+    limita: pKva!==null && pKw!==null && pKva>pKw ? "kVA" : "kW",
+    devIn: sc ? devFases([byp.vab,byp.vbc,byp.vca], P.vnom) : devFases([i.vab,i.vbc,i.vca], P.vnom),
+    devOut: devFases([o.vab,o.vbc,o.vca], P.vnom),
     unbVin: sc ? unb([byp.vab,byp.vbc,byp.vca]) : unb([i.vab,i.vbc,i.vca]),
     unbIin: sc ? null : unb([i.ia,i.ib,i.ic]),
     unbVout: unb([o.vab,o.vbc,o.vca]), unbIout: unb([l.ia,l.ib,l.ic]),
@@ -232,12 +251,14 @@ function calcularLectura(r){
   };
   c.flags = []; c.det = [];
   const flag = (n, d) => { c.flags.push(n); c.det.push(d ? `${n} (${d})` : n); };
-  if (c.pctKw!==null && c.pctKw>P.limCarga) flag("Carga alta", pct(c.pctKw));
+  if (c.pctKw!==null && c.pctKw>P.limCarga) flag("Carga alta", `${pct(c.pctKw)} por ${c.limita}`);
   if ((c.unbVin??0)>P.limV || (c.unbVout??0)>P.limV) flag("Desbalance de voltaje", `${sc?"bypass":"entrada"} ${pct(c.unbVin,2)}, salida ${pct(c.unbVout,2)}`);
   if ((c.unbIin??0)>P.limI || (c.unbIout??0)>P.limI) flag("Desbalance de corriente", sc ? `carga ${pct(c.unbIout)}` : `entrada ${pct(c.unbIin)}, carga ${pct(c.unbIout)}`);
-  if (c.dev!==null && Math.abs(c.dev)>P.limDev) flag("Voltaje fuera de rango", `${fx(c.vout)} V`);
+  if (c.devOut!==null && Math.abs(c.devOut)>P.limDev) flag("Voltaje de salida fuera de rango", `una fase a ${(c.devOut>0?"+":"")+pct(c.devOut,1)} del nominal`);
+  if (c.devIn!==null && Math.abs(c.devIn)>P.limDevIn) flag(`Voltaje de ${sc?"bypass":"entrada"} fuera de rango`, `una fase a ${(c.devIn>0?"+":"")+pct(c.devIn,1)} del nominal`);
+  if (c.vCell!==null && (c.vCell<P.vCeldaMin || c.vCell>P.vCeldaMax)) flag(c.vCell<P.vCeldaMin ? "Batería bajo flotación" : "Batería sobre flotación", `${fx(c.vCell,3)} V/celda; rango ${fx(P.vCeldaMin,3)}–${fx(P.vCeldaMax,3)}`);
   if (c.hz!==null && Math.abs(c.hz-60)>0.5) flag("Frecuencia fuera de rango", `${fx(c.hz)} Hz`);
-  if (c.batA!==null && c.batA!==0) flag("Batería con corriente", `${c.batA} A`);
+  if (c.batA!==null && Math.abs(c.batA)>P.limBatA) flag("Batería con corriente", `${c.batA} A`);
   if (c.kvaDiff!==null && Math.abs(c.kvaDiff)>0.10) flag("kVA no cuadra con V×I", `${fx(c.kvaCalc)} vs ${fx(l.kva,0)} kVA`);
   if (sc && enl!==null && enl<P.modulos) flag(`Solo ${enl} de ${P.modulos} UPS en línea`);
   c.ok = c.flags.length===0;
@@ -289,15 +310,17 @@ $("#lcd").addEventListener("keydown", e => {
 function renderChecks(){
   const c = calc({...draft, equipo:selEq});
   const rows = [
-    [c.sc ? "Carga de la rama (vs UPS en línea)" : "Carga del módulo (kW)", pct(c.pctKw), c.pctKw===null?null:c.pctKw<=P.limCarga],
+    [c.sc ? "Carga de la rama (vs UPS en línea)" : "Carga del módulo", c.pctKw===null?"—":`${pct(c.pctKw)} (por ${c.limita})`, c.pctKw===null?null:c.pctKw<=P.limCarga],
     ["Factor de potencia de la carga", fx(c.fp,2), c.fp===null?null:true],
     ["kVA calculado con V×I", c.kvaCalc===null?"—":`${fx(c.kvaCalc)} kVA (${c.kvaDiff===null?"—":(c.kvaDiff>0?"+":"")+pct(c.kvaDiff)} vs display)`, c.kvaDiff===null?null:Math.abs(c.kvaDiff)<=0.10],
     [c.sc ? "Desbalance V bypass / salida" : "Desbalance V entrada / salida", `${pct(c.unbVin,2)} / ${pct(c.unbVout,2)}`, (c.unbVin===null&&c.unbVout===null)?null:((c.unbVin??0)<=P.limV && (c.unbVout??0)<=P.limV)],
     [c.sc ? "Desbalance I de carga" : "Desbalance I entrada / carga", c.sc ? pct(c.unbIout) : `${pct(c.unbIin)} / ${pct(c.unbIout)}`, (c.unbIin===null&&c.unbIout===null)?null:((c.unbIin??0)<=P.limI && (c.unbIout??0)<=P.limI)],
-    ["Voltaje salida vs nominal", c.dev===null?"—":`${fx(c.vout)} V (${(c.dev>0?"+":"")+pct(c.dev,2)})`, c.dev===null?null:Math.abs(c.dev)<=P.limDev],
+    ["Voltaje salida vs nominal", c.devOut===null?"—":`prom. ${fx(c.vout)} V; peor fase ${(c.devOut>0?"+":"")+pct(c.devOut,1)}`, c.devOut===null?null:Math.abs(c.devOut)<=P.limDev],
+    [c.sc ? "Voltaje bypass vs nominal" : "Voltaje entrada vs nominal", c.devIn===null?"—":`peor fase ${(c.devIn>0?"+":"")+pct(c.devIn,1)}`, c.devIn===null?null:Math.abs(c.devIn)<=P.limDevIn],
     ["Frecuencia", c.hz===null?"—":fx(c.hz)+" Hz", c.hz===null?null:Math.abs(c.hz-60)<=0.5],
     c.sc ? ["UPS en línea", c.enlinea===null?"—":`${c.enlinea} de ${P.modulos}`, c.enlinea===null?null:c.enlinea>=P.modulos]
-         : ["Batería", c.vCell===null?"—":`${fx(c.vCell,3)} V/celda, ${c.batA===0?"flotación":(c.batA??"—")+" A"}`, c.batA===null?null:c.batA===0]
+         : ["Batería", c.vCell===null&&c.batA===null?"—":`${fx(c.vCell,3)} V/celda, ${(c.batA??"—")} A`,
+            c.vCell===null&&c.batA===null ? null : (c.vCell===null || (c.vCell>=P.vCeldaMin && c.vCell<=P.vCeldaMax)) && (c.batA===null || Math.abs(c.batA)<=P.limBatA)]
   ];
   $("#checks").innerHTML = rows.map(([a,b,ok]) => `<div class="chk ${ok===null?"na":ok?"ok":"bad"}"><span>${a}</span><b>${b}</b></div>`).join("");
 }
@@ -335,10 +358,25 @@ function siguiente(){
   const ri = RAMAS.indexOf(selRama);
   return ri < RAMAS.length-1 ? [RAMAS[ri+1], eqs[0]] : [selRama, selEq];
 }
+/* Valores que casi seguro son errores de dedo (no límites de operación): se avisan antes de guardar. */
+function revisarCaptura(d, eq){
+  const sc = isScct(eq), out = [], fase = {vab:"A-B", vbc:"B-C", vca:"C-A"};
+  for (const [g, n] of sc ? [["byp","bypass"],["out","salida"]] : [["in","entrada"],["out","salida"]])
+    for (const k of ["vab","vbc","vca"]){ const v = num(d[g]?.[k]); if (v!==null && (v < P.vnom*0.5 || v > P.vnom*1.5)) out.push(`Voltaje de ${n} ${fase[k]}: ${v} V (nominal ${P.vnom} V)`); }
+  const kw = num(d.load?.kw), kva = num(d.load?.kva);
+  if (kw!==null && kva!==null && kw > kva*1.02) out.push(`kW (${kw}) mayor que kVA (${kva}): el factor de potencia no puede pasar de 1`);
+  const hz = num(d.out?.hz); if (hz!==null && (hz < 55 || hz > 65)) out.push(`Frecuencia de ${hz} Hz`);
+  const bv = num(d.bat?.v); if (!sc && bv!==null && (bv/P.celdas < 1.75 || bv/P.celdas > 2.6)) out.push(`Voltaje de batería ${bv} V (${fx(bv/P.celdas,2)} V/celda con ${P.celdas} celdas)`);
+  const enl = num(d.sys?.enlinea); if (sc && enl!==null && (enl < 0 || enl > P.modulos || enl % 1)) out.push(`UPS en línea: ${enl} (hay ${P.modulos} por rama)`);
+  const c = calc({...d, equipo:eq}); if (c.kvaDiff!==null && Math.abs(c.kvaDiff) > 0.3) out.push(`kVA del display (${kva}) muy distinto de V×I (${fx(c.kvaCalc,0)} kVA): revisa voltajes, corrientes o kVA`);
+  return out;
+}
 $("#saveBtn").onclick = async () => {
   const st = $("#saveStatus"); estado(st, "");
   if (foto.pending){ st.textContent = "Esperando a que termine la foto…"; await foto.pending; }
   if (num(draft.load.kw)===null || num(draft.load.kva)===null){ estado(st, "Faltan kVA y kW de carga: son necesarios para el cálculo del sistema.", true); return; }
+  const dudas = revisarCaptura(draft, selEq);
+  if (dudas.length && !confirm(`Revisa estos valores, parecen errores de captura:\n\n• ${dudas.join("\n• ")}\n\n¿Guardar de todos modos?`)) return;
   $("#saveBtn").disabled = true;
   const tsv = $("#ts").value; const ts = tsv ? new Date(tsv).toISOString() : new Date().toISOString();
   const id = Comun.nuevoId("l");
@@ -379,7 +417,7 @@ function estadoRama(rama){
   const enl = sc && num(sc.sys?.enlinea)!==null ? num(sc.sys.enlinea) : P.modulos;
   const kw = scKw ?? (ups.length ? sumKw : null), kva = scKva ?? (ups.length ? sumKva : null);
   const fuente = scKw!==null ? "SCCT" : "suma de módulos";
-  const N = kw!==null ? Math.max(1, Math.ceil(kw/kwMod())) : null;
+  const N = kw!==null ? modsNecesarios(kw, kva) : null;
   const warns = [];
   const faltan = P.modulos - ups.length;
   if (!sc) warns.push("Sin lectura del SCCT: la carga se toma de la suma de módulos.");
@@ -392,14 +430,15 @@ function estadoRama(rama){
   return {rama, L, ups, kw, kva, sumKw, fuente, enl, N, red: N!==null ? enl-N : null, warns, hay: Object.keys(L).length>0};
 }
 /* Escenario de pérdida de una rama: toda la carga pasa a la rama que queda. */
-function escenario(queda, tot){
-  const cap = kwMod()*queda.enl, N = Math.max(1, Math.ceil(tot/kwMod())), red = queda.enl - N, p = tot/cap;
+function escenario(queda, tot, totKva){
+  const cap = kwMod()*queda.enl, N = modsNecesarios(tot, totKva), red = queda.enl - N, p = cargaRel(tot, totKva, queda.enl);
   return {rama:queda.rama, cap, red, p, ok: red>=0 && p<=P.limCarga};
 }
+const kvaTotal = (A, B) => num(A.kva)!==null && num(B.kva)!==null ? A.kva + B.kva : null;
 function renderSys(){
   const E = RAMAS.map(estadoRama);
   $("#ramas").innerHTML = E.map(e => {
-    const lf = k => (e.kw===null || e.enl-k<=0) ? "—" : pct(e.kw/(kwMod()*(e.enl-k)));
+    const lf = k => (e.kw===null || e.enl-k<=0) ? "—" : pct(cargaRel(e.kw, e.kva, e.enl-k));
     let u = "";
     for (const eq of equipos()){
       const r = e.L[eq];
@@ -416,7 +455,7 @@ function renderSys(){
       ${e.warns.length?`<div class="note">${e.warns.map(esc).join("<br>")}</div>`:""}
       <div class="kv" style="margin-top:8px">
         <span>UPS en línea</span><span>${e.enl} de ${P.modulos}</span>
-        <span>Capacidad en línea</span><span>${fx(kwMod()*e.enl,0)} kW</span>
+        <span>Capacidad en línea</span><span>${fx(kwMod()*e.enl,0)} kW / ${fx(P.kva*e.enl,0)} kVA</span>
         <span>Factor de potencia</span><span>${e.kw!==null&&e.kva?fx(e.kw/e.kva,2):"—"}</span>
         <span>Módulos requeridos (N)</span><span>${e.N??"—"}</span>
         <span>Carga por módulo, todos en línea</span><span>${lf(0)}</span>
@@ -432,7 +471,7 @@ function renderSys(){
   }
   const tot = A.kw + B.kw;
   const tarjeta = (queda, pierde) => {
-    const x = escenario(queda, tot);
+    const x = escenario(queda, tot, kvaTotal(A, B));
     return `<div class="rama"><div class="muted">Si se pierde la Rama ${pierde.rama}</div>
       <div class="row" style="justify-content:space-between;align-items:flex-end">
         <div><div class="muted">Rama ${queda.rama} quedaría en</div><div class="big">${confTxt(x.red)}</div></div>
@@ -660,7 +699,8 @@ async function generarInforme(){
   const [A,B] = E;
   if (A.kw!==null && B.kw!==null){
     const tot = A.kw + B.kw;
-    cruce = {tot, pierdeA: escenario(B, tot), pierdeB: escenario(A, tot)};
+    const totKva = kvaTotal(A, B);
+    cruce = {tot, pierdeA: escenario(B, tot, totKva), pierdeB: escenario(A, tot, totKva)};
     [cruce.pierdeA, cruce.pierdeB].forEach((x,i) => { if (!x.ok) hall.push({eq:`Rama ${x.rama}`, d:`Si se pierde la Rama ${i===0?"A":"B"}, quedaría en ${confTxt(x.red)} al ${pct(x.p,0)} por módulo`, f:""}); });
   }
   const estadoGlobal = hall.length ? {t:`${hall.length} hallazgo(s) que requieren atención`, c:"bad"} : faltan.length ? {t:"Sin hallazgos, con lecturas incompletas", c:"warn"} : {t:"Sin hallazgos", c:"ok"};
@@ -672,10 +712,10 @@ async function generarInforme(){
     const d = prev && num(prev.load?.kw)!==null && num(r.load?.kw)!==null ? r.load.kw - prev.load.kw : null;
     const td = (fuera, txt) => `<td${fuera ? ' class="mal"' : ""}>${txt}</td>`;   // fuera de límite: en rojo
     const bat = c.sc ? td(c.enlinea!==null && c.enlinea<P.modulos, (c.enlinea??"—")+" en línea")
-      : td(c.batA!==null && c.batA!==0, `${fx(c.vCell,3)} V/c${c.batA ? ` · ${c.batA} A` : ""}`);
-    return `<tr><td><b>${eq}</b></td><td>${fdate(r.ts)}</td><td>${fx(r.load?.kw,0)}</td><td>${d===null?"—":(d>0?"+":"")+fx(d,0)}</td><td>${fx(r.load?.kva,0)}</td>${td(c.pctKw>P.limCarga, pct(c.pctKw))}<td>${fx(c.fp,2)}</td>${td(c.dev!==null && Math.abs(c.dev)>P.limDev, fx(c.vout,0))}${td(c.unbIout>P.limI, pct(c.unbIout))}${bat}<td><span class="est ${c.ok?"ok":"bad"}" style="margin:0;padding:1px 6px">${c.ok?"OK":"Revisar"}</span></td></tr>`;
+      : td((c.batA!==null && Math.abs(c.batA)>P.limBatA) || (c.vCell!==null && (c.vCell<P.vCeldaMin || c.vCell>P.vCeldaMax)), `${fx(c.vCell,3)} V/c${c.batA ? ` · ${c.batA} A` : ""}`);
+    return `<tr><td><b>${eq}</b></td><td>${fdate(r.ts)}</td><td>${fx(r.load?.kw,0)}</td><td>${d===null?"—":(d>0?"+":"")+fx(d,0)}</td><td>${fx(r.load?.kva,0)}</td>${td(c.pctKw>P.limCarga, pct(c.pctKw))}<td>${fx(c.fp,2)}</td>${td(c.devOut!==null && Math.abs(c.devOut)>P.limDev, fx(c.vout,0))}${td(c.unbIout>P.limI, pct(c.unbIout))}${bat}<td><span class="est ${c.ok?"ok":"bad"}" style="margin:0;padding:1px 6px">${c.ok?"OK":"Revisar"}</span></td></tr>`;
   }).join("");
-  const kpiRama = e => `<div class="kpi"><div class="l">Rama ${e.rama}</div><div class="v">${e.kw===null?"—":confTxt(e.red)}</div><div>${e.kw===null?"Sin datos":Math.round(e.kw)+" kW ("+e.fuente+")"}</div><div style="color:#4a5866">${e.enl} de ${P.modulos} UPS en línea${e.kw!==null?`, ${pct(e.kw/(kwMod()*e.enl))} de capacidad`:""}</div></div>`;
+  const kpiRama = e => `<div class="kpi"><div class="l">Rama ${e.rama}</div><div class="v">${e.kw===null?"—":confTxt(e.red)}</div><div>${e.kw===null?"Sin datos":Math.round(e.kw)+" kW ("+e.fuente+")"}</div><div style="color:#4a5866">${e.enl} de ${P.modulos} UPS en línea${e.kw!==null?`, ${pct(cargaRel(e.kw, e.kva, e.enl))} de capacidad`:""}</div></div>`;
 
   // notas
   const notas = incNotas ? usadas.filter(r => r.nota).map(r => `<li><b>Rama ${r.rama} ${esc(r.equipo)}</b> (${fdate(r.ts)}): ${esc(r.nota)}</li>`).join("") : "";
@@ -698,11 +738,11 @@ async function generarInforme(){
   ${hall.length?`<ul>${hall.map(h=>`<li><b>${esc(h.eq)}</b>: ${esc(h.d)}${h.f?` <span style="color:#6a7784">(${h.f})</span>`:""}</li>`).join("")}</ul>`:"<p>No se detectaron parámetros fuera de límite.</p>"}
   ${faltan.length?`<p style="color:#6b5200"><b>Sin lectura:</b> ${faltan.map(esc).join(", ")}.</p>`:""}
   ${E.map(e=>`<div class="bloque"><h2>Detalle Rama ${e.rama}</h2><div class="tw"><table><tr><th>Equipo</th><th>Lectura</th><th>kW</th><th>Δ kW</th><th>kVA</th><th>% carga</th><th>FP</th><th>V salida</th><th>Desb. I</th><th>Batería</th><th>Estado</th></tr>${filas(e)}</table></div></div>`).join("")}
-  <div style="font-size:11px;color:#6a7784;margin-top:4px">Δ kW: cambio respecto a la lectura anterior del mismo equipo. % carga de UPS contra ${fx(kwMod(),0)} kW por módulo; del SCCT contra la capacidad de los UPS en línea. Batería: voltaje por celda y corriente (en flotación debe ser 0 A); en el SCCT, UPS en línea. En rojo, los valores fuera de límite.</div>
+  <div style="font-size:11px;color:#6a7784;margin-top:4px">Δ kW: cambio respecto a la lectura anterior del mismo equipo. % carga: el mayor entre kW contra ${fx(kwMod(),0)} kW y kVA contra ${fx(P.kva,0)} kVA por módulo (en el SCCT, por los UPS en línea). V salida: promedio; se marca si alguna fase sale de rango. Batería: voltaje por celda y corriente (en flotación debe ser 0 A); en el SCCT, UPS en línea. En rojo, los valores fuera de límite.</div>
   ${notas?`<h2>Notas de campo</h2><ul>${notas}</ul>`:""}
   ${fotosInf?`<h2>Evidencia fotográfica</h2><div class="fotos">${fotosInf}</div>`:""}
   <h2>Criterios</h2>
-  <div style="font-size:12px">Módulo ${P.kva} kVA, FP ${P.fp}. Límites: carga ${pct(P.limCarga,0)}, desbalance de voltaje ${pct(P.limV,1)}, desbalance de corriente ${pct(P.limI,0)}, desviación de voltaje ${pct(P.limDev,0)} sobre ${P.vnom} V, frecuencia 60 ± 0.5 Hz, kVA vs V×I ±10 %.</div>
+  <div style="font-size:12px">Módulo ${P.kva} kVA / ${fx(kwMod(),0)} kW (FP ${P.fp}). Límites: carga ${pct(P.limCarga,0)} (kW o kVA, el mayor), desbalance de voltaje ${pct(P.limV,1)}, desbalance de corriente ${pct(P.limI,0)}, desviación por fase ${pct(P.limDev,0)} en salida y ${pct(P.limDevIn,0)} en entrada/bypass sobre ${P.vnom} V, frecuencia 60 ± 0.5 Hz, kVA vs V×I ±10 %. Batería: ${P.celdas} celdas, flotación ${fx(P.vCeldaMin,3)}–${fx(P.vCeldaMax,3)} V/celda a 25 °C, corriente tolerada ${P.limBatA} A.</div>
   <div class="firma"><div>Elaboró${elab?`<br>${esc(elab)}`:""}</div><div>Revisó${revi?`<br>${esc(revi)}`:""}</div></div>
   <div class="pie">Generado con Bitácora de UPS. Valores capturados de los displays de los equipos; la inspección es pasiva y no incluye intervención en equipos.</div>
   </div>`;
@@ -712,7 +752,7 @@ async function generarInforme(){
   L.push(`*Informe UPS${sitio?" – "+sitio:""}*`);
   L.push(`${fdate(ahora)} | Lecturas: ${periodo}`);
   L.push("");
-  E.forEach(e => L.push(`Rama ${e.rama}: ${e.kw===null?"sin datos":`${confTxt(e.red)} | ${Math.round(e.kw)} kW | ${pct(e.kw/(kwMod()*e.enl))} | ${e.enl}/${P.modulos} UPS en línea`}`));
+  E.forEach(e => L.push(`Rama ${e.rama}: ${e.kw===null?"sin datos":`${confTxt(e.red)} | ${Math.round(e.kw)} kW | ${pct(cargaRel(e.kw, e.kva, e.enl))} | ${e.enl}/${P.modulos} UPS en línea`}`));
   if (cruce) L.push(`Si se pierde A: B en ${confTxt(cruce.pierdeA.red)} al ${pct(cruce.pierdeA.p,0)}. Si se pierde B: A en ${confTxt(cruce.pierdeB.red)} al ${pct(cruce.pierdeB.p,0)}.`);
   L.push("");
   L.push(hall.length ? `Hallazgos (${hall.length}):` : "Sin hallazgos.");
@@ -734,6 +774,11 @@ function renderAll(){ bak.aviso(); renderChips(); renderLcdMeta(); tabs.renderVi
   load();
   await Comun.revisarEntorno({lsOk, persist, fotos,
     sinFotos:"Este navegador no permite guardar fotos al abrir el archivo así. Las lecturas sí se guardan; para las fotos, publica la app en GitHub Pages o ábrela en otro navegador."});
+  if (fpActualizado){
+    persist();
+    const n = $("#storeNote"); n.innerHTML += (n.innerHTML ? "<br>" : "") + "Se actualizó el factor de potencia de los UPS de 0.8 a 0.9 (450 kW por módulo), según la placa del equipo. Puedes cambiarlo en Ajustes.";
+    n.classList.remove("hidden");
+  }
   renderCfg();
   $("#repSitio").value = P.sitio || ""; $("#repElab").value = P.elaboro || ""; $("#repRevi").value = P.reviso || "";
   newDraft();
