@@ -216,9 +216,34 @@ const piePagina = texto => `@page{size:letter;margin:12mm 12mm 16mm;
   @bottom-right{content:"Página " counter(page) " de " counter(pages);font:9px system-ui,sans-serif;color:#6a7784}}`;
 function cssInforme(css){ const st = document.createElement("style"); st.textContent = css + CSS_IMPRESION; document.head.append(st); }
 const docInforme = (titulo, css, html, pie = titulo) => `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(titulo)}</title><style>body{margin:0;padding:12px;background:#eef1f4}${css}${CSS_IMPRESION}@media print{body{background:#fff;padding:0}}${piePagina(pie)}</style></head><body>${html}</body></html>`;
-/* Carga en paralelo las fotos [{id, alt, pie}] y devuelve las <figure> del informe. */
+/* Fotos que no se pudieron cargar en el último informe; accionesInforme las avisa. */
+let fotosFaltantes = [];
+/* Carga las fotos [{id, alt, pie}] y devuelve las <figure> del informe. Las que no están en el teléfono se bajan
+   del servidor de dos en dos y con reintentos: pedirlas todas a la vez hacía que Apps Script rechazara varias
+   y el informe salía con unas fotos sí y otras no. */
 async function figurasInforme(fotos, lista){
-  const urls = await Promise.all(lista.map(async f => { const b = await fotos.get(f.id); return b ? blobToDataURL(b) : null; }));
+  const urls = new Array(lista.length).fill(null), st = $("#repStatus");
+  let sig = 0, hechas = 0, fallidas = 0;
+  const una = async f => {
+    for (let k = 0; k < 3; k++){
+      const b = await fotos.get(f.id);
+      if (b) return blobToDataURL(b);
+      // sin servidor o sin señal no tiene caso insistir; tras dos fotos perdidas, las demás se intentan una sola vez
+      if (!fotos.remoto || navigator.onLine === false || fallidas >= 2) break;
+      await new Promise(r => setTimeout(r, 1500 * (k + 1)));
+    }
+    fallidas++;
+    return null;
+  };
+  const trabajador = async () => {
+    while (sig < lista.length){
+      const i = sig++;
+      urls[i] = await una(lista[i]);
+      hechas++; if (st && lista.length > 1) estado(st, `Preparando fotos: ${hechas} de ${lista.length}…`);
+    }
+  };
+  await Promise.all([trabajador(), trabajador()]);
+  fotosFaltantes.push(...lista.filter((f, i) => !urls[i]).map(f => f.pie));
   return lista.map((f, i) => urls[i] ? `<figure><img src="${urls[i]}" alt="${esc(f.alt)}"><figcaption>${esc(f.pie)}</figcaption></figure>` : "").join("");
 }
 /* Botones del informe. generar() devuelve {html, texto, doc} o null si no hay lecturas. */
@@ -229,13 +254,15 @@ function accionesInforme({generar, guardarDatos, vacio, archivo, titulo}){
     $("#repGen").disabled = true;
     try{
       guardarDatos();
+      fotosFaltantes = [];
       rep = await generar();
       if (!rep){ estado(st, typeof vacio==="function" ? vacio() : vacio, true); $("#rep").innerHTML=""; $("#repAcc").classList.add("hidden"); return; }
       $("#rep").innerHTML = rep.html; $("#repAcc").classList.remove("hidden");
       let pp = $("#repPagina"); if (!pp){ pp = document.createElement("style"); pp.id = "repPagina"; document.head.append(pp); }
       pp.textContent = piePagina(rep.pie || titulo);
       $("#repShare").classList.toggle("hidden", !navigator.share);
-      estado(st, "Informe listo.");
+      const nf = fotosFaltantes.length;
+      estado(st, nf ? `Informe listo, pero ${nf === 1 ? "falta 1 foto que no se pudo bajar" : `faltan ${nf} fotos que no se pudieron bajar`} del servidor${nf <= 3 ? ` (${fotosFaltantes.join("; ")})` : ""}. Revisa la señal y toca «Generar informe» otra vez.` : "Informe listo.", !!nf);
     }catch{ estado(st, "No se pudo generar el informe.", true); }
     finally{ $("#repGen").disabled = false; }
   };
@@ -468,6 +495,21 @@ function compartir(o){
     }
   }
 
+  /* Después de sincronizar, baja en segundo plano (una por una) las fotos recientes que capturaron otros, para que
+     el informe y el historial las tengan al instante y sin señal. Si una falla se detiene; sigue en la próxima. */
+  let precargando = false;
+  async function precargarFotos(){
+    if (precargando) return;
+    precargando = true;
+    try{
+      const desde = Date.now() - 31 * 86400000;
+      for (const r of o.lecturas()){
+        if (!r.foto || !r.fotoSrv || +new Date(r.ts) < desde || await o.fotos.has(r.id)) continue;
+        if (!(await o.fotos.remoto(r.id))) break;
+      }
+    }finally{ precargando = false; }
+  }
+
   function sincronizar(){
     if (!activo()) return Promise.resolve();
     if (enCurso){ otraVez = true; return enCurso; }
@@ -475,6 +517,7 @@ function compartir(o){
       try{
         do { otraVez = false; await ronda(); } while (otraVez);
         error = "";
+        precargarFotos();
       }catch(e){ error = e.message; }
       finally{ enCurso = null; estadoUI(); }
     })();
