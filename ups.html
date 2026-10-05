@@ -91,7 +91,9 @@
       <label for="repSitio">Sitio</label><input class="plain" id="repSitio" placeholder="Ej. Data center, sala eléctrica">
       <label for="repElab">Elaboró</label><input class="plain" id="repElab" placeholder="Nombre y puesto">
       <label for="repRevi">Revisó</label><input class="plain" id="repRevi" placeholder="Nombre y puesto">
+      <label for="repDia">Lecturas del día</label><input class="plain" type="date" id="repDia">
     </div>
+    <div class="muted" style="margin-top:6px;font-size:13px">Usa la última lectura de cada equipo en ese día. Déjalo vacío para usar la última lectura de cada equipo de cualquier fecha.</div>
     <div class="row" style="margin-top:10px;gap:16px">
       <label><input type="checkbox" id="repFotos" checked> Incluir fotos</label>
       <label><input type="checkbox" id="repNotas" checked> Incluir notas</label>
@@ -267,7 +269,9 @@ function calcularLectura(r){
 const confTxt = (red) => red<0 ? "Sobrecarga" : red===0 ? "N" : "N+"+red;
 
 /* ================= pestañas ================= */
-const tabs = Comun.pestanas({sis:renderSys, ten:renderChart, his:renderHis, cfg:renderUsage});
+/* El día del informe arranca en el de la lectura más reciente; si la persona lo cambia, se respeta. */
+function prepInforme(){ const d = $("#repDia"); if (!d.dataset.elegido && readings.length) d.value = diaDe(readings[0].ts); }
+const tabs = Comun.pestanas({sis:renderSys, ten:renderChart, inf:prepInforme, his:renderHis, cfg:renderUsage});
 
 /* ================= captura ================= */
 function chip(txt, pressed, fn){ const b=document.createElement("button"); b.className="chip"; b.textContent=txt; b.setAttribute("aria-pressed", pressed); b.onclick=fn; return b; }
@@ -402,13 +406,16 @@ $("#saveBtn").onclick = async () => {
 };
 
 /* ================= sistema ================= */
-function ultimos(rama){
+/* Día local (AAAA-MM-DD) de una lectura, para filtrar el informe por fecha. */
+const diaDe = ts => isoLocal(new Date(ts)).slice(0,10);
+const fDia = dia => new Date(dia+"T12:00").toLocaleDateString("es-MX", {day:"2-digit", month:"2-digit", year:"2-digit"});
+function ultimos(rama, dia){
   const m = {}, eqs = new Set(equipos());
-  for (const r of readings){ if (r.rama===rama && !m[r.equipo] && eqs.has(r.equipo)) m[r.equipo]=r; }
+  for (const r of readings){ if (r.rama===rama && !m[r.equipo] && eqs.has(r.equipo) && (!dia || diaDe(r.ts)===dia)) m[r.equipo]=r; }
   return m;
 }
-function estadoRama(rama){
-  const L = ultimos(rama);
+function estadoRama(rama, dia){
+  const L = ultimos(rama, dia);
   const ups = equipos().filter(e=>!isScct(e) && L[e]);
   const sumKw = ups.reduce((s,e)=>s+(num(L[e].load?.kw)||0),0);
   const sumKva = ups.reduce((s,e)=>s+(num(L[e].load?.kva)||0),0);
@@ -436,7 +443,7 @@ function escenario(queda, tot, totKva){
 }
 const kvaTotal = (A, B) => num(A.kva)!==null && num(B.kva)!==null ? A.kva + B.kva : null;
 function renderSys(){
-  const E = RAMAS.map(estadoRama);
+  const E = RAMAS.map(r => estadoRama(r));
   $("#ramas").innerHTML = E.map(e => {
     const lf = k => (e.kw===null || e.enl-k<=0) ? "—" : pct(cargaRel(e.kw, e.kva, e.enl-k));
     let u = "";
@@ -676,12 +683,14 @@ function anterior(r){ return readings.find(x => x.rama===r.rama && x.equipo===r.
 async function generarInforme(){
   const incFotos = $("#repFotos").checked, incNotas = $("#repNotas").checked;
   const sitio = $("#repSitio").value.trim(), elab = $("#repElab").value.trim(), revi = $("#repRevi").value.trim();
-  const E = RAMAS.map(estadoRama);
+  const dia = $("#repDia").value;
+  const E = RAMAS.map(r => estadoRama(r, dia));
   const ahora = new Date();
   const usadas = E.flatMap(e => Object.values(e.L));
   if (!usadas.length) return null;
   const fechas = usadas.map(r => +new Date(r.ts));
-  const periodo = `${fdate(Math.min(...fechas))} a ${fdate(Math.max(...fechas))}`;
+  const hora = t => new Intl.DateTimeFormat("es-MX", {timeStyle:"short"}).format(t);
+  const periodo = dia ? `${fDia(dia)}, ${hora(Math.min(...fechas))} a ${hora(Math.max(...fechas))}` : `${fdate(Math.min(...fechas))} a ${fdate(Math.max(...fechas))}`;
 
   // hallazgos
   const hall = [], faltan = [];
@@ -736,7 +745,7 @@ async function generarInforme(){
     <div style="font-size:11px;color:#6a7784;margin-top:4px">Supone carga de doble alimentación que se transfiere completa a la otra rama.</div>`:""}
   <h2>Hallazgos</h2>
   ${hall.length?`<ul>${hall.map(h=>`<li><b>${esc(h.eq)}</b>: ${esc(h.d)}${h.f?` <span style="color:#6a7784">(${h.f})</span>`:""}</li>`).join("")}</ul>`:"<p>No se detectaron parámetros fuera de límite.</p>"}
-  ${faltan.length?`<p style="color:#6b5200"><b>Sin lectura:</b> ${faltan.map(esc).join(", ")}.</p>`:""}
+  ${faltan.length?`<p style="color:#6b5200"><b>Sin lectura${dia?" ese día":""}:</b> ${faltan.map(esc).join(", ")}.</p>`:""}
   ${E.map(e=>`<div class="bloque"><h2>Detalle Rama ${e.rama}</h2><div class="tw"><table><tr><th>Equipo</th><th>Lectura</th><th>kW</th><th>Δ kW</th><th>kVA</th><th>% carga</th><th>FP</th><th>V salida</th><th>Desb. I</th><th>Batería</th><th>Estado</th></tr>${filas(e)}</table></div></div>`).join("")}
   <div style="font-size:11px;color:#6a7784;margin-top:4px">Δ kW: cambio respecto a la lectura anterior del mismo equipo. % carga: el mayor entre kW contra ${fx(kwMod(),0)} kW y kVA contra ${fx(P.kva,0)} kVA por módulo (en el SCCT, por los UPS en línea). V salida: promedio; se marca si alguna fase sale de rango. Batería: voltaje por celda y corriente (en flotación debe ser 0 A); en el SCCT, UPS en línea. En rojo, los valores fuera de límite.</div>
   ${notas?`<h2>Notas de campo</h2><ul>${notas}</ul>`:""}
@@ -757,13 +766,13 @@ async function generarInforme(){
   L.push("");
   L.push(hall.length ? `Hallazgos (${hall.length}):` : "Sin hallazgos.");
   hall.forEach(h => L.push(`• ${h.eq}: ${h.d}`));
-  if (faltan.length) L.push(`Sin lectura: ${faltan.join(", ")}`);
+  if (faltan.length) L.push(`Sin lectura${dia?" ese día":""}: ${faltan.join(", ")}`);
   if (elab) { L.push(""); L.push(`Elaboró: ${elab}`); }
   const pie = `Informe de sistemas UPS${sitio?" · "+sitio:""} · ${fdate(ahora)}`;
   return {html, pie, texto:L.join("\n"), doc:Comun.docInforme(`Informe UPS ${fdate(ahora)}`, REP_CSS, html, pie)};
 }
 Comun.accionesInforme({generar:generarInforme, archivo:"informe_ups", titulo:"Informe UPS",
-  vacio:"No hay lecturas guardadas para generar el informe.",
+  vacio:() => $("#repDia").value ? `No hay lecturas del ${fDia($("#repDia").value)}. Elige otro día o deja la fecha vacía.` : "No hay lecturas guardadas para generar el informe.",
   guardarDatos(){ P.sitio = $("#repSitio").value.trim(); P.elaboro = $("#repElab").value.trim(); P.reviso = $("#repRevi").value.trim(); persist(); }});
 
 /* Dibuja lo que siempre está a la vista y la pestaña abierta; las demás se dibujan al abrirlas. */
@@ -780,6 +789,7 @@ function renderAll(){ bak.aviso(); renderChips(); renderLcdMeta(); tabs.renderVi
     n.classList.remove("hidden");
   }
   renderCfg();
+  $("#repDia").addEventListener("change", ev => { ev.target.dataset.elegido = "1"; });
   $("#repSitio").value = P.sitio || ""; $("#repElab").value = P.elaboro || ""; $("#repRevi").value = P.reviso || "";
   newDraft();
   if (!(await loadDraft())) $("#ts").value = nowLocal();

@@ -225,7 +225,7 @@ function accionesInforme({generar, guardarDatos, vacio, archivo, titulo}){
     try{
       guardarDatos();
       rep = await generar();
-      if (!rep){ estado(st, vacio, true); $("#rep").innerHTML=""; $("#repAcc").classList.add("hidden"); return; }
+      if (!rep){ estado(st, typeof vacio==="function" ? vacio() : vacio, true); $("#rep").innerHTML=""; $("#repAcc").classList.add("hidden"); return; }
       $("#rep").innerHTML = rep.html; $("#repAcc").classList.remove("hidden");
       let pp = $("#repPagina"); if (!pp){ pp = document.createElement("style"); pp.id = "repPagina"; document.head.append(pp); }
       pp.textContent = piePagina(rep.pie || titulo);
