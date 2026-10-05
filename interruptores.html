@@ -17,10 +17,29 @@
 .etu-lcd input{width:100%;background:rgba(255,255,255,.45);border:1px solid #7f8f7a;color:#1c2a6b;font:700 19px var(--fb);padding:6px;border-radius:4px;font-variant-numeric:tabular-nums}
 .tu{background:#23484b;color:#e9efe6;border-radius:10px;padding:12px;margin:12px 0;border:1px solid #16302f}
 .tu .grp{border-top:1px solid rgba(233,239,230,.2);padding:10px 0 4px}
-.tu .grp:first-child{border-top:0;padding-top:0}
-.tu .gh{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.tu .gh{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;margin-bottom:6px}
 .tu .gl{background:#f1ede2;color:#23484b;font:700 18px var(--fc);width:30px;height:30px;border-radius:4px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
 .tu .gt{font:600 15px var(--fb)}
+.tu .gl.w{width:auto;padding:0 6px;font-size:14px}
+.tu .gh .leds{margin-left:auto}
+.tuh{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px}
+.tuh div:first-child b{display:block;font:700 16px var(--fb);letter-spacing:.5px}
+.tuh span{font-size:12px;opacity:.8}
+.tuh .plug{background:#f1ede2;color:#23484b;border-radius:4px;padding:4px 8px;font-size:11px;text-align:right;line-height:1.2}
+.tuh .plug b{display:block;font:700 15px var(--fb)}
+.frente{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.trip{display:flex;align-items:center;gap:8px;background:#1b3537;border:1px solid rgba(233,239,230,.3);color:#e9efe6;border-radius:6px;padding:6px 10px;font:600 11px var(--fb);cursor:pointer;text-align:left;line-height:1.15}
+.trip b{background:#4a5b5b;color:#fff;border-radius:3px;padding:4px 8px;font-size:14px;min-width:30px;text-align:center}
+.trip.on b{background:#e25b2c}
+.leds{display:flex;flex-wrap:wrap;gap:6px}
+.led{display:inline-flex;align-items:center;gap:5px;background:#1b3537;border:1px solid rgba(233,239,230,.25);color:#e9efe6;border-radius:999px;padding:5px 9px 5px 6px;font:600 11px var(--fb);cursor:pointer;min-height:30px;letter-spacing:.3px}
+.led i{width:12px;height:12px;border-radius:50%;background:#4a5652;box-shadow:inset 0 1px 2px rgba(0,0,0,.5);flex:0 0 auto}
+.led.on{border-color:#fff}
+.led.verde.on i{background:#4fe07a;box-shadow:0 0 8px #4fe07a}
+.led.amar.on i{background:#ffd23f;box-shadow:0 0 8px #ffd23f}
+.led.rojo.on i{background:#ff4b3a;box-shadow:0 0 8px #ff4b3a}
+.tuhint{font-size:12px;opacity:.75;margin:6px 0 4px}
+.tu .nota{font-size:12px;opacity:.75;margin:-4px 0 6px}
 .tu .set{margin:6px 0 10px}
 .tu .sl{font-size:13px;opacity:.9;margin-bottom:4px;display:flex;justify-content:space-between;gap:8px}
 .tu .sl b{font-weight:600;color:#ffd98a}
@@ -90,7 +109,7 @@
   <div class="tu" id="tu"></div>
 
   <div class="card">
-    <h3 style="margin-top:0">Indicadores</h3>
+    <h3 style="margin-top:0">Estado del interruptor</h3>
     <div class="tg" id="inds"></div>
   </div>
   <div class="card">
@@ -219,38 +238,51 @@ const {$, esc, num, pct, fx, fdate, isoLocal, nowLocal, stamp, download, descarg
 /* ================= definición del ETU45B ================= */
 const TR_I2T = ["2","3.5","5.5","8","10","14","17","21","25","30"];
 const TR_I4T = ["1","2","3","4","5"];
+/* Mismo orden que el frente del ETU45B Release 2: interruptores DIP arriba y luego los diales L, S, I y el módulo G.
+   Cada grupo lleva los LEDs que el equipo tiene en esa zona (claves de IND). */
 const SETS = [
-  {g:"L", t:"Largo tiempo (sobrecarga)", items:[
-    {k:"char", l:"Característica", o:["I²t","I⁴t"], c:"c2"},
+  {g:"DIP", t:"Interruptores DIP", items:[
+    {k:"mem", l:"Memoria térmica (MEMORY)", o:["OFF","ON"], c:"c2"},
+    {k:"nOn", l:"Protección de neutro (IN)", o:["OFF","ON"], c:"c2"},
+    {k:"nFac", l:"IN =", o:["0.5 × In","1 × In"], c:"c2"},
+    {k:"char", l:"Característica L", o:["I²t","I⁴t"], c:"c2"}]},
+  {g:"L", t:"Largo tiempo (sobrecarga)", leds:["ledL","ledN"], items:[
     {k:"ir", l:"IR = × In", o:["0.4","0.45","0.5","0.55","0.6","0.65","0.7","0.8","0.9","1.0"]},
-    {k:"tr", l:"tR (s) @ 6 × IR", o:null}
-  ]},
-  {g:"S", t:"Corto tiempo", items:[
+    {k:"tr", l:"tR (s) @ 6 × IR", o:null}]},
+  {g:"S", t:"Corto tiempo", leds:["ledS"], items:[
     {k:"isd", l:"Isd = × In", o:["1.25","1.5","2","2.5","3","4","6","8","10","12"]},
-    {k:"tsd", l:"tsd (s)  ·  I²t tsd (s) @ 12 × In", o:["0.02 (M)","0.1","0.2","0.3","0.4","I²t 0.1","I²t 0.2","I²t 0.3","I²t 0.4","OFF"]}
-  ]},
-  {g:"I", t:"Instantáneo", items:[
-    {k:"ii", l:"Ii = × In", o:["1.5","2.2","3","4","6","8","10","12","MAX","OFF"]}
-  ]},
-  {g:"G", t:"Falla a tierra (GFM AT 45B)", gf:true, items:[
-    {k:"gTrip", l:"Ig disparo", o:["OFF","A","B","C","D","E"], c:"c6"},
-    {k:"gAlarm", l:"Ig alarma", o:["OFF","A","B","C","D","E"], c:"c6"},
-    {k:"tg", l:"tg (s)  ·  I²t tg (s)", o:["0.1","0.2","0.3","0.4","0.5","I²t 0.1","I²t 0.2","I²t 0.3","I²t 0.4","I²t 0.5"]}
-  ]},
-  {g:"≡", t:"Interruptores DIP", items:[
-    {k:"mem", l:"Memoria térmica", o:["OFF","ON"], c:"c2"},
-    {k:"nOn", l:"Protección de neutro IN", o:["OFF","ON"], c:"c2"},
-    {k:"nFac", l:"IN =", o:["0.5 × In","1 × In"], c:"c2"}
-  ]}
-];
-const SET_NAMES = {char:"Característica L", ir:"IR", tr:"tR", isd:"Isd", tsd:"tsd", ii:"Ii", gTrip:"Ig disparo", gAlarm:"Ig alarma", tg:"tg", mem:"Memoria", nOn:"Prot. neutro", nFac:"IN ="};
+    {k:"tsd", l:"tsd (s)  ·  I²t tsd (s) @ 12 × In", o:["0.02 (M)","0.1","0.2","0.3","0.4","I²t 0.1","I²t 0.2","I²t 0.3","I²t 0.4","OFF"]}]},
+  {g:"I", t:"Instantáneo", leds:["ledI"], nota:"OFF: Ics = Icw · MAX = 0.8 × Icw", items:[
+    {k:"ii", l:"Ii = × In", o:["1.5","2.2","3","4","6","8","10","12","MAX","OFF"]}]},
+  {g:"G", t:"Falla a tierra (GFM AT 45B)", gf:true, leds:["gLedAlarm","gLedTrip"], items:[
+    {k:"gMet", l:"Detección", o:["ΣI","Ig"], c:"c2"},
+    {k:"gTrip", l:"Ig disparo (TRIP)", o:["OFF","A","B","C","D","E"], c:"c6"},
+    {k:"gAlarm", l:"Ig alarma (ALARM)", o:["OFF","A","B","C","D","E"], c:"c6"},
+    {k:"tg", l:"tg (s)  ·  I²t tg (s)", o:["0.1","0.2","0.3","0.4","0.5","I²t 0.1","I²t 0.2","I²t 0.3","I²t 0.4","I²t 0.5"]}]}];
+const SET_NAMES = {char:"Característica L", ir:"IR", tr:"tR", isd:"Isd", tsd:"tsd", ii:"Ii", gMet:"Detección G", gTrip:"Ig disparo", gAlarm:"Ig alarma", tg:"tg", mem:"Memoria", nOn:"Prot. neutro", nFac:"IN ="};
 const optsFor = (it, s) => it.k==="tr" ? (s.char==="I⁴t" ? TR_I4T : TR_I2T) : it.o;
+/* El selector del equipo dice "0.5 / 1 × IR"; se guarda con el texto de siempre para no marcar cambios falsos contra la línea base. */
+const VER = {nFac:{"0.5 × In":"0.5 × IR", "1 × In":"1 × IR"}};
+const verVal = (k, v) => VER[k]?.[v] ?? v;
+/* z: dónde va en la pantalla (top = frente del disparador, L/S/I/G = junto a su dial, est = tarjeta de estado).
+   Los LEDs que no existían en lecturas viejas quedan vacíos y no se marcan. */
+const OFF_ON = ["Apagado","Encendido"];
 const IND = [
-  {k:"contact", l:"Contactos", o:["Cerrado","Abierto"], bad:null},
-  {k:"tripped", l:"Breaker tripped", o:["No","Sí"], bad:"Sí"},
-  {k:"alarm", l:"LED Alarm", o:["Apagado","Encendido"], bad:"Encendido"},
-  {k:"tuErr", l:"LED T.U. Error", o:["Apagado","Encendido"], bad:"Encendido"}
+  {k:"contact", l:"Contactos", o:["Cerrado","Abierto"], bad:null, z:"est"},
+  {k:"tripped", l:"Breaker tripped", o:["No","Sí"], bad:"Sí", z:"top"},
+  {k:"active", l:"LED Active", t:"ACTIVE", o:OFF_ON, bad:null, z:"top", led:"verde"},
+  {k:"alarm", l:"LED Alarm", t:"ALARM", o:OFF_ON, bad:"Encendido", z:"top", led:"amar"},
+  {k:"comm", l:"LED Comm", t:"COMM", o:OFF_ON, bad:null, z:"top", led:"verde"},
+  {k:"extend", l:"LED Extend", t:"EXTEND", o:OFF_ON, bad:null, z:"top", led:"verde"},
+  {k:"tuErr", l:"LED T.U. Error", t:"T.U. ERROR", o:OFF_ON, bad:"Encendido", z:"top", led:"rojo"},
+  {k:"ledL", l:"LED causa de disparo L", t:"L", o:OFF_ON, bad:"Encendido", z:"L", led:"amar"},
+  {k:"ledN", l:"LED causa de disparo N", t:"N", o:OFF_ON, bad:"Encendido", z:"L", led:"amar"},
+  {k:"ledS", l:"LED causa de disparo S", t:"S", o:OFF_ON, bad:"Encendido", z:"S", led:"amar"},
+  {k:"ledI", l:"LED causa de disparo I", t:"I", o:OFF_ON, bad:"Encendido", z:"I", led:"amar"},
+  {k:"gLedAlarm", l:"LED falla a tierra ALARM", t:"ALARM", o:OFF_ON, bad:"Encendido", z:"G", led:"amar"},
+  {k:"gLedTrip", l:"LED falla a tierra TRIP", t:"TRIP", o:OFF_ON, bad:"Encendido", z:"G", led:"rojo"}
 ];
+const indDe = k => IND.find(i => i.k===k);
 const DEFAULTS = {limCargaIR:0.80, limDesb:0.10, limNeutro:0.30};
 const CFG_FIELDS = [["limCargaIR","Carga máx. vs IR (fracción)",0.05],["limDesb","Desbalance de corriente máx. (fracción)",0.01],["limNeutro","IN máx. vs corriente promedio (fracción)",0.05]];
 
@@ -320,7 +352,7 @@ function calcularLectura(r){
   x.ok = x.flags.length===0;
   return x;
 }
-const cambiosTxt = (cambios, flecha) => cambios.map(cb=>`${SET_NAMES[cb.k]} ${cb.de}${flecha}${cb.a}`).join(", ");
+const cambiosTxt = (cambios, flecha) => cambios.map(cb=>`${SET_NAMES[cb.k]} ${verVal(cb.k,cb.de)}${flecha}${verVal(cb.k,cb.a)}`).join(", ");
 function estadoBase(e, r){
   if (!e?.base) return {t:"Sin línea base", c:"warn"};
   if (!r) return {t:"Línea base registrada", c:""};
@@ -330,7 +362,7 @@ function estadoBase(e, r){
 const ajustesTxt = (s, e) => {
   if (!s) return "—";
   let t = `IR ${s.ir??"?"} · tR ${s.tr??"?"}${s.char==="I⁴t"?" (I⁴t)":""} · Isd ${s.isd??"?"} · tsd ${s.tsd??"?"} · Ii ${s.ii??"?"}`;
-  if (e?.gf) t += ` · G ${s.gTrip??"?"}/${s.gAlarm??"?"} tg ${s.tg??"?"}`;
+  if (e?.gf) t += ` · G ${s.gMet?s.gMet+" ":""}${s.gTrip??"?"}/${s.gAlarm??"?"} tg ${s.tg??"?"}`;
   return t;
 };
 
@@ -338,7 +370,7 @@ const ajustesTxt = (s, e) => {
 const tabs = Comun.pestanas({res:renderResumen, equ:renderEquipos, ten:renderChart, inf:()=>ramaOpts($("#repRama")), his:renderHis, cfg:renderUsage});
 
 /* ================= captura ================= */
-function newDraft(){ draft = {cur:{}, set:{}, ind:{contact:"Cerrado", tripped:"No", alarm:"Apagado", tuErr:"Apagado"}}; }
+function newDraft(){ draft = {cur:{}, set:{}, ind:Object.fromEntries(IND.map(i => [i.k, i.o[0]]))}; }
 function renderEqSel(){
   const has = equipos.length>0;
   $("#noEq").classList.toggle("hidden", has); $("#capBody").classList.toggle("hidden", !has);
@@ -352,19 +384,30 @@ function renderEqSel(){
 $("#eqSel").onchange = () => { selEq = $("#eqSel").value; renderEqSel(); renderTU(); saveDraft(); };
 function renderTU(){
   const e = eqById(selEq);
-  let h = "";
+  const led = i => { const on = draft.ind[i.k]===i.o[1];
+    return `<button type="button" class="led ${i.led}${on?" on":""}" data-i="${i.k}" aria-pressed="${on}" aria-label="${esc(i.l)}"><i></i>${esc(i.t)}</button>`; };
+  const leds = ks => `<div class="leds">${ks.map(k => led(indDe(k))).join("")}</div>`;
+  const trip = indDe("tripped"), disp = draft.ind.tripped===trip.bad;
+  let h = `<div class="tuh"><div><b>SIEMENS ETU45B</b><span>Release 2</span></div><div class="plug">Rating plug<b>In = ${e ? fx(e.in,0)+" A" : "—"}</b></div></div>
+    <div class="frente">
+      <button type="button" class="trip${disp?" on":""}" data-i="tripped" aria-pressed="${disp}"><span>BREAKER<br>TRIPPED</span><b>${disp?"Sí":"No"}</b></button>
+      ${leds(IND.filter(i => i.z==="top" && i.led).map(i => i.k))}
+    </div>
+    <div class="tuhint">Toca cada LED que veas encendido y el indicador mecánico si está disparado.</div>`;
   for (const g of SETS){
     if (g.gf && !(e && e.gf)) continue;
-    h += `<div class="grp"><div class="gh"><span class="gl">${g.g}</span><span class="gt">${g.t}</span></div>`;
+    h += `<div class="grp"><div class="gh"><span class="gl${g.g.length>1?" w":""}">${g.g}</span><span class="gt">${g.t}</span>${g.leds ? leds(g.leds) : ""}</div>`;
     for (const it of g.items){
       const o = optsFor(it, draft.set);
       if (it.k==="tr" && draft.set.tr && !o.includes(draft.set.tr)) delete draft.set.tr;
       const v = draft.set[it.k];
       const n = num(v);
-      const extra = (e && n && (it.k==="ir" || it.k==="isd" || it.k==="ii")) ? `= ${fx(n*e.in,0)} A` : "";
-      h += `<div class="set"><div class="sl"><span>${it.l}</span><b>${v?esc(v)+" "+extra:"sin elegir"}</b></div>
-        <div class="pick ${it.c||""} ${v?"":"miss"}" role="group" aria-label="${esc(it.l)}">${o.map(op=>`<button data-k="${it.k}" data-v="${esc(op)}" aria-pressed="${v===op}">${esc(op)}</button>`).join("")}</div></div>`;
+      let extra = (e && n && (it.k==="ir" || it.k==="isd" || it.k==="ii")) ? `= ${fx(n*e.in,0)} A` : "";
+      if (it.k==="nFac" && e && v && num(draft.set.ir)) extra = `= ${fx(parseFloat(v)*num(draft.set.ir)*e.in,0)} A`;
+      h += `<div class="set"><div class="sl"><span>${it.l}</span><b>${v?esc(verVal(it.k,v))+" "+extra:"sin elegir"}</b></div>
+        <div class="pick ${it.c||""} ${v?"":"miss"}" role="group" aria-label="${esc(it.l)}">${o.map(op=>`<button data-k="${it.k}" data-v="${esc(op)}" aria-pressed="${v===op}">${esc(verVal(it.k,op))}</button>`).join("")}</div></div>`;
     }
+    if (g.nota) h += `<div class="nota">${g.nota}</div>`;
     h += `</div>`;
   }
   $("#tu").innerHTML = h;
@@ -372,11 +415,13 @@ function renderTU(){
 }
 /* Eventos delegados: los botones se redibujan en cada toque, el manejador no. */
 $("#tu").addEventListener("click", ev => {
-  const b = ev.target.closest("button[data-k]"); if (!b) return;
-  draft.set[b.dataset.k] = b.dataset.v; renderTU(); saveDraft();
+  const b = ev.target.closest("button[data-k],button[data-i]"); if (!b) return;
+  if (b.dataset.i){ const i = indDe(b.dataset.i); draft.ind[i.k] = draft.ind[i.k]===i.o[1] ? i.o[0] : i.o[1]; }
+  else draft.set[b.dataset.k] = b.dataset.v;
+  renderTU(); saveDraft();
 });
 function renderInds(){
-  $("#inds").innerHTML = IND.map(i => `<span>${i.l}</span><span class="seg2">${i.o.map(o=>`<button data-i="${i.k}" data-v="${o}" class="${i.bad===o?"alert":""}" aria-pressed="${draft.ind[i.k]===o}">${o}</button>`).join("")}</span>`).join("");
+  $("#inds").innerHTML = IND.filter(i => i.z==="est").map(i => `<span>${i.l}</span><span class="seg2">${i.o.map(o=>`<button data-i="${i.k}" data-v="${o}" class="${i.bad===o?"alert":""}" aria-pressed="${draft.ind[i.k]===o}">${o}</button>`).join("")}</span>`).join("");
 }
 $("#inds").addEventListener("click", ev => {
   const b = ev.target.closest("button[data-i]"); if (!b) return;
@@ -575,7 +620,7 @@ $("#csvBtn").onclick = () => {
   const head = ["fecha","interruptor","tablero","rama","in_A","i1","i2","i3","in_neutro","i_prom","pct_In","IR_A","pct_IR","desbalance","neutro_vs_prom",...keys,"Isd_A","Ii_A",...IND.map(i=>i.k),"cambios_vs_base","estado","observaciones","nota","foto","capturo"];
   const filas = [...lecturas].reverse().map(r => { const x=calc(r), e=eqById(r.eq), c=r.cur||{};
     return [isoLocal(new Date(r.ts)).replace("T"," "),e?.tag,e?.tablero,e?.rama,e?.in,c.i1,c.i2,c.i3,c.in,x.avg?.toFixed(1),x.pctIn?.toFixed(4),x.irA,x.pctIR?.toFixed(4),x.desb?.toFixed(4),x.pctN?.toFixed(4),
-      ...keys.map(k=>r.set?.[k]),x.isdA,x.iiA,...IND.map(i=>r.ind?.[i.k]),x.cambios.map(cb=>`${SET_NAMES[cb.k]} ${cb.de}->${cb.a}`).join("; "),x.ok?"OK":"REVISAR",x.det.join("; "),r.nota,r.foto?"sí":"",r.autor]; });
+      ...keys.map(k=>verVal(k, r.set?.[k])),x.isdA,x.iiA,...IND.map(i=>r.ind?.[i.k]),x.cambios.map(cb=>`${SET_NAMES[cb.k]} ${verVal(cb.k,cb.de)}->${verVal(cb.k,cb.a)}`).join("; "),x.ok?"OK":"REVISAR",x.det.join("; "),r.nota,r.foto?"sí":"",r.autor]; });
   descargarCSV(`lecturas_interruptores_${stamp()}.csv`, head, filas);
 };
 
