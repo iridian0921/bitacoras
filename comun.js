@@ -178,7 +178,9 @@ function pestanas(render){
 /* ================= gráfica de tendencias =================
    series: [{name, color, dash, pts:[{t, v}]}] */
 const fmtDia = new Intl.DateTimeFormat("es-MX", {day:"2-digit", month:"short"});
-function grafica(series, {lim = null, fmt, min0 = false, label}){
+/* Gráfica de líneas en SVG. tema cambia los colores de la cuadrícula (el informe exportado no tiene las variables CSS). */
+function svgGrafica(series, {lim = null, fmt, min0 = false, label, tema = {}}){
+  const C = {line:"var(--line)", muted:"var(--muted)", bad:"var(--bad)", ...tema};
   let t0=Infinity, t1=-Infinity, v0=Infinity, v1=-Infinity;
   for (const s of series) for (const p of s.pts){ if (p.t<t0) t0=p.t; if (p.t>t1) t1=p.t; if (p.v<v0) v0=p.v; if (p.v>v1) v1=p.v; }
   if (t0===t1){ t0-=43200000; t1+=43200000; }
@@ -187,15 +189,18 @@ function grafica(series, {lim = null, fmt, min0 = false, label}){
   const W=700,H=320,L=56,R=14,T=14,B=40;
   const X=t=>L+(t-t0)/(t1-t0)*(W-L-R), Y=v=>T+(1-(v-v0)/(v1-v0))*(H-T-B);
   const g = [];
-  for (let i=0;i<=4;i++){ const v=v0+(v1-v0)*i/4; g.push(`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end" font-size="12" fill="var(--muted)">${fmt(v)}</text>`); }
-  for (let i=0;i<=3;i++){ const t=t0+(t1-t0)*i/3; g.push(`<text x="${X(t)}" y="${H-14}" text-anchor="middle" font-size="12" fill="var(--muted)">${fmtDia.format(t)}</text>`); }
-  if (lim!==null) g.push(`<line x1="${L}" x2="${W-R}" y1="${Y(lim)}" y2="${Y(lim)}" stroke="var(--bad)" stroke-dasharray="6 5"/><text x="${W-R}" y="${Y(lim)-5}" text-anchor="end" font-size="12" fill="var(--bad)">Límite ${fmt(lim)}</text>`);
+  for (let i=0;i<=4;i++){ const v=v0+(v1-v0)*i/4; g.push(`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.line}"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end" font-size="12" fill="${C.muted}">${fmt(v)}</text>`); }
+  for (let i=0;i<=3;i++){ const t=t0+(t1-t0)*i/3; g.push(`<text x="${X(t)}" y="${H-14}" text-anchor="middle" font-size="12" fill="${C.muted}">${fmtDia.format(t)}</text>`); }
+  if (lim!==null) g.push(`<line x1="${L}" x2="${W-R}" y1="${Y(lim)}" y2="${Y(lim)}" stroke="${C.bad}" stroke-dasharray="6 5"/><text x="${W-R}" y="${Y(lim)-5}" text-anchor="end" font-size="12" fill="${C.bad}">Límite ${fmt(lim)}</text>`);
   for (const s of series){
     const dash = s.dash ? ` stroke-dasharray="8 4"` : "";
     if (s.pts.length>1) g.push(`<polyline fill="none" stroke="${s.color}" stroke-width="2.5"${dash} points="${s.pts.map(p=>X(p.t)+","+Y(p.v)).join(" ")}"/>`);
     for (const p of s.pts) g.push(`<circle cx="${X(p.t)}" cy="${Y(p.v)}" r="4" fill="${s.color}"><title>${esc(s.name)}: ${fmt(p.v)} (${fdate(p.t)})</title></circle>`);
   }
-  $("#chartBox").innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">${g.join("")}</svg>`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">${g.join("")}</svg>`;
+}
+function grafica(series, opts){
+  $("#chartBox").innerHTML = svgGrafica(series, opts);
   $("#legend").innerHTML = series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("");
 }
 
@@ -525,7 +530,7 @@ function compartir(o){
 }
 
 return {vigilarVersion, $, esc, num, pct, fx, fdate, isoLocal, nowLocal, stamp, download, descargarCSV, estado,
-  fotosDB, capturaFoto, visorFotos, DRAFT_KEY, pestanas, grafica,
+  fotosDB, capturaFoto, visorFotos, DRAFT_KEY, pestanas, grafica, svgGrafica,
   cssInforme, docInforme, figurasInforme, accionesInforme,
   respaldo, renderUso, revisarEntorno, avisoBorrador, nuevoId, compartir, syncConfig};
 })();

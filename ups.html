@@ -91,9 +91,13 @@
       <label for="repSitio">Sitio</label><input class="plain" id="repSitio" placeholder="Ej. Data center, sala eléctrica">
       <label for="repElab">Elaboró</label><input class="plain" id="repElab" placeholder="Nombre y puesto">
       <label for="repRevi">Revisó</label><input class="plain" id="repRevi" placeholder="Nombre y puesto">
-      <label for="repDia">Lecturas del día</label><input class="plain" type="date" id="repDia">
+      <label for="repDesde">Desde</label><input class="plain" type="date" id="repDesde">
+      <label for="repHasta">Hasta</label><input class="plain" type="date" id="repHasta">
     </div>
-    <div class="muted" style="margin-top:6px;font-size:13px">Usa la última lectura de cada equipo en ese día. Déjalo vacío para usar la última lectura de cada equipo de cualquier fecha.</div>
+    <div class="row" style="margin-top:8px;gap:6px" id="repRapido">
+      <button class="btn sec" data-dias="1">Último día</button><button class="btn sec" data-dias="7">7 días</button><button class="btn sec" data-dias="30">30 días</button><button class="btn sec" data-dias="0">Sin fechas</button>
+    </div>
+    <div class="muted" style="margin-top:6px;font-size:13px">Un solo día: informe de esa ronda. Un intervalo agrega el comportamiento del periodo (gráfica de carga, máximos por equipo y hallazgos). Sin fechas: la última lectura de cada equipo.</div>
     <div class="row" style="margin-top:10px;gap:16px">
       <label><input type="checkbox" id="repFotos" checked> Incluir fotos</label>
       <label><input type="checkbox" id="repNotas" checked> Incluir notas</label>
@@ -270,7 +274,10 @@ const confTxt = (red) => red<0 ? "Sobrecarga" : red===0 ? "N" : "N+"+red;
 
 /* ================= pestañas ================= */
 /* El día del informe arranca en el de la lectura más reciente; si la persona lo cambia, se respeta. */
-function prepInforme(){ const d = $("#repDia"); if (!d.dataset.elegido && readings.length) d.value = diaDe(readings[0].ts); }
+function prepInforme(){
+  if ($("#repDesde").dataset.elegido || !readings.length) return;
+  $("#repDesde").value = $("#repHasta").value = diaDe(readings[0].ts);
+}
 const tabs = Comun.pestanas({sis:renderSys, ten:renderChart, inf:prepInforme, his:renderHis, cfg:renderUsage});
 
 /* ================= captura ================= */
@@ -409,13 +416,15 @@ $("#saveBtn").onclick = async () => {
 /* Día local (AAAA-MM-DD) de una lectura, para filtrar el informe por fecha. */
 const diaDe = ts => isoLocal(new Date(ts)).slice(0,10);
 const fDia = dia => new Date(dia+"T12:00").toLocaleDateString("es-MX", {day:"2-digit", month:"2-digit", year:"2-digit"});
-function ultimos(rama, dia){
+/* Filtro por intervalo de días AAAA-MM-DD, extremos incluidos; un extremo vacío no limita. */
+const enRango = (desde, hasta) => r => { const d = diaDe(r.ts); return (!desde || d>=desde) && (!hasta || d<=hasta); };
+function ultimos(rama, filtro){
   const m = {}, eqs = new Set(equipos());
-  for (const r of readings){ if (r.rama===rama && !m[r.equipo] && eqs.has(r.equipo) && (!dia || diaDe(r.ts)===dia)) m[r.equipo]=r; }
+  for (const r of readings){ if (r.rama===rama && !m[r.equipo] && eqs.has(r.equipo) && (!filtro || filtro(r))) m[r.equipo]=r; }
   return m;
 }
-function estadoRama(rama, dia){
-  const L = ultimos(rama, dia);
+function estadoRama(rama, filtro){
+  const L = ultimos(rama, filtro);
   const ups = equipos().filter(e=>!isScct(e) && L[e]);
   const sumKw = ups.reduce((s,e)=>s+(num(L[e].load?.kw)||0),0);
   const sumKva = ups.reduce((s,e)=>s+(num(L[e].load?.kva)||0),0);
@@ -676,21 +685,81 @@ const REP_CSS = `
 .rep .pie{margin-top:14px;font-size:11px;color:#6a7784}
 .rep section,.rep .kpis,.rep table{break-inside:auto}
 .rep h2{break-after:avoid}
+.rep svg.chart{width:100%;height:auto;display:block}
+.rep .ley{display:flex;gap:14px;font-size:12px;margin:2px 0 6px}
+.rep .ley i{display:inline-block;width:14px;height:4px;border-radius:2px;margin-right:5px;vertical-align:middle}
 `;
 Comun.cssInforme(REP_CSS);
 function anterior(r){ return readings.find(x => x.rama===r.rama && x.equipo===r.equipo && x.ts < r.ts) || null; }
 
+/* Comportamiento de un intervalo: carga de cada rama día por día, máximos por equipo y hallazgos que aparecieron. */
+function comportamiento(lect){
+  const dias = [...new Set(lect.map(r => diaDe(r.ts)))].sort();
+  const diario = dias.map(d => ({d, E: RAMAS.map(r => estadoRama(r, x => diaDe(x.ts)===d))}));
+  const stats = a => { const v = a.filter(x => x!==null && isFinite(x)); return v.length ? {min:Math.min(...v), max:Math.max(...v), prom:v.reduce((s,x)=>s+x,0)/v.length} : null; };
+  const texto = [];
+  // por rama
+  const filasRama = RAMAS.map((rama, i) => {
+    const ds = diario.map(x => ({d:x.d, e:x.E[i]})).filter(x => x.e.kw!==null);
+    if (!ds.length) return `<tr><td><b>Rama ${rama}</b></td><td colspan="5" style="color:#6a7784">Sin lecturas</td></tr>`;
+    const k = stats(ds.map(x => x.e.kw)), dMax = ds.find(x => x.e.kw===k.max).d;
+    const caps = ds.map(x => ({d:x.d, p:cargaRel(x.e.kw, x.e.kva, x.e.enl)})).filter(x => x.p!==null);
+    const cMax = caps.length ? caps.reduce((a, b) => b.p > a.p ? b : a) : null;
+    const reds = ds.filter(x => x.e.red!==null), peor = reds.length ? reds.reduce((a, b) => b.e.red < a.e.red ? b : a) : null;
+    texto.push(`Rama ${rama}: ${Math.round(k.min)}–${Math.round(k.max)} kW (máx. ${fDia(dMax)})${cMax ? `, hasta ${pct(cMax.p)} de capacidad` : ""}${peor ? `, peor: ${confTxt(peor.e.red)} (${fDia(peor.d)})` : ""}`);
+    return `<tr><td><b>Rama ${rama}</b></td><td>${ds.length}</td><td>${fx(k.min,0)} / ${fx(k.prom,0)} / ${fx(k.max,0)}<br><span style="color:#6a7784">máx. ${fDia(dMax)}</span></td>
+      <td${cMax && cMax.p>P.limCarga ? ' class="mal"' : ""}>${cMax ? `${pct(cMax.p)}<br><span style="color:#6a7784">${fDia(cMax.d)}</span>` : "—"}</td>
+      <td${peor && peor.e.red<1 ? ' class="mal"' : ""}>${peor ? `${confTxt(peor.e.red)}<br><span style="color:#6a7784">${fDia(peor.d)}</span>` : "—"}</td></tr>`;
+  }).join("");
+  // gráfica de carga por rama
+  const series = RAMAS.map((rama, i) => ({name:`Rama ${rama}`, color:COLORS[i], pts: diario.filter(x => x.E[i].kw!==null).map(x => ({t:+new Date(x.d+"T12:00"), v:x.E[i].kw}))})).filter(s => s.pts.length);
+  const graf = series.length ? Comun.svgGrafica(series, {label:"Carga por rama (kW)", fmt: v => v.toFixed(0), min0:true, tema:{line:"#d7dee5", muted:"#6a7784", bad:"#a3330b"}}) : "";
+  // por equipo
+  const filasEq = RAMAS.flatMap(rama => equipos().map(eq => {
+    const rs = lect.filter(r => r.rama===rama && r.equipo===eq); if (!rs.length) return "";
+    const cs = rs.map(calc), k = stats(rs.map(r => num(r.load?.kw))), p = stats(cs.map(c => c.pctKw)), v = isScct(eq) ? null : stats(cs.map(c => c.vCell));
+    const vMal = v && (v.min < P.vCeldaMin || v.max > P.vCeldaMax), nMal = cs.filter(c => !c.ok).length;
+    return `<tr><td><b>${rama} ${esc(eq)}</b></td><td>${rs.length}</td><td>${k ? `${fx(k.min,0)} / ${fx(k.prom,0)} / ${fx(k.max,0)}` : "—"}</td>
+      <td${p && p.max>P.limCarga ? ' class="mal"' : ""}>${p ? pct(p.max) : "—"}</td><td${vMal ? ' class="mal"' : ""}>${v ? `${fx(v.min,3)}–${fx(v.max,3)}` : "—"}</td><td${nMal ? ' class="mal"' : ""}>${nMal}</td></tr>`;
+  })).join("");
+  // hallazgos que aparecieron en el periodo, agrupados por equipo
+  const porEq = new Map();
+  for (const r of lect){
+    const c = calc(r); if (c.ok) continue;
+    const key = `Rama ${r.rama} ${r.equipo}`; if (!porEq.has(key)) porEq.set(key, {n:0, f:new Map()});
+    const g = porEq.get(key); g.n++;
+    for (const f of c.flags){ const x = g.f.get(f) || {n:0, ult:r.ts}; x.n++; if (r.ts > x.ult) x.ult = r.ts; g.f.set(f, x); }
+  }
+  const total = n => lect.filter(r => `Rama ${r.rama} ${r.equipo}`===n).length;
+  const orden = RAMAS.flatMap(r => equipos().map(eq => `Rama ${r} ${eq}`));
+  const hallP = [...porEq].sort((x, y) => orden.indexOf(x[0]) - orden.indexOf(y[0])).map(([eq, g]) => `<li><b>${esc(eq)}</b> (${g.n} de ${total(eq)} lecturas): ${[...g.f].map(([f, x]) => `${esc(f)} ×${x.n}, última ${fDia(diaDe(x.ult))}`).join("; ")}</li>`).join("");
+  texto.push(porEq.size ? `Lecturas con hallazgos: ${[...porEq.values()].reduce((s, g) => s + g.n, 0)} de ${lect.length}` : "Sin hallazgos en el periodo.");
+  const html = `<div class="bloque"><h2>Comportamiento del periodo</h2>
+    <div style="font-size:12px;color:#4a5866;margin-bottom:6px">${lect.length} lecturas en ${dias.length} día(s) con lecturas.</div>
+    ${graf ? `<div class="ley">${series.map(s => `<span><i style="background:${s.color}"></i>${s.name}</span>`).join("")}</div>${graf}<div style="font-size:11px;color:#6a7784">Carga de cada rama por día (SCCT o suma de módulos, con la última lectura de cada equipo ese día).</div>` : ""}
+    <div class="tw"><table><tr><th>Rama</th><th>Días</th><th>kW mín / prom / máx</th><th>% capacidad máx.</th><th>Peor configuración</th></tr>${filasRama}</table></div></div>
+    <div class="bloque"><h2>Por equipo en el periodo</h2><div class="tw"><table><tr><th>Equipo</th><th>Lecturas</th><th>kW mín / prom / máx</th><th>% carga máx.</th><th>V/celda mín–máx</th><th>Con hallazgos</th></tr>${filasEq}</table></div></div>
+    <h2>Hallazgos durante el periodo</h2>${hallP ? `<ul>${hallP}</ul>` : "<p>Ninguna lectura del periodo tuvo parámetros fuera de límite.</p>"}`;
+  return {html, texto, n:lect.length, dias:dias.length};
+}
+
 async function generarInforme(){
   const incFotos = $("#repFotos").checked, incNotas = $("#repNotas").checked;
   const sitio = $("#repSitio").value.trim(), elab = $("#repElab").value.trim(), revi = $("#repRevi").value.trim();
-  const dia = $("#repDia").value;
-  const E = RAMAS.map(r => estadoRama(r, dia));
+  let desde = $("#repDesde").value, hasta = $("#repHasta").value;
+  if (desde && hasta && desde > hasta) [desde, hasta] = [hasta, desde];
+  const filtro = desde || hasta ? enRango(desde, hasta) : null;
+  const unDia = !!desde && desde===hasta, multi = !!filtro && !unDia;   // multi: informe de un intervalo
+  const E = RAMAS.map(r => estadoRama(r, filtro));
   const ahora = new Date();
   const usadas = E.flatMap(e => Object.values(e.L));
   if (!usadas.length) return null;
-  const fechas = usadas.map(r => +new Date(r.ts));
+  const eqSet = new Set(equipos());
+  const enPeriodo = filtro ? readings.filter(r => filtro(r) && eqSet.has(r.equipo)) : usadas;
+  const fechas = enPeriodo.map(r => +new Date(r.ts));
   const hora = t => new Intl.DateTimeFormat("es-MX", {timeStyle:"short"}).format(t);
-  const periodo = dia ? `${fDia(dia)}, ${hora(Math.min(...fechas))} a ${hora(Math.max(...fechas))}` : `${fdate(Math.min(...fechas))} a ${fdate(Math.max(...fechas))}`;
+  const periodo = unDia ? `${fDia(desde)}, ${hora(Math.min(...fechas))} a ${hora(Math.max(...fechas))}` : `${fdate(Math.min(...fechas))} a ${fdate(Math.max(...fechas))}`;
+  const comp = multi ? comportamiento(enPeriodo) : null;
 
   // hallazgos
   const hall = [], faltan = [];
@@ -727,7 +796,7 @@ async function generarInforme(){
   const kpiRama = e => `<div class="kpi"><div class="l">Rama ${e.rama}</div><div class="v">${e.kw===null?"—":confTxt(e.red)}</div><div>${e.kw===null?"Sin datos":Math.round(e.kw)+" kW ("+e.fuente+")"}</div><div style="color:#4a5866">${e.enl} de ${P.modulos} UPS en línea${e.kw!==null?`, ${pct(cargaRel(e.kw, e.kva, e.enl))} de capacidad`:""}</div></div>`;
 
   // notas
-  const notas = incNotas ? usadas.filter(r => r.nota).map(r => `<li><b>Rama ${r.rama} ${esc(r.equipo)}</b> (${fdate(r.ts)}): ${esc(r.nota)}</li>`).join("") : "";
+  const notas = incNotas ? (multi ? [...enPeriodo].reverse() : usadas).filter(r => r.nota).map(r => `<li><b>Rama ${r.rama} ${esc(r.equipo)}</b> (${fdate(r.ts)}): ${esc(r.nota)}</li>`).join("") : "";
   // fotos
   const fotosInf = incFotos ? await Comun.figurasInforme(fotos, E.flatMap(e => equipos().filter(eq => e.L[eq]?.foto)
     .map(eq => ({id:e.L[eq].id, alt:`Display Rama ${e.rama} ${eq}`, pie:`Rama ${e.rama} ${eq}, ${fdate(e.L[eq].ts)}`})))) : "";
@@ -736,7 +805,7 @@ async function generarInforme(){
   <div class="hd"><div><h1>Informe de sistemas UPS</h1><div>${sitio?esc(sitio):"Rama A y Rama B"}</div>
     <div class="est ${estadoGlobal.c}">${estadoGlobal.t}</div></div>
     <div class="m">Generado: ${fdate(ahora)}<br>Lecturas: ${periodo}${elab?`<br>Elaboró: ${esc(elab)}`:""}</div></div>
-  <h2>Resumen</h2>
+  <h2>${multi ? "Estado al cierre del periodo" : "Resumen"}</h2>${multi ? `<div style="font-size:12px;color:#4a5866;margin-bottom:6px">Con la última lectura de cada equipo dentro del periodo.</div>` : ""}
   <div class="kpis">${E.map(kpiRama).join("")}
     ${cruce?`<div class="kpi"><div class="l">Carga total del sistema</div><div class="v">${Math.round(cruce.tot)} kW</div><div style="color:#4a5866">A ${Math.round(A.kw)} + B ${Math.round(B.kw)} kW</div></div>`:""}</div>
   ${cruce?`<h2>Si se pierde una rama</h2><table><tr><th>Escenario</th><th>Rama que queda</th><th>Configuración</th><th>Carga por módulo</th></tr>
@@ -745,9 +814,10 @@ async function generarInforme(){
     <div style="font-size:11px;color:#6a7784;margin-top:4px">Supone carga de doble alimentación que se transfiere completa a la otra rama.</div>`:""}
   <h2>Hallazgos</h2>
   ${hall.length?`<ul>${hall.map(h=>`<li><b>${esc(h.eq)}</b>: ${esc(h.d)}${h.f?` <span style="color:#6a7784">(${h.f})</span>`:""}</li>`).join("")}</ul>`:"<p>No se detectaron parámetros fuera de límite.</p>"}
-  ${faltan.length?`<p style="color:#6b5200"><b>Sin lectura${dia?" ese día":""}:</b> ${faltan.map(esc).join(", ")}.</p>`:""}
+  ${faltan.length?`<p style="color:#6b5200"><b>Sin lectura${unDia?" ese día":filtro?" en el periodo":""}:</b> ${faltan.map(esc).join(", ")}.</p>`:""}
   ${E.map(e=>`<div class="bloque"><h2>Detalle Rama ${e.rama}</h2><div class="tw"><table><tr><th>Equipo</th><th>Lectura</th><th>kW</th><th>Δ kW</th><th>kVA</th><th>% carga</th><th>FP</th><th>V salida</th><th>Desb. I</th><th>Batería</th><th>Estado</th></tr>${filas(e)}</table></div></div>`).join("")}
   <div style="font-size:11px;color:#6a7784;margin-top:4px">Δ kW: cambio respecto a la lectura anterior del mismo equipo. % carga: el mayor entre kW contra ${fx(kwMod(),0)} kW y kVA contra ${fx(P.kva,0)} kVA por módulo (en el SCCT, por los UPS en línea). V salida: promedio; se marca si alguna fase sale de rango. Batería: voltaje por celda y corriente (en flotación debe ser 0 A); en el SCCT, UPS en línea. En rojo, los valores fuera de límite.</div>
+  ${comp ? comp.html : ""}
   ${notas?`<h2>Notas de campo</h2><ul>${notas}</ul>`:""}
   ${fotosInf?`<h2>Evidencia fotográfica</h2><div class="fotos">${fotosInf}</div>`:""}
   <h2>Criterios</h2>
@@ -766,13 +836,16 @@ async function generarInforme(){
   L.push("");
   L.push(hall.length ? `Hallazgos (${hall.length}):` : "Sin hallazgos.");
   hall.forEach(h => L.push(`• ${h.eq}: ${h.d}`));
-  if (faltan.length) L.push(`Sin lectura${dia?" ese día":""}: ${faltan.join(", ")}`);
+  if (faltan.length) L.push(`Sin lectura${unDia?" ese día":filtro?" en el periodo":""}: ${faltan.join(", ")}`);
+  if (comp){ L.push(""); L.push(`*Periodo* (${comp.n} lecturas en ${comp.dias} día(s)):`); comp.texto.forEach(t => L.push(t)); }
   if (elab) { L.push(""); L.push(`Elaboró: ${elab}`); }
   const pie = `Informe de sistemas UPS${sitio?" · "+sitio:""} · ${fdate(ahora)}`;
   return {html, pie, texto:L.join("\n"), doc:Comun.docInforme(`Informe UPS ${fdate(ahora)}`, REP_CSS, html, pie)};
 }
 Comun.accionesInforme({generar:generarInforme, archivo:"informe_ups", titulo:"Informe UPS",
-  vacio:() => $("#repDia").value ? `No hay lecturas del ${fDia($("#repDia").value)}. Elige otro día o deja la fecha vacía.` : "No hay lecturas guardadas para generar el informe.",
+  vacio:() => { const d = $("#repDesde").value, h = $("#repHasta").value;
+    return !d && !h ? "No hay lecturas guardadas para generar el informe."
+      : `No hay lecturas ${d===h ? "del "+fDia(d) : d && h ? `entre el ${fDia(d)} y el ${fDia(h)}` : d ? "desde el "+fDia(d) : "hasta el "+fDia(h)}. Elige otras fechas.`; },
   guardarDatos(){ P.sitio = $("#repSitio").value.trim(); P.elaboro = $("#repElab").value.trim(); P.reviso = $("#repRevi").value.trim(); persist(); }});
 
 /* Dibuja lo que siempre está a la vista y la pestaña abierta; las demás se dibujan al abrirlas. */
@@ -789,7 +862,14 @@ function renderAll(){ bak.aviso(); renderChips(); renderLcdMeta(); tabs.renderVi
     n.classList.remove("hidden");
   }
   renderCfg();
-  $("#repDia").addEventListener("change", ev => { ev.target.dataset.elegido = "1"; });
+  ["#repDesde","#repHasta"].forEach(id => $(id).addEventListener("change", () => { $("#repDesde").dataset.elegido = "1"; }));
+  $("#repRapido").addEventListener("click", ev => {
+    const b = ev.target.closest("[data-dias]"); if (!b) return;
+    const n = +b.dataset.dias, fin = readings.length ? diaDe(readings[0].ts) : diaDe(new Date());
+    const ini = new Date(fin+"T12:00"); ini.setDate(ini.getDate() - Math.max(n-1, 0));
+    $("#repDesde").value = n ? diaDe(ini) : ""; $("#repHasta").value = n ? fin : "";
+    $("#repDesde").dataset.elegido = "1";
+  });
   $("#repSitio").value = P.sitio || ""; $("#repElab").value = P.elaboro || ""; $("#repRevi").value = P.reviso || "";
   newDraft();
   if (!(await loadDraft())) $("#ts").value = nowLocal();
