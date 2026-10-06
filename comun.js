@@ -175,6 +175,47 @@ function pestanas(render){
   };
 }
 
+/* ================= hora de la lectura =================
+   Por defecto la lectura toma la hora en que se toca Guardar (antes se llenaba al abrir el formulario y un
+   borrador o la app abierta en segundo plano dejaban horas viejas). "Cambiar hora" permite ponerla a mano, p. ej.
+   al pasar lecturas de papel; esas quedan marcadas con tsManual y siempre se guarda también la hora real (guardado). */
+const fmtHora = new Intl.DateTimeFormat("es-MX", {hour:"numeric", minute:"2-digit", second:"2-digit"});
+function horaCaptura(alCambiar){
+  const inp = $("#ts"), caja = document.createElement("span");
+  caja.className = "tsbox";
+  inp.before(caja); caja.append(inp);
+  caja.insertAdjacentHTML("beforeend", `<span class="tsauto" id="tsAuto"></span><button type="button" class="linkbtn" id="tsModo"></button>`);
+  let manual = false;
+  const pintar = () => {
+    inp.classList.toggle("hidden", !manual); $("#tsAuto").classList.toggle("hidden", manual);
+    $("#tsModo").textContent = manual ? "Usar hora automática" : "Cambiar hora";
+    if (!manual) $("#tsAuto").textContent = `Se toma al guardar · ${fmtHora.format(new Date())}`;
+  };
+  setInterval(() => { if (!manual) pintar(); }, 1000);
+  const poner = (m, v = "") => { manual = m; inp.value = m ? (v || nowLocal()) : ""; pintar(); };
+  $("#tsModo").onclick = () => { poner(!manual); if (manual) inp.focus(); alCambiar?.(); };
+  inp.addEventListener("change", () => alCambiar?.());
+  poner(false);
+  return {
+    /* para el borrador: "" = automática */
+    valor: () => manual ? inp.value : "",
+    poner: v => poner(!!v, v),
+    reiniciar: () => poner(false),
+    /* al guardar: {ts, guardado, manual} o null si la persona cancela una hora dudosa */
+    leer(){
+      const ahora = new Date(), g = ahora.toISOString();
+      if (!manual || !inp.value) return {ts:g, guardado:g, manual:false};
+      const d = new Date(inp.value);
+      if (isNaN(d)) return {ts:g, guardado:g, manual:false};
+      if (d - ahora > 5*60000 && !confirm(`La hora de la lectura (${fdate(d)}) está en el futuro. ¿Guardar así?`)) return null;
+      if (ahora - d > 86400000 && !confirm(`La hora de la lectura (${fdate(d)}) tiene más de 24 h de diferencia con la hora actual. ¿Guardar así?`)) return null;
+      return {ts:d.toISOString(), guardado:g, manual:true};
+    }
+  };
+}
+/* Marca para lecturas con hora puesta a mano: ✎ con la hora real en que se guardó. */
+const marcaHora = r => r.tsManual ? ` <span class="tsman" title="Hora corregida a mano${r.guardado ? "; guardada el " + fdate(r.guardado) : ""}">✎</span>` : "";
+
 /* ================= gráfica de tendencias =================
    series: [{name, color, dash, pts:[{t, v, id?, foto?}]}]
    lim: línea de límite superior · banda: [mín, máx] del rango normal · fuera(v): punto fuera de límite (va en rojo) */
@@ -605,7 +646,7 @@ function compartir(o){
 }
 
 return {vigilarVersion, $, esc, num, pct, fx, fdate, isoLocal, nowLocal, stamp, download, descargarCSV, estado,
-  fotosDB, capturaFoto, visorFotos, DRAFT_KEY, pestanas, grafica, svgGrafica,
+  fotosDB, capturaFoto, visorFotos, DRAFT_KEY, pestanas, grafica, svgGrafica, horaCaptura, marcaHora,
   cssInforme, docInforme, figurasInforme, accionesInforme,
   respaldo, renderUso, revisarEntorno, avisoBorrador, nuevoId, compartir, syncConfig};
 })();
