@@ -343,28 +343,29 @@ function renderChecks(){
 
 /* Borrador: se guarda en cada cambio para sobrevivir si el navegador recarga la página al volver de la cámara */
 function saveDraft(){
-  try{ localStorage.setItem(LSD, JSON.stringify({rama:selRama, equipo:selEq, draft, nota:$("#nota").value, ts:$("#ts").value, foto:!!foto.blob})); }catch{}
+  try{ localStorage.setItem(LSD, JSON.stringify({rama:selRama, equipo:selEq, draft, nota:$("#nota").value, tsMan:hora.valor(), foto:!!foto.blob})); }catch{}
 }
 async function loadDraft(){
   try{
     const d = JSON.parse(localStorage.getItem(LSD) || "null"); if (!d) return false;
     selRama = RAMAS.includes(d.rama) ? d.rama : "A"; selEq = d.equipo || "UPS 1";
     draft = {in:{}, byp:{}, out:{}, load:{}, bat:{}, sys:{}, ...(d.draft||{})};
-    $("#nota").value = d.nota || ""; $("#ts").value = d.ts || nowLocal();
+    $("#nota").value = d.nota || ""; hora.poner(d.tsMan || "");   // borradores viejos (con "ts") vuelven a hora automática
     const hayDatos = Object.values(draft).some(g => Object.values(g||{}).some(v => v!==null && v!==undefined));
     if (d.foto) await foto.restore();
     if (hayDatos || d.foto) Comun.avisoBorrador();
     return true;
   }catch{ return false; }
 }
-$("#nota").oninput = saveDraft; $("#ts").onchange = saveDraft;
+$("#nota").oninput = saveDraft;
+const hora = Comun.horaCaptura(() => saveDraft());
 
 /* ================= fotos ================= */
 const foto = Comun.capturaFoto({fotos, maxLado:1280, calidad:0.72, onChange:saveDraft,
   heic:"Formato HEIC no compatible. En la cámara del teléfono cambia el formato a JPG o elige otra foto."});
 
 function clearForm(){
-  newDraft(); $("#nota").value=""; $("#ts").value=nowLocal(); foto.clear(); renderLcd();
+  newDraft(); $("#nota").value=""; hora.reiniciar(); foto.clear(); renderLcd();
   try{ localStorage.removeItem(LSD); }catch{}
 }
 $("#clearBtn").onclick = () => { clearForm(); $("#saveStatus").textContent=""; };
@@ -393,11 +394,11 @@ $("#saveBtn").onclick = async () => {
   if (num(draft.load.kw)===null || num(draft.load.kva)===null){ estado(st, "Faltan kVA y kW de carga: son necesarios para el cálculo del sistema.", true); return; }
   const dudas = revisarCaptura(draft, selEq);
   if (dudas.length && !confirm(`Revisa estos valores, parecen errores de captura:\n\n• ${dudas.join("\n• ")}\n\n¿Guardar de todos modos?`)) return;
+  const h = hora.leer(); if (!h) return;
   $("#saveBtn").disabled = true;
-  const tsv = $("#ts").value; const ts = tsv ? new Date(tsv).toISOString() : new Date().toISOString();
   const id = Comun.nuevoId("l");
   const sc = isScct(selEq);
-  const r = {id, rama:selRama, equipo:selEq, ups: sc ? null : +selEq.replace(/\D/g,""), ts,
+  const r = {id, rama:selRama, equipo:selEq, ups: sc ? null : +selEq.replace(/\D/g,""), ts:h.ts, guardado:h.guardado, ...(h.manual ? {tsManual:true} : {}),
     in: sc ? {} : {...draft.in}, byp: sc ? {...draft.byp} : {}, out:{...draft.out}, load:{...draft.load},
     bat: sc ? {} : {...draft.bat}, sys: sc ? {...draft.sys} : {}, nota:$("#nota").value.trim(), foto:false, autor:sync.autor()};
   const gf = await foto.guardar(id); r.foto = gf.ok;
@@ -466,7 +467,7 @@ function renderSys(){
       if (!r){ u += `<div class="unit"><div class="n">${eq}</div><div class="muted">Sin lectura</div></div>`; continue; }
       const c = calc(r);
       u += `<div class="unit"><div class="row" style="justify-content:space-between"><span class="n">${eq}</span><span class="pill ${c.ok?"ok":"bad"}">${c.ok?"OK":"Revisar"}</span></div>
-        <div>${fx(r.load?.kw,0)} kW, ${pct(c.pctKw)}</div><div class="muted">${fdate(r.ts)}</div>${c.ok?"":`<div class="muted">${esc(c.flags.join(", "))}</div>`}</div>`;
+        <div>${fx(r.load?.kw,0)} kW, ${pct(c.pctKw)}</div><div class="muted">${fdate(r.ts)}${Comun.marcaHora(r)}</div>${c.ok?"":`<div class="muted">${esc(c.flags.join(", "))}</div>`}</div>`;
     }
     return `<div class="rama"><h3>Rama ${e.rama}</h3>
       <div class="row" style="justify-content:space-between;align-items:flex-end">
@@ -584,7 +585,7 @@ function renderHis(){
   const rows = readings.filter(r => (sr.value==="all" || r.rama===sr.value) && (se.value==="all" || r.equipo===se.value));
   if (!rows.length){ $("#hisTbl").innerHTML = `<tr><td class="muted">Sin lecturas guardadas.</td></tr>`; return; }
   $("#hisTbl").innerHTML = `<thead><tr><th>Fecha</th><th>Capturó</th><th>Rama</th><th>Equipo</th><th>kW</th><th>kVA</th><th>% carga</th><th>Estado</th><th>Foto</th><th></th></tr></thead><tbody>` +
-    rows.map(r => { const c = calc(r); return `<tr><td>${fdate(r.ts)}</td><td>${esc(r.autor||"—")}</td><td>${esc(r.rama)}</td><td>${esc(r.equipo)}</td><td>${fx(r.load?.kw,0)}</td><td>${fx(r.load?.kva,0)}</td><td>${pct(c.pctKw)}</td>
+    rows.map(r => { const c = calc(r); return `<tr><td>${fdate(r.ts)}${Comun.marcaHora(r)}</td><td>${esc(r.autor||"—")}</td><td>${esc(r.rama)}</td><td>${esc(r.equipo)}</td><td>${fx(r.load?.kw,0)}</td><td>${fx(r.load?.kva,0)}</td><td>${pct(c.pctKw)}</td>
       <td><span class="pill ${c.ok?"ok":"bad"}" title="${esc(c.flags.join(", "))}">${c.ok?"OK":"Revisar"}</span></td>
       <td>${r.foto?`<button class="linkbtn" data-foto="${esc(r.id)}">Ver</button>`:""}</td>
       <td><button class="btn danger" data-del="${esc(r.id)}">Borrar</button></td></tr>`; }).join("") + `</tbody>`;
@@ -598,10 +599,10 @@ $("#hisTbl").addEventListener("click", async e => {
 Comun.visorFotos(fotos, $("#hisTbl"));
 $("#hisRama").onchange = renderHis; $("#hisEq").onchange = renderHis;
 $("#csvBtn").onclick = () => {
-  const head = ["fecha","rama","equipo","in_vab","in_vbc","in_vca","in_ia","in_ib","in_ic","byp_vab","byp_vbc","byp_vca","out_vab","out_vbc","out_vca","hz","load_kva","load_kw","load_ia","load_ib","load_ic","bat_v","bat_a","ups_en_linea","fp","pct_carga","desb_i_carga","desb_i_entrada","v_celda","estado","observaciones","nota","foto","capturo"];
+  const head = ["fecha","rama","equipo","in_vab","in_vbc","in_vca","in_ia","in_ib","in_ic","byp_vab","byp_vbc","byp_vca","out_vab","out_vbc","out_vca","hz","load_kva","load_kw","load_ia","load_ib","load_ic","bat_v","bat_a","ups_en_linea","fp","pct_carga","desb_i_carga","desb_i_entrada","v_celda","estado","observaciones","nota","foto","capturo","hora_manual","guardado"];
   const filas = [...readings].reverse().map(r => { const c=calc(r), i=r.in||{}, y=r.byp||{}, o=r.out||{}, l=r.load||{}, b=r.bat||{}, s=r.sys||{};
     return [isoLocal(new Date(r.ts)).replace("T"," "),r.rama,r.equipo,i.vab,i.vbc,i.vca,i.ia,i.ib,i.ic,y.vab,y.vbc,y.vca,o.vab,o.vbc,o.vca,o.hz,l.kva,l.kw,l.ia,l.ib,l.ic,b.v,b.a,s.enlinea,
-      c.fp?.toFixed(3),c.pctKw?.toFixed(4),c.unbIout?.toFixed(4),c.unbIin?.toFixed(4),c.vCell?.toFixed(3),c.ok?"OK":"REVISAR",c.flags.join("; "),r.nota,r.foto?"sí":"",r.autor]; });
+      c.fp?.toFixed(3),c.pctKw?.toFixed(4),c.unbIout?.toFixed(4),c.unbIin?.toFixed(4),c.vCell?.toFixed(3),c.ok?"OK":"REVISAR",c.flags.join("; "),r.nota,r.foto?"sí":"",r.autor,r.tsManual?"sí":"",r.guardado?isoLocal(new Date(r.guardado)).replace("T"," "):""]; });
   descargarCSV(`lecturas_ups_${stamp()}.csv`, head, filas);
 };
 
@@ -832,7 +833,7 @@ async function generarInforme(){
     const td = (fuera, txt) => `<td${fuera ? ' class="mal"' : ""}>${txt}</td>`;   // fuera de límite: en rojo
     const bat = c.sc ? td(c.enlinea!==null && c.enlinea<P.modulos, (c.enlinea??"—")+" en línea")
       : td((c.batA!==null && Math.abs(c.batA)>P.limBatA) || (c.vCell!==null && (c.vCell<P.vCeldaMin || c.vCell>P.vCeldaMax)), `${fx(c.vCell,3)} V/c${c.batA ? ` · ${c.batA} A` : ""}`);
-    return `<tr><td><b>${eq}</b></td><td>${fdate(r.ts)}</td><td>${fx(r.load?.kw,0)}</td><td>${d===null?"—":(d>0?"+":"")+fx(d,0)}</td><td>${fx(r.load?.kva,0)}</td>${td(c.pctKw>P.limCarga, pct(c.pctKw))}<td>${fx(c.fp,2)}</td>${td(c.devOut!==null && Math.abs(c.devOut)>P.limDev, fx(c.vout,0))}${td(c.unbIout>P.limI, pct(c.unbIout))}${bat}<td><span class="est ${c.ok?"ok":"bad"}" style="margin:0;padding:1px 6px">${c.ok?"OK":"Revisar"}</span></td></tr>`;
+    return `<tr><td><b>${eq}</b></td><td>${fdate(r.ts)}${r.tsManual ? " ✎" : ""}</td><td>${fx(r.load?.kw,0)}</td><td>${d===null?"—":(d>0?"+":"")+fx(d,0)}</td><td>${fx(r.load?.kva,0)}</td>${td(c.pctKw>P.limCarga, pct(c.pctKw))}<td>${fx(c.fp,2)}</td>${td(c.devOut!==null && Math.abs(c.devOut)>P.limDev, fx(c.vout,0))}${td(c.unbIout>P.limI, pct(c.unbIout))}${bat}<td><span class="est ${c.ok?"ok":"bad"}" style="margin:0;padding:1px 6px">${c.ok?"OK":"Revisar"}</span></td></tr>`;
   }).join("");
   const kpiRama = e => `<div class="kpi"><div class="l">Rama ${e.rama}</div><div class="v">${e.kw===null?"—":confTxt(e.red)}</div><div>${e.kw===null?"Sin datos":Math.round(e.kw)+" kW ("+e.fuente+")"}</div><div style="color:#4a5866">${e.enl} de ${P.modulos} UPS en línea${e.kw!==null?`, ${pct(cargaRel(e.kw, e.kva, e.enl))} de capacidad`:""}</div></div>`;
 
@@ -857,7 +858,7 @@ async function generarInforme(){
   ${hall.length?`<ul>${hall.map(h=>`<li><b>${esc(h.eq)}</b>: ${esc(h.d)}${h.f?` <span style="color:#6a7784">(${h.f})</span>`:""}</li>`).join("")}</ul>`:"<p>No se detectaron parámetros fuera de límite.</p>"}
   ${faltan.length?`<p style="color:#6b5200"><b>Sin lectura${unDia?" ese día":filtro?" en el periodo":""}:</b> ${faltan.map(esc).join(", ")}.</p>`:""}
   ${E.map(e=>`<div class="bloque"><h2>Detalle Rama ${e.rama}</h2><div class="tw"><table><tr><th>Equipo</th><th>Lectura</th><th>kW</th><th>Δ kW</th><th>kVA</th><th>% carga</th><th>FP</th><th>V salida</th><th>Desb. I</th><th>Batería</th><th>Estado</th></tr>${filas(e)}</table></div></div>`).join("")}
-  <div style="font-size:11px;color:#6a7784;margin-top:4px">Δ kW: cambio respecto a la lectura anterior del mismo equipo. % carga: el mayor entre kW contra ${fx(kwMod(),0)} kW y kVA contra ${fx(P.kva,0)} kVA por módulo (en el SCCT, por los UPS en línea). V salida: promedio; se marca si alguna fase sale de rango. Batería: voltaje por celda y corriente (en flotación debe ser 0 A); en el SCCT, UPS en línea. En rojo, los valores fuera de límite.</div>
+  <div style="font-size:11px;color:#6a7784;margin-top:4px">Δ kW: cambio respecto a la lectura anterior del mismo equipo. % carga: el mayor entre kW contra ${fx(kwMod(),0)} kW y kVA contra ${fx(P.kva,0)} kVA por módulo (en el SCCT, por los UPS en línea). V salida: promedio; se marca si alguna fase sale de rango. Batería: voltaje por celda y corriente (en flotación debe ser 0 A); en el SCCT, UPS en línea. En rojo, los valores fuera de límite.${usadas.some(r => r.tsManual) ? " ✎: hora de la lectura corregida a mano." : ""}</div>
   ${comp ? comp.html : ""}
   ${notas?`<h2>Notas de campo</h2><ul>${notas}</ul>`:""}
   ${fotosInf?`<h2>Evidencia fotográfica</h2><div class="fotos">${fotosInf}</div>`:""}
@@ -913,7 +914,7 @@ function renderAll(){ bak.aviso(); renderChips(); renderLcdMeta(); tabs.renderVi
   });
   $("#repSitio").value = P.sitio || ""; $("#repElab").value = P.elaboro || ""; $("#repRevi").value = P.reviso || "";
   newDraft();
-  if (!(await loadDraft())) $("#ts").value = nowLocal();
+  await loadDraft();
   renderChips(); renderLcd(); renderAll();
   sync.sincronizar();
 })();

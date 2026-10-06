@@ -138,3 +138,6 @@ dialog img{max-width:100%;max-height:75vh;display:block}
 .row.per button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 td.mal{color:var(--bad);font-weight:700}
 i.sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:0}
+.tsbox{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.tsauto{font-weight:600;font-variant-numeric:tabular-nums}
+.tsman{color:var(--muted);cursor:help}

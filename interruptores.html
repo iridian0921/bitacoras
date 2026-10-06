@@ -449,25 +449,26 @@ function renderChecks(){
   ];
   $("#checks").innerHTML = rows.map(([a,b,ok]) => `<div class="chk ${ok===null?"na":ok?"ok":"bad"}"><span>${a}</span><b>${esc(b)}</b></div>`).join("");
 }
-function saveDraft(){ try{ localStorage.setItem(LSD, JSON.stringify({eq:selEq, draft, nota:$("#nota").value, ts:$("#ts").value, foto:!!foto.blob})); }catch{} }
+function saveDraft(){ try{ localStorage.setItem(LSD, JSON.stringify({eq:selEq, draft, nota:$("#nota").value, tsMan:hora.valor(), foto:!!foto.blob})); }catch{} }
 async function loadDraft(){
   try{
     const d = JSON.parse(localStorage.getItem(LSD)||"null"); if (!d) return false;
     selEq = d.eq; newDraft(); draft = {cur:{...(d.draft?.cur||{})}, set:{...(d.draft?.set||{})}, ind:{...draft.ind, ...(d.draft?.ind||{})}};
-    $("#nota").value = d.nota||""; $("#ts").value = d.ts||nowLocal();
+    $("#nota").value = d.nota||""; hora.poner(d.tsMan || "");   // borradores viejos (con "ts") vuelven a hora automática
     if (d.foto) await foto.restore();
     const hay = Object.values(draft.cur).some(v=>v!==null&&v!==undefined) || Object.keys(draft.set).length || d.foto;
     if (hay) Comun.avisoBorrador();
     return true;
   }catch{ return false; }
 }
-$("#nota").oninput = saveDraft; $("#ts").onchange = saveDraft;
+$("#nota").oninput = saveDraft;
+const hora = Comun.horaCaptura(() => saveDraft());
 
 /* ================= fotos ================= */
 const foto = Comun.capturaFoto({fotos, maxLado:1600, calidad:0.75, onChange:saveDraft,
   heic:"Formato HEIC no compatible. Cambia la cámara a JPG o elige otra foto."});
 
-function clearForm(){ newDraft(); fillCur(); $("#nota").value=""; $("#ts").value=nowLocal(); foto.clear(); try{ localStorage.removeItem(LSD); }catch{} }
+function clearForm(){ newDraft(); fillCur(); $("#nota").value=""; hora.reiniciar(); foto.clear(); try{ localStorage.removeItem(LSD); }catch{} }
 $("#clearBtn").onclick = () => { clearForm(); renderTU(); $("#saveStatus").textContent=""; };
 $("#saveBtn").onclick = async () => {
   const st = $("#saveStatus"); estado(st, "");
@@ -476,10 +477,10 @@ $("#saveBtn").onclick = async () => {
   const x = calc({eq:selEq, cur:draft.cur, set:draft.set, ind:draft.ind});
   if (x.avg===null){ estado(st, "Faltan las corrientes I1, I2 e I3.", true); return; }
   if (x.faltan.length && !confirm(`Faltan ${x.faltan.length} ajuste(s): ${x.faltan.map(k=>SET_NAMES[k]).join(", ")}. ¿Guardar de todos modos?`)) return;
+  const h = hora.leer(); if (!h) return;
   $("#saveBtn").disabled = true;
-  const tsv = $("#ts").value; const ts = tsv ? new Date(tsv).toISOString() : new Date().toISOString();
   const id = Comun.nuevoId("r");
-  const r = {id, eq:selEq, ts, cur:{...draft.cur}, set:{...draft.set}, ind:{...draft.ind}, nota:$("#nota").value.trim(), foto:false, autor:sync.autor()};
+  const r = {id, eq:selEq, ts:h.ts, guardado:h.guardado, ...(h.manual ? {tsManual:true} : {}), cur:{...draft.cur}, set:{...draft.set}, ind:{...draft.ind}, nota:$("#nota").value.trim(), foto:false, autor:sync.autor()};
   const gf = await foto.guardar(id); r.foto = gf.ok;
   lecturas.push(r); sortL();
   if (!persist()){ lecturas = lecturas.filter(q=>q.id!==id); if (r.foto) fotos.del(id); estado(st, "No se pudo guardar: almacenamiento lleno o bloqueado. Descarga un respaldo.", true); $("#saveBtn").disabled=false; return; }
@@ -563,7 +564,7 @@ function renderResumen(){
     if (!r) return `<div class="unit"><span class="n">${esc(e.tag)}</span><div class="muted">${esc(e.tablero||"")}</div><div class="muted">Sin lecturas</div></div>`;
     const x = calc(r), b = estadoBase(e, r);
     return `<div class="unit"><div class="row" style="justify-content:space-between"><span class="n">${esc(e.tag)}</span><span class="pill ${x.ok?"ok":"bad"}">${x.ok?"OK":"Revisar"}</span></div>
-      <div class="muted">${esc(e.tablero||"")} · ${fdate(r.ts)}</div>
+      <div class="muted">${esc(e.tablero||"")} · ${fdate(r.ts)}${Comun.marcaHora(r)}</div>
       <div>${fx(x.avg,0)} A prom. · ${pct(x.pctIR)} de IR</div>
       <div><span class="badge ${b.c}">${esc(b.t)}</span></div>
       ${x.ok?"":`<div class="muted">${esc(x.flags.filter(f=>f!=="Ajuste distinto a la línea base").join(", "))}</div>`}</div>`;
@@ -602,7 +603,7 @@ function renderHis(){
   const rows = lecturas.filter(r => se.value==="all" || r.eq===se.value);
   if (!rows.length){ $("#hisTbl").innerHTML = `<tr><td class="muted">Sin lecturas guardadas.</td></tr>`; return; }
   $("#hisTbl").innerHTML = `<thead><tr><th>Fecha</th><th>Capturó</th><th>Interruptor</th><th>I prom</th><th>% IR</th><th>Ajustes</th><th>Estado</th><th>Foto</th><th></th></tr></thead><tbody>` +
-    rows.map(r => { const x = calc(r), e = eqById(r.eq); return `<tr><td>${fdate(r.ts)}</td><td>${esc(r.autor||"—")}</td><td>${esc(e?.tag||"—")}</td><td>${fx(x.avg,0)} A</td><td>${pct(x.pctIR)}</td><td>${esc(ajustesTxt(r.set,e))}</td>
+    rows.map(r => { const x = calc(r), e = eqById(r.eq); return `<tr><td>${fdate(r.ts)}${Comun.marcaHora(r)}</td><td>${esc(r.autor||"—")}</td><td>${esc(e?.tag||"—")}</td><td>${fx(x.avg,0)} A</td><td>${pct(x.pctIR)}</td><td>${esc(ajustesTxt(r.set,e))}</td>
       <td><span class="pill ${x.ok?"ok":"bad"}" title="${esc(x.det.join("; "))}">${x.ok?"OK":"Revisar"}</span></td>
       <td>${r.foto?`<button class="linkbtn" data-foto="${esc(r.id)}">Ver</button>`:""}</td>
       <td><button class="btn danger" data-del="${esc(r.id)}">Borrar</button></td></tr>`; }).join("") + `</tbody>`;
@@ -617,10 +618,10 @@ Comun.visorFotos(fotos, $("#hisTbl"));
 $("#hisEq").onchange = renderHis;
 $("#csvBtn").onclick = () => {
   const keys = SETS.flatMap(g=>g.items.map(i=>i.k));
-  const head = ["fecha","interruptor","tablero","rama","in_A","i1","i2","i3","in_neutro","i_prom","pct_In","IR_A","pct_IR","desbalance","neutro_vs_prom",...keys,"Isd_A","Ii_A",...IND.map(i=>i.k),"cambios_vs_base","estado","observaciones","nota","foto","capturo"];
+  const head = ["fecha","interruptor","tablero","rama","in_A","i1","i2","i3","in_neutro","i_prom","pct_In","IR_A","pct_IR","desbalance","neutro_vs_prom",...keys,"Isd_A","Ii_A",...IND.map(i=>i.k),"cambios_vs_base","estado","observaciones","nota","foto","capturo","hora_manual","guardado"];
   const filas = [...lecturas].reverse().map(r => { const x=calc(r), e=eqById(r.eq), c=r.cur||{};
     return [isoLocal(new Date(r.ts)).replace("T"," "),e?.tag,e?.tablero,e?.rama,e?.in,c.i1,c.i2,c.i3,c.in,x.avg?.toFixed(1),x.pctIn?.toFixed(4),x.irA,x.pctIR?.toFixed(4),x.desb?.toFixed(4),x.pctN?.toFixed(4),
-      ...keys.map(k=>verVal(k, r.set?.[k])),x.isdA,x.iiA,...IND.map(i=>r.ind?.[i.k]),x.cambios.map(cb=>`${SET_NAMES[cb.k]} ${verVal(cb.k,cb.de)}->${verVal(cb.k,cb.a)}`).join("; "),x.ok?"OK":"REVISAR",x.det.join("; "),r.nota,r.foto?"sí":"",r.autor]; });
+      ...keys.map(k=>verVal(k, r.set?.[k])),x.isdA,x.iiA,...IND.map(i=>r.ind?.[i.k]),x.cambios.map(cb=>`${SET_NAMES[cb.k]} ${verVal(cb.k,cb.de)}->${verVal(cb.k,cb.a)}`).join("; "),x.ok?"OK":"REVISAR",x.det.join("; "),r.nota,r.foto?"sí":"",r.autor,r.tsManual?"sí":"",r.guardado?isoLocal(new Date(r.guardado)).replace("T"," "):""]; });
   descargarCSV(`lecturas_interruptores_${stamp()}.csv`, head, filas);
 };
 
@@ -674,7 +675,7 @@ async function generarInforme(){
     if (!r) return `<tr><td><b>${esc(e.tag)}</b><br><span style="color:#6a7784">${esc(e.tablero||"")}</span></td><td colspan="6" style="color:#6a7784">Sin lectura</td></tr>`;
     const x = calc(r), b = estadoBase(e,r);
     const rojo = (fuera, txt) => fuera ? `<span class="mal">${txt}</span>` : txt;   // fuera de límite: en rojo
-    return `<tr><td><b>${esc(e.tag)}</b><br><span style="color:#6a7784">${esc(e.tablero||"")}${e.rama!=="-"?" · Rama "+esc(e.rama):""}</span></td><td>${fdate(r.ts)}</td>
+    return `<tr><td><b>${esc(e.tag)}</b><br><span style="color:#6a7784">${esc(e.tablero||"")}${e.rama!=="-"?" · Rama "+esc(e.rama):""}</span></td><td>${fdate(r.ts)}${r.tsManual ? " ✎" : ""}</td>
       <td>${fx(num(r.cur?.i1),0)} / ${fx(num(r.cur?.i2),0)} / ${fx(num(r.cur?.i3),0)}<br>${rojo(x.pctN>P.limNeutro, `IN ${fx(num(r.cur?.in),0)} A`)}</td>
       <td>${rojo(x.pctIR>P.limCargaIR, `${pct(x.pctIR)} de IR`)}<br><span style="color:#6a7784">IR ${fx(x.irA,0)} A · desb. ${rojo(x.desb>P.limDesb, pct(x.desb))}</span></td>
       <td>${esc(ajustesTxt(r.set,e))}</td><td><span class="est ${b.c||""}" style="margin:0;padding:1px 6px;font-weight:600">${esc(b.t)}</span></td>
@@ -705,6 +706,7 @@ async function generarInforme(){
   <h2>Criterios</h2>
   <div style="font-size:12px">Carga máxima ${pct(P.limCargaIR,0)} de IR; desbalance de corriente ${pct(P.limDesb,0)}; corriente de neutro ${pct(P.limNeutro,0)} del promedio. Se reporta cualquier ajuste distinto a la línea base registrada, LED de alarma o de error del disparador encendido e indicador de disparo activo. La coherencia verifica IR &lt; Isd &lt; Ii.</div>
   <div class="firma"><div>Elaboró${elab?`<br>${esc(elab)}`:""}</div><div>Revisó${revi?`<br>${esc(revi)}`:""}</div></div>
+  ${con.some(u => u.r.tsManual) ? `<div style="font-size:11px;color:#6a7784;margin-top:4px">✎: hora de la lectura corregida a mano.</div>` : ""}
   <div class="pie">Generado con Bitácora de interruptores. Valores tomados de la pantalla y diales del disparador por inspección visual; no se modificó ningún ajuste.</div></div>`;
   const L = [`*Informe de interruptores${sitio?" – "+sitio:""}*`, `${alcance} | ${fdate(ahora)}`, `Inspeccionados ${con.length}/${E.length} | Con hallazgos ${nRevisar} | Ajustes cambiados ${nCambios}`, ""];
   L.push(hall.length ? `Hallazgos (${hall.length}):` : "Sin hallazgos.");
@@ -764,7 +766,7 @@ function renderAll(){ bak.aviso(); renderEqSel(); tabs.renderVisible(); }
   await Comun.revisarEntorno({lsOk, persist, fotos, sinFotos:"Este navegador no permite guardar fotos al abrir el archivo así. Las lecturas sí se guardan."});
   renderCfg(); $("#repSitio").value = P.sitio||""; $("#repElab").value = P.elaboro||""; $("#repRevi").value = P.reviso||"";
   newDraft();
-  if (!(await loadDraft())) $("#ts").value = nowLocal();
+  await loadDraft();
   fillCur(); renderAll(); renderTU();
   if (!equipos.length) tabs.ir("equ");
   sync.sincronizar();
