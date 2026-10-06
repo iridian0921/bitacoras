@@ -128,3 +128,13 @@ dialog img{max-width:100%;max-height:75vh;display:block}
 
 /* Aviso de versión nueva */
 .version-nueva{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:20;display:flex;gap:12px;align-items:center;justify-content:space-between;background:var(--ink);color:var(--bg);border-radius:10px;padding:10px 12px;box-shadow:0 4px 16px rgba(0,0,0,.3);font-weight:600;max-width:736px;margin:0 auto}
+#chartBox{position:relative}
+.chart circle.hit{cursor:pointer}
+.chart-tip{position:absolute;z-index:2;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.15);max-width:260px;pointer-events:auto}
+.chart-tip .v{font-size:16px;font-weight:700}
+.chart-tip .mal{color:var(--bad);font-weight:600}
+.row.per{gap:6px;margin-top:8px}
+.row.per button{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:600 14px var(--fb);padding:7px 12px;border-radius:999px;cursor:pointer}
+.row.per button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+td.mal{color:var(--bad);font-weight:700}
+i.sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:0}

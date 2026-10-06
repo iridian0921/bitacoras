@@ -176,32 +176,64 @@ function pestanas(render){
 }
 
 /* ================= gráfica de tendencias =================
-   series: [{name, color, dash, pts:[{t, v}]}] */
+   series: [{name, color, dash, pts:[{t, v, id?, foto?}]}]
+   lim: línea de límite superior · banda: [mín, máx] del rango normal · fuera(v): punto fuera de límite (va en rojo) */
 const fmtDia = new Intl.DateTimeFormat("es-MX", {day:"2-digit", month:"short"});
 /* Gráfica de líneas en SVG. tema cambia los colores de la cuadrícula (el informe exportado no tiene las variables CSS). */
-function svgGrafica(series, {lim = null, fmt, min0 = false, label, tema = {}}){
-  const C = {line:"var(--line)", muted:"var(--muted)", bad:"var(--bad)", ...tema};
+/* ancho: el de la pantalla, para que los textos salgan a su tamaño real (sin él, 700 para el informe). */
+function svgGrafica(series, {lim = null, banda = null, fuera = null, fmt, min0 = false, label, tema = {}, ancho = 0}){
+  const C = {line:"var(--line)", muted:"var(--muted)", bad:"var(--bad)", banda:"var(--okbg)", fondo:"var(--surface)", ...tema};
   let t0=Infinity, t1=-Infinity, v0=Infinity, v1=-Infinity;
   for (const s of series) for (const p of s.pts){ if (p.t<t0) t0=p.t; if (p.t>t1) t1=p.t; if (p.v<v0) v0=p.v; if (p.v>v1) v1=p.v; }
   if (t0===t1){ t0-=43200000; t1+=43200000; }
   if (lim!==null){ v1=Math.max(v1,lim); v0=Math.min(v0,lim); }
+  if (banda){ v1=Math.max(v1,banda[1]); v0=Math.min(v0,banda[0]); }
   const pad=(v1-v0)*0.12 || Math.abs(v1)*0.05 || 1; v0-=pad; v1+=pad; if (min0) v0=Math.max(0,v0);
-  const W=700,H=320,L=56,R=14,T=14,B=40;
+  const W = ancho ? Math.max(300, Math.round(ancho)) : 700, H = W < 500 ? 250 : 320, L=52, R=10, T=14, B=34;
   const X=t=>L+(t-t0)/(t1-t0)*(W-L-R), Y=v=>T+(1-(v-v0)/(v1-v0))*(H-T-B);
   const g = [];
+  if (banda) g.push(`<rect x="${L}" width="${W-L-R}" y="${Y(banda[1])}" height="${Y(banda[0])-Y(banda[1])}" fill="${C.banda}"/>`);
   for (let i=0;i<=4;i++){ const v=v0+(v1-v0)*i/4; g.push(`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.line}"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end" font-size="12" fill="${C.muted}">${fmt(v)}</text>`); }
-  for (let i=0;i<=3;i++){ const t=t0+(t1-t0)*i/3; g.push(`<text x="${X(t)}" y="${H-14}" text-anchor="middle" font-size="12" fill="${C.muted}">${fmtDia.format(t)}</text>`); }
-  if (lim!==null) g.push(`<line x1="${L}" x2="${W-R}" y1="${Y(lim)}" y2="${Y(lim)}" stroke="${C.bad}" stroke-dasharray="6 5"/><text x="${W-R}" y="${Y(lim)-5}" text-anchor="end" font-size="12" fill="${C.bad}">Límite ${fmt(lim)}</text>`);
-  for (const s of series){
+  const corto = t1-t0 < 2*86400000, fmtT = corto ? new Intl.DateTimeFormat("es-MX", {hour:"numeric", minute:"2-digit"}) : fmtDia;
+  for (let i=0;i<=3;i++){ const t=t0+(t1-t0)*i/3; g.push(`<text x="${X(t)}" y="${H-10}" text-anchor="${i===0?"start":i===3?"end":"middle"}" font-size="12" fill="${C.muted}">${fmtT.format(t)}</text>`); }
+  if (banda) for (const [v, txt] of [[banda[1],"Máx."],[banda[0],"Mín."]])
+    g.push(`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.bad}" stroke-dasharray="6 5"/><text x="${W-R}" y="${Y(v)+(txt==="Máx."?-5:14)}" text-anchor="end" font-size="12" fill="${C.muted}">${txt} ${fmt(v)}</text>`);
+  if (lim!==null) g.push(`<line x1="${L}" x2="${W-R}" y1="${Y(lim)}" y2="${Y(lim)}" stroke="${C.bad}" stroke-dasharray="6 5"/><text x="${W-R}" y="${Y(lim)-5}" text-anchor="end" font-size="12" fill="${C.muted}">Límite ${fmt(lim)}</text>`);
+  series.forEach((s, si) => {
     const dash = s.dash ? ` stroke-dasharray="8 4"` : "";
-    if (s.pts.length>1) g.push(`<polyline fill="none" stroke="${s.color}" stroke-width="2.5"${dash} points="${s.pts.map(p=>X(p.t)+","+Y(p.v)).join(" ")}"/>`);
-    for (const p of s.pts) g.push(`<circle cx="${X(p.t)}" cy="${Y(p.v)}" r="4" fill="${s.color}"><title>${esc(s.name)}: ${fmt(p.v)} (${fdate(p.t)})</title></circle>`);
-  }
+    if (s.pts.length>1) g.push(`<polyline fill="none" stroke="${s.color}" stroke-width="2"${dash} points="${s.pts.map(p=>X(p.t)+","+Y(p.v)).join(" ")}"/>`);
+    s.pts.forEach((p, i) => {
+      const mal = fuera && fuera(p.v);
+      // punto visible (rojo y más grande si sale de límite) y un área de toque más grande, invisible
+      g.push(`<circle cx="${X(p.t)}" cy="${Y(p.v)}" r="${mal?6:4}" fill="${mal?C.bad:s.color}" stroke="${C.fondo}" stroke-width="2"><title>${esc(s.name)}: ${fmt(p.v)} (${fdate(p.t)})</title></circle>`);
+      g.push(`<circle class="hit" data-s="${si}" data-i="${i}" cx="${X(p.t)}" cy="${Y(p.v)}" r="14" fill="transparent"/>`);
+    });
+  });
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">${g.join("")}</svg>`;
 }
+/* Dibuja en #chartBox con su leyenda. Al tocar un punto muestra equipo, fecha y valor (y la foto si la lectura tiene). */
+let graficaActual = null;
 function grafica(series, opts){
-  $("#chartBox").innerHTML = svgGrafica(series, opts);
-  $("#legend").innerHTML = series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join("");
+  graficaActual = {series, opts};
+  const box = $("#chartBox");
+  box.innerHTML = svgGrafica(series, {...opts, ancho: box.clientWidth}) + `<div class="chart-tip hidden" id="chartTip" role="status"></div>`;
+  $("#legend").innerHTML = series.length > 1 ? series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.name)}${s.dash?" (punteada)":""}</span>`).join("") : "";
+  if (!box.dataset.tip){
+    box.dataset.tip = "1";
+    box.addEventListener("click", ev => {
+      const tip = $("#chartTip"); if (!tip || ev.target.closest("#chartTip")) return;
+      const h = ev.target.closest("circle.hit");
+      if (!h){ tip.classList.add("hidden"); return; }
+      const {series, opts} = graficaActual, s = series[+h.dataset.s], p = s.pts[+h.dataset.i];
+      const mal = opts.fuera && opts.fuera(p.v);
+      tip.innerHTML = `<b>${esc(s.name)}</b> · ${fdate(p.t)}<br><span class="v">${opts.fmt(p.v)}</span>${mal ? ` <span class="mal">⚠ fuera de límite</span>` : ""}${p.foto ? ` <button class="linkbtn" data-foto="${esc(p.id)}">Ver foto</button>` : ""}`;
+      const r = box.getBoundingClientRect(), c = h.getBoundingClientRect();
+      tip.classList.remove("hidden");
+      const x = Math.min(Math.max(c.left + c.width/2 - r.left - tip.offsetWidth/2, 0), r.width - tip.offsetWidth);
+      const yArriba = c.top - r.top - tip.offsetHeight - 4;
+      tip.style.left = x + "px"; tip.style.top = (yArriba >= 0 ? yArriba : c.bottom - r.top + 4) + "px";
+    });
+  }
 }
 
 /* ================= informe ================= */

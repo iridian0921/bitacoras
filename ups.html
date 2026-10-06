@@ -81,7 +81,12 @@
     <select id="tenRama" aria-label="Rama"></select>
     <select id="metric" aria-label="Variable a graficar"></select>
   </div>
-  <div class="card"><div id="chartBox"></div><div class="legend" id="legend"></div></div>
+  <div class="row per" id="tenPer" role="group" aria-label="Periodo">
+    <button data-d="7">7 días</button><button data-d="30">30 días</button><button data-d="90">90 días</button><button data-d="0">Todo</button>
+  </div>
+  <div class="card"><div id="chartBox"></div><div class="legend" id="legend"></div>
+    <div class="muted" id="tenNota" style="font-size:13px;margin-top:6px"></div></div>
+  <div class="card tbl-wrap" id="tenResWrap"><table class="tbl" id="tenRes"></table></div>
 </section>
 
 <section id="inf">
@@ -178,7 +183,7 @@ const FIELDS_SCCT = [
   {g:"SYSTEM LOAD", k:"load", cols:3, f:[["kva","kVA"],["kw","kW"],["x",""],["ia","ØA A"],["ib","ØB A"],["ic","ØC A"]]},
   {g:"MÓDULOS", k:"sys", cols:2, f:[["enlinea","UPS en línea"]]}
 ];
-const COLORS = ["#2438b5","#c2410c","#237a47","#8b5cf6","#0e7490","#a16207","#be185d","#4d7c0f"];
+const COLORS = ["#3a56d4","#c2410c","#237a47","#8b5cf6","#0891b2","#a16207","#be185d","#4d7c0f"];
 
 let P = {...DEFAULTS}, readings = [];
 let selRama = "A", selEq = "UPS 1", draft = null;
@@ -501,37 +506,73 @@ function renderSys(){
 }
 
 /* ================= tendencias ================= */
+/* eqs: qué equipos entran (ups = los módulos, scct = la rama, all = ambos; el SCCT va punteado).
+   lim: límite superior · banda: rango normal [mín, máx]. Los puntos fuera van en rojo. */
 const METRICS = [
-  ["kw","Carga (kW)", r=>num(r.load?.kw), null, false, true],
-  ["pctKw","Carga (% de capacidad)", r=>calc(r).pctKw, ()=>P.limCarga, true, true],
-  ["unbIout","Desbalance de corriente de carga (%)", r=>calc(r).unbIout, ()=>P.limI, true, true],
-  ["unbIin","Desbalance de corriente de entrada (%)", r=>calc(r).unbIin, ()=>P.limI, true, false],
-  ["vout","Voltaje de salida promedio (V)", r=>calc(r).vout, null, false, true],
-  ["vCell","Batería, voltaje por celda (V)", r=>calc(r).vCell, null, false, false],
-  ["fp","Factor de potencia de la carga", r=>calc(r).fp, null, false, true]
+  {k:"kwMod", l:"Carga por módulo (kW)", f:r=>num(r.load?.kw), eqs:"ups", lim:()=>P.limCarga*kwMod(), nota:()=>`Límite: ${pct(P.limCarga,0)} de ${fx(kwMod(),0)} kW por módulo.`},
+  {k:"kwRama", l:"Carga de la rama, SCCT (kW)", f:r=>num(r.load?.kw), eqs:"scct", lim:()=>P.limCarga*kwMod()*P.modulos, nota:()=>`Límite: ${pct(P.limCarga,0)} de ${P.modulos} × ${fx(kwMod(),0)} kW. La redundancia depende de cuántos UPS estén en línea (ver Sistema).`},
+  {k:"pctKw", l:"Carga (% de capacidad)", f:r=>calc(r).pctKw, pct:true, eqs:"all", lim:()=>P.limCarga, nota:()=>"El mayor entre kW y kVA; en el SCCT, sobre los UPS en línea."},
+  {k:"unbIout", l:"Desbalance de corriente de carga (%)", f:r=>calc(r).unbIout, pct:true, eqs:"all", lim:()=>P.limI},
+  {k:"unbIin", l:"Desbalance de corriente de entrada (%)", f:r=>calc(r).unbIin, pct:true, eqs:"ups", lim:()=>P.limI},
+  {k:"vout", l:"Voltaje de salida promedio (V)", f:r=>calc(r).vout, eqs:"all", banda:()=>[P.vnom*(1-P.limDev), P.vnom*(1+P.limDev)], nota:()=>`Banda: ${P.vnom} V ± ${pct(P.limDev,0)}.`},
+  {k:"vCell", l:"Batería, voltaje por celda (V)", f:r=>calc(r).vCell, eqs:"ups", dec:3, banda:()=>[P.vCeldaMin, P.vCeldaMax], nota:()=>`Banda de flotación: ${fx(P.vCeldaMin,3)}–${fx(P.vCeldaMax,3)} V/celda a 25 °C.`},
+  {k:"fp", l:"Factor de potencia de la carga", f:r=>calc(r).fp, eqs:"all", dec:2}
 ];
-$("#metric").innerHTML = METRICS.map(([k,l])=>`<option value="${k}">${l}</option>`).join("");
+$("#metric").innerHTML = METRICS.map(m=>`<option value="${m.k}">${m.l}</option>`).join("");
 $("#tenRama").innerHTML = RAMAS.map(r=>`<option value="${r}">Rama ${r}</option>`).join("");
 $("#metric").onchange = renderChart; $("#tenRama").onchange = renderChart;
+let tenDias = 30;
+$("#tenPer").addEventListener("click", ev => { const b = ev.target.closest("[data-d]"); if (!b) return; tenDias = +b.dataset.d; renderChart(); });
+Comun.visorFotos(fotos, $("#chartBox"));
+/* Tendencia: pendiente por mínimos cuadrados, expresada como cambio por 30 días. */
+function pendiente(pts){
+  if (pts.length < 3 || pts[pts.length-1].t - pts[0].t < 7*86400000) return null;
+  const n = pts.length, mt = pts.reduce((s,p)=>s+p.t,0)/n, mv = pts.reduce((s,p)=>s+p.v,0)/n;
+  let a = 0, b = 0; for (const p of pts){ a += (p.t-mt)*(p.v-mv); b += (p.t-mt)**2; }
+  return b ? a/b*30*86400000 : null;
+}
 function renderChart(){
-  const m = METRICS.find(x=>x[0]===$("#metric").value); const isPct = !!m[4]; const rama = $("#tenRama").value;
+  const m = METRICS.find(x=>x.k===$("#metric").value), rama = $("#tenRama").value;
+  [...$("#tenPer").children].forEach(b => b.setAttribute("aria-pressed", +b.dataset.d===tenDias));
+  const desde = tenDias ? Date.now() - tenDias*86400000 : -Infinity;
+  const lim = m.lim ? m.lim() : null, banda = m.banda ? m.banda() : null;
+  const fuera = v => (lim!==null && v>lim) || (banda && (v<banda[0] || v>banda[1]));
   const porEq = new Map();
   for (const r of readings){
     if (r.rama!==rama) continue;
-    const t = +new Date(r.ts), v = m[2](r);
-    if (v===null || !isFinite(v) || isNaN(t)) continue;
+    const t = +new Date(r.ts); if (isNaN(t) || t < desde) continue;
+    const v = m.f(r); if (v===null || !isFinite(v)) continue;
     if (!porEq.has(r.equipo)) porEq.set(r.equipo, []);
-    porEq.get(r.equipo).push({t, v});
+    porEq.get(r.equipo).push({t, v, id:r.id, foto:!!r.foto});
   }
   const series = [];
   equipos().forEach((eq, idx) => {
-    if (isScct(eq) && !m[5]) return;
+    const sc = isScct(eq);
+    if ((m.eqs==="ups" && sc) || (m.eqs==="scct" && !sc)) return;
     const pts = porEq.get(eq);
-    if (pts) series.push({name:eq, color:COLORS[idx%COLORS.length], dash:isScct(eq), pts:pts.sort((a,b)=>a.t-b.t)});
+    if (pts) series.push({name:eq, color:COLORS[idx%COLORS.length], dash:sc && m.eqs==="all", pts:pts.sort((a,b)=>a.t-b.t)});
   });
-  if (!series.length){ $("#chartBox").innerHTML = `<p class="muted">Sin lecturas de esta variable en la Rama ${rama}.</p>`; $("#legend").innerHTML=""; return; }
-  Comun.grafica(series, {lim: m[3] ? m[3]() : null, min0: isPct, label:`${m[1]}, Rama ${rama}`,
-    fmt: v => isPct ? (v*100).toFixed(1)+"%" : (Math.abs(v)<10 ? v.toFixed(2) : v.toFixed(0))});
+  // mismos decimales en toda la gráfica, según la escala de los valores
+  const escala = Math.max(...series.flatMap(x => x.pts.map(q => Math.abs(q.v))), 0);
+  const fmt = v => m.pct ? (v*100).toFixed(1)+" %" : v.toFixed(m.dec ?? (escala<10 ? 2 : 0));
+  $("#tenNota").textContent = m.nota ? m.nota() : "";
+  if (!series.length){
+    $("#chartBox").innerHTML = `<p class="muted">Sin lecturas de esta variable en la Rama ${rama}${tenDias ? ` en los últimos ${tenDias} días. Prueba con «Todo»` : ""}.</p>`;
+    $("#legend").innerHTML = ""; $("#tenResWrap").classList.add("hidden"); return;
+  }
+  Comun.grafica(series, {lim, banda, fuera, min0: !!m.pct, label:`${m.l}, Rama ${rama}`, fmt});
+  // resumen del periodo por equipo
+  const dif = d => d===null ? "—" : Math.abs(d) < 1e-9 ? "= 0" : (d>0 ? "+" : "−") + fmt(Math.abs(d)).replace(" %"," pts");
+  const filas = series.map(s => {
+    const v = s.pts.map(p=>p.v), n = v.length, ult = v[n-1], ant = n>1 ? v[n-2] : null;
+    const prom = v.reduce((a,b)=>a+b,0)/n, nf = v.filter(fuera).length, pe = pendiente(s.pts);
+    const tend = pe===null ? "—" : Math.abs(pe) < Math.abs(prom)*0.01 ? "→ estable" : `${pe>0?"↑":"↓"} ${dif(pe).slice(1)} /mes`;
+    const td = (x, mal) => `<td${mal?' class="mal"':""}>${x}</td>`;
+    return `<tr><td><i class="sw" style="background:${s.color}"></i>${esc(s.name)}</td>${td(fmt(ult), fuera(ult))}<td>${ant===null?"—":dif(ult-ant)}</td>
+      ${td(fmt(Math.min(...v)), fuera(Math.min(...v)))}<td>${fmt(prom)}</td>${td(fmt(Math.max(...v)), fuera(Math.max(...v)))}<td>${tend}</td>${td(nf ? `⚠ ${nf}` : "0", nf>0)}<td>${n}</td></tr>`;
+  }).join("");
+  $("#tenRes").innerHTML = `<thead><tr><th>Equipo</th><th>Último</th><th>vs anterior</th><th>Mín.</th><th>Prom.</th><th>Máx.</th><th>Tendencia</th><th>Fuera de límite</th><th>Lecturas</th></tr></thead><tbody>${filas}</tbody>`;
+  $("#tenResWrap").classList.remove("hidden");
 }
 
 /* ================= historial ================= */
