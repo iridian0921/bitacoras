@@ -230,7 +230,7 @@ function svgGrafica(series, {lim = null, banda = null, fuera = null, fmt, min0 =
   if (lim!==null){ v1=Math.max(v1,lim); v0=Math.min(v0,lim); }
   if (banda){ v1=Math.max(v1,banda[1]); v0=Math.min(v0,banda[0]); }
   const pad=(v1-v0)*0.12 || Math.abs(v1)*0.05 || 1; v0-=pad; v1+=pad; if (min0) v0=Math.max(0,v0);
-  const W = ancho ? Math.max(300, Math.round(ancho)) : 700, H = W < 500 ? 250 : 320, L=52, R=10, T=14, B=34;
+  const W = ancho ? Math.max(300, Math.round(ancho)) : 700, H = W < 500 ? 250 : W > 760 ? Math.min(420, Math.round(W*0.36)) : 320, L=52, R=10, T=14, B=34;
   const X=t=>L+(t-t0)/(t1-t0)*(W-L-R), Y=v=>T+(1-(v-v0)/(v1-v0))*(H-T-B);
   const g = [];
   if (banda) g.push(`<rect x="${L}" width="${W-L-R}" y="${Y(banda[1])}" height="${Y(banda[0])-Y(banda[1])}" fill="${C.banda}"/>`);
@@ -261,6 +261,11 @@ function grafica(series, opts){
   $("#legend").innerHTML = series.length > 1 ? series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.name)}${s.dash?" (punteada)":""}</span>`).join("") : "";
   if (!box.dataset.tip){
     box.dataset.tip = "1";
+    // en PC la ventana cambia de tamaño: se vuelve a dibujar al nuevo ancho
+    let t = null, w = box.clientWidth;
+    addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => {
+      if (graficaActual && box.clientWidth && Math.abs(box.clientWidth - w) > 20){ w = box.clientWidth; grafica(graficaActual.series, graficaActual.opts); }
+    }, 200); });
     box.addEventListener("click", ev => {
       const tip = $("#chartTip"); if (!tip || ev.target.closest("#chartTip")) return;
       const h = ev.target.closest("circle.hit");

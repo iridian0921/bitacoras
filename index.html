@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="comun.css">
 <style>
 .apps{display:grid;gap:12px;margin-top:14px}
+@media (min-width:900px){.wrap{max-width:980px}.apps{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .app{display:flex;gap:14px;align-items:center;text-decoration:none;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
 .app .ic{font-size:34px;width:56px;height:56px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--bg);flex:0 0 auto}
 .app h3{margin:0;font:700 22px/1.1 var(--fc)}
