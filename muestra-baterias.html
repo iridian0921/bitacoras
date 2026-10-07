@@ -65,6 +65,12 @@ svg.sp{width:100%;max-width:520px;height:auto;display:block}
 .form{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:8px 10px;align-items:center;font-size:15px;max-width:640px}
 .form input{width:100%}
 .form h4{grid-column:1/-1;margin:10px 0 0}
+#tModelos input{width:100%;min-width:80px;font-size:14px;padding:6px}
+#tModelos input[data-k="nombre"]{min-width:220px}#tModelos input[data-k="torque"]{min-width:150px}#tModelos input[type="date"]{min-width:140px}
+#tModelos td:first-child{font-weight:700}
+.asg{display:grid;grid-template-columns:auto repeat(4,minmax(0,1fr));gap:4px 6px;align-items:center;font-size:14px}
+.asg select{font-size:14px;padding:5px;width:100%}
+.mtag{font-size:12px;font-weight:700;color:var(--muted)}
 .hidden{display:none!important}
 .crit td:first-child{font-weight:600}
 @media (max-width:640px){.crit tr{display:block;border-bottom:1px solid var(--line);padding:6px 0}.crit td{display:block;border:0;padding:2px 0}}
@@ -90,7 +96,7 @@ svg.sp{width:100%;max-width:520px;height:auto;display:block}
 
   <div id="res" class="hidden">
     <nav class="sec noprint">
-      <a href="#sGen">Estado</a><a href="#sPri">Prioridades</a><a href="#sMon">Monitoreo</a><a href="#det">Banco</a><a href="#sHall">Hallazgos</a><a href="#sAju">Ficha y límites</a>
+      <a href="#sGen">Estado</a><a href="#sPri">Prioridades</a><a href="#sMon">Monitoreo</a><a href="#det">Banco</a><a href="#sHall">Hallazgos</a><a href="#sAju">Modelos y límites</a>
     </nav>
     <div class="row" style="margin-top:6px"><label for="mes" class="muted">Mes evaluado</label><select id="mes"></select></div>
 
@@ -127,8 +133,19 @@ svg.sp{width:100%;max-width:520px;height:auto;display:block}
     <div class="row noprint"><button class="btn sec" onclick="print()">Imprimir / PDF</button></div>
   </div>
 
-  <h2 id="sAju">Ficha de la batería y límites</h2>
+  <h2 id="sAju">Modelos, asignación por banco y límites</h2>
+  <div class="card noprint tw">
+    <h3>Modelos de batería</h3>
+    <div class="muted small">Datos de la placa y de la ficha técnica. Un campo vacío no se evalúa (por ejemplo, la flotación de M3 hasta tener su placa).</div>
+    <table id="tModelos" style="margin-top:6px"></table>
+  </div>
   <div class="card noprint">
+    <h3>Modelo de cada banco</h3>
+    <div class="muted small">Según el levantamiento del 07/10/26. Cambia aquí si un banco se reemplaza completo.</div>
+    <div class="lados" id="asign" style="margin-top:6px"></div>
+  </div>
+  <div class="card noprint">
+    <h3>Límites</h3>
     <div class="form" id="form"></div>
     <div class="row" style="margin-top:12px"><button class="btn" id="guardarCfg">Guardar</button><button class="btn sec" id="defCfg">Valores recomendados</button><span class="small" id="cfgSt"></span></div>
   </div>
@@ -148,6 +165,7 @@ svg.sp{width:100%;max-width:520px;height:auto;display:block}
       <tr><td>Corriente de flotación</td><td>Más del doble de la mediana de los bancos: <b>Vigilar</b> (posible batería en falla o riesgo térmico, IEEE 1491).</td></tr>
       <tr><td>Rizado (mV)</td><td>Más del <b>0.5 % del voltaje del banco</b>: <b>Vigilar</b>. Límite habitual de fabricantes de VRLA; ajústalo a tu ficha.</td></tr>
       <tr><td>Monitoreo</td><td>Sensores que no reportan; resistencia sin actualizar en más de <b>45 días</b>; suma de voltajes de las baterías distinta del voltaje del banco en más de <b>2 %</b> (sensor descalibrado). Se reportan como fallas del monitoreo, no de las baterías.</td></tr>
+      <tr><td>Modelos</td><td>Cada banco se evalúa con la ficha de su modelo (flotación, resistencia de referencia, torque). La corriente de flotación solo se compara entre bancos del mismo modelo, porque tienen capacidades distintas. Si un reemplazo usa un modelo distinto al del banco, se marca Vigilar: los fabricantes e IEEE 1188 recomiendan no mezclar modelos en un banco.</td></tr>
       <tr><td>Reemplazos</td><td>Al registrar un reemplazo, la batería empieza una línea base nueva. Mientras Gexia no mida su resistencia otra vez, esa resistencia no se evalúa (sería la de la batería anterior).</td></tr>
       <tr><td>Marco en México</td><td>La NOM-001-SEDE-2012 (artículo 480, baterías estacionarias) regula la instalación: ventilación, soportes y protección. No fija límites de mantenimiento, por eso estos criterios se basan en IEEE 1188 / IEEE 1491 y en la ficha del fabricante, que es lo que usan los programas de mantenimiento de centros de datos (por ejemplo, con ICREA-Std-131 o TIA-942).</td></tr>
     </tbody></table>
@@ -168,46 +186,58 @@ const dia = t => t.slice(0,10);
 const mesTxt = m => new Date(m+"-15T12:00:00Z").toLocaleDateString("es-MX", {month:"long", year:"numeric", timeZone:"UTC"});
 const vivo = x => x != null && x > 0.5;
 
-/* ===== ficha y límites (punto 5) ===== */
-const DEF = {
-  ficha:{modelo:"", ah:null, rRef:null, vMin:2.25, vMax:2.30, celdas:6, instalacion:""},
-  L:{rWarn:0.20, rBad:0.50, rMes:0.10, vWarn:0.25, vBad:0.60, tWarn:30, tDelta:3, tBad:35, cWarn:0.20, cBad:0.50, iFact:2, rizPct:0.5, rDias:45, sumaPct:2}
+/* ===== modelos, asignación por banco y límites (punto 5) ===== */
+/* Catálogo según el levantamiento de modelos (07/10/26). Flotación por celda = placa ÷ 6 celdas. */
+const MODELOS_DEF = {
+  M1:{nombre:"EnerSys DataSafe HX 12HX540-FR", ah:null, rRef:null, vMin:2.25, vMax:2.283, celdas:6, torque:"6.8 N·m (60 in·lb)", instalacion:""},
+  M2:{nombre:"CSB HRL12540W FR", ah:null, rRef:null, vMin:2.25, vMax:2.30, celdas:6, torque:"", instalacion:""},
+  M3:{nombre:"Ritar HR12-520W", ah:null, rRef:null, vMin:null, vMax:null, celdas:6, torque:"", instalacion:""}
 };
+const ASIGN_DEF = (() => {
+  const a = {};
+  for (const l of ["A","B"]) for (let u = 1; u <= 4; u++) for (let b = 1; b <= 4; b++) a[`${l}|${u}|0${b}`] = "M1";
+  ["A|4|01","A|4|02"].forEach(k => a[k] = "M2");
+  ["B|3|01","B|3|02","B|4|02"].forEach(k => a[k] = "M3");
+  return a;
+})();
+const DEF = {L:{rWarn:0.20, rBad:0.50, rMes:0.10, vWarn:0.25, vBad:0.60, tWarn:30, tDelta:3, tBad:35, cWarn:0.20, cBad:0.50, iFact:2, rizPct:0.5, rDias:45, sumaPct:2}};
 const CFG_KEY = "bitacora-baterias-cfg", REP_KEY = "bitacora-baterias-reemplazos";
 const leerLS = (k, d) => { try{ return JSON.parse(localStorage.getItem(k) || "null") ?? d; }catch{ return d; } };
 let cfg = leerLS(CFG_KEY, {});
-cfg = {ficha:{...DEF.ficha, ...(cfg.ficha||{})}, L:{...DEF.L, ...(cfg.L||{})}};
-let L = cfg.L, F = cfg.ficha;
+const modelosGuardados = cfg.modelos || {};
+if (cfg.ficha && !cfg.modelos) modelosGuardados.M1 = {rRef:cfg.ficha.rRef, ah:cfg.ficha.ah, instalacion:cfg.ficha.instalacion};   // ficha única de la versión anterior
+cfg = {modelos:Object.fromEntries(Object.entries(MODELOS_DEF).map(([k, m]) => [k, {...m, ...Object.fromEntries(Object.entries(modelosGuardados[k] || {}).filter(([, v]) => v != null && v !== ""))}])),
+       asign:{...ASIGN_DEF, ...(cfg.asign||{})}, L:{...DEF.L, ...(cfg.L||{})}};
+let L = cfg.L;
+const modeloDe = clave => cfg.asign[clave] || "M1";
+const fichaDe = clave => cfg.modelos[modeloDe(clave)] || {};
+const guardarCfg = () => { try{ localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }catch{} };
 let reemplazos = leerLS(REP_KEY, []);
 const guardarRep = () => { try{ localStorage.setItem(REP_KEY, JSON.stringify(reemplazos)); }catch{} };
 const CAMPOS = [
-  ["h","Ficha de la batería"],
-  ["ficha","modelo","Modelo","text"],["ficha","ah","Capacidad (Ah)","number"],
-  ["ficha","rRef","Resistencia de referencia del fabricante (mΩ) · opcional","number"],
-  ["ficha","vMin","Flotación mínima por celda (V)","number"],["ficha","vMax","Flotación máxima por celda (V)","number"],
-  ["ficha","celdas","Celdas por batería","number"],["ficha","instalacion","Fecha de instalación de los bancos","date"],
-  ["h","Límites"],
-  ["L","rWarn","Resistencia: Vigilar desde (fracción, 0.20 = +20 %)","number"],["L","rBad","Resistencia: Reemplazar desde (fracción)","number"],
-  ["L","rMes","Resistencia: subida en 30 días para Vigilar (fracción)","number"],
-  ["L","vWarn","Voltaje: Vigilar si se aparta de la mediana más de (V)","number"],["L","vBad","Voltaje: Crítico si se aparta más de (V)","number"],
-  ["L","tWarn","Temperatura: Vigilar arriba de (°C)","number"],["L","tDelta","Temperatura: Vigilar si supera el promedio del banco por (°C)","number"],["L","tBad","Temperatura: Crítico arriba de (°C)","number"],
-  ["L","cWarn","Conexiones: Vigilar desde (fracción)","number"],["L","cBad","Conexiones: Crítico desde (fracción)","number"],
-  ["L","iFact","Corriente de flotación: Vigilar si es N veces la mediana","number"],["L","rizPct","Rizado: Vigilar arriba de (% del voltaje del banco)","number"],
-  ["L","rDias","Monitoreo: resistencia sin actualizar más de (días)","number"],["L","sumaPct","Monitoreo: suma de voltajes vs banco, diferencia máx. (%)","number"]
+  ["L","rWarn","Resistencia: Vigilar desde (fracción, 0.20 = +20 %)"],["L","rBad","Resistencia: Reemplazar desde (fracción)"],
+  ["L","rMes","Resistencia: subida en 30 días para Vigilar (fracción)"],
+  ["L","vWarn","Voltaje: Vigilar si se aparta de la mediana más de (V)"],["L","vBad","Voltaje: Crítico si se aparta más de (V)"],
+  ["L","tWarn","Temperatura: Vigilar arriba de (°C)"],["L","tDelta","Temperatura: Vigilar si supera el promedio del banco por (°C)"],["L","tBad","Temperatura: Crítico arriba de (°C)"],
+  ["L","cWarn","Conexiones: Vigilar desde (fracción)"],["L","cBad","Conexiones: Crítico desde (fracción)"],
+  ["L","iFact","Corriente de flotación: Vigilar si es N veces la mediana de bancos del mismo modelo"],["L","rizPct","Rizado: Vigilar arriba de (% del voltaje del banco)"],
+  ["L","rDias","Monitoreo: resistencia sin actualizar más de (días)"],["L","sumaPct","Monitoreo: suma de voltajes vs banco, diferencia máx. (%)"]
 ];
+const COLM = [["nombre","Marca y modelo","text"],["ah","Ah","number"],["rRef","R ref. (mΩ)","number"],["vMin","Flot. mín. V/celda","number"],["vMax","Flot. máx. V/celda","number"],["celdas","Celdas","number"],["torque","Torque","text"],["instalacion","Instalación","date"]];
 function pintarForm(){
-  $("#form").innerHTML = CAMPOS.map(c => c[0]==="h" ? `<h4>${c[1]}</h4>` :
-    `<label for="c-${c[1]}">${c[2]}</label><input class="f" id="c-${c[1]}" data-g="${c[0]}" data-k="${c[1]}" type="${c[3]}" ${c[3]==="number"?'step="any" inputmode="decimal"':""} value="${esc(cfg[c[0]][c[1]] ?? "")}">`).join("");
+  $("#form").innerHTML = CAMPOS.map(c => `<label for="c-${c[1]}">${c[2]}</label><input class="f" id="c-${c[1]}" data-k="${c[1]}" type="number" step="any" inputmode="decimal" value="${esc(cfg.L[c[1]] ?? "")}">`).join("");
+  $("#tModelos").innerHTML = `<thead><tr><th>Clave</th>${COLM.map(c => `<th>${c[1]}</th>`).join("")}</tr></thead><tbody>` +
+    Object.entries(cfg.modelos).map(([k, m]) => `<tr><td>${k}</td>${COLM.map(c => `<td><input class="f" data-m="${k}" data-k="${c[0]}" type="${c[2]}" ${c[2]==="number"?'step="any" inputmode="decimal"':""} value="${esc(m[c[0]] ?? "")}"></td>`).join("")}</tr>`).join("") + `</tbody>`;
+  $("#asign").innerHTML = ["A","B"].map(l => `<div><b>Rama ${l}</b><div class="asg" style="margin-top:4px"><span></span>${[1,2,3,4].map(b => `<span class="mtag">Banco ${b}</span>`).join("")}
+    ${[1,2,3,4].map(u => `<span class="mtag">UPS ${u}</span>${[1,2,3,4].map(b => { const k = `${l}|${u}|0${b}`; return `<select data-asg="${k}" aria-label="Rama ${l} UPS ${u} banco ${b}">${Object.keys(cfg.modelos).map(m => `<option value="${m}"${modeloDe(k)===m?" selected":""}>${m}</option>`).join("")}</select>`; }).join("")}`).join("")}</div></div>`).join("");
 }
 $("#guardarCfg").onclick = () => {
-  for (const inp of document.querySelectorAll("#form input")){
-    const g = inp.dataset.g, k = inp.dataset.k;
-    cfg[g][k] = inp.type === "number" ? (inp.value === "" ? (g==="L" ? DEF.L[k] : null) : Number(inp.value)) : inp.value.trim();
-  }
-  try{ localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }catch{}
-  L = cfg.L; F = cfg.ficha; $("#cfgSt").textContent = "Guardado."; pintarForm(); todo();
+  document.querySelectorAll("#form input").forEach(inp => { const k = inp.dataset.k; cfg.L[k] = inp.value === "" ? DEF.L[k] : Number(inp.value); });
+  document.querySelectorAll("#tModelos input").forEach(inp => { const m = inp.dataset.m, k = inp.dataset.k; cfg.modelos[m][k] = inp.type === "number" ? (inp.value === "" ? null : Number(inp.value)) : inp.value.trim(); });
+  document.querySelectorAll("#asign select").forEach(sl => cfg.asign[sl.dataset.asg] = sl.value);
+  guardarCfg(); L = cfg.L; $("#cfgSt").textContent = "Guardado."; pintarForm(); todo();
 };
-$("#defCfg").onclick = () => { cfg.L = {...DEF.L}; cfg.ficha = {...DEF.ficha, modelo:F.modelo, ah:F.ah, rRef:F.rRef, instalacion:F.instalacion}; pintarForm(); $("#cfgSt").textContent = "Valores recomendados cargados: toca Guardar para aplicarlos."; };
+$("#defCfg").onclick = () => { cfg.L = {...DEF.L}; cfg.asign = {...ASIGN_DEF}; pintarForm(); $("#cfgSt").textContent = "Límites y asignación del levantamiento cargados: toca Guardar para aplicarlos."; };
 
 const NIVEL = {ok:0, na:1, warn:2, bad:3};
 const peor = (a, b) => NIVEL[b] > NIVEL[a] ? b : a;
@@ -291,6 +321,7 @@ function analizar(B, ctx, mes){
   const delMes = hist.filter(f => dia(f.t).startsWith(mes));
   if (!delMes.length) return null;
   const u = delMes[delMes.length-1], p = delMes[0], hoy = dia(u.t);
+  const clave = `${B.lado}|${B.ups}|${B.banco}`, mod = modeloDe(clave), F = fichaDe(clave);
   const n = Object.keys(u.bat).length || 40, celdas = F.celdas || 6;
   const V = [], R = [], T = [];
   for (let i = 1; i <= n; i++){ const x = u.bat[i] || {}; V.push(vivo(x.v) ? x.v : null); R.push(vivo(x.r) ? x.r : null); T.push(vivo(x.t) ? x.t : null); }
@@ -304,7 +335,7 @@ function analizar(B, ctx, mes){
   for (let i = 1; i <= n; i++){
     const v = V[i-1], t = T[i-1], m = [];
     let r = R[i-1], est = "ok";
-    const rep = repDe(`${B.lado}|${B.ups}|${B.banco}`, i, hoy);
+    const rep = repDe(clave, i, hoy);
     // filas desde el reemplazo (o todo el historial) para la línea base y la tendencia
     const propias = rep ? hist.filter(f => dia(f.t) >= rep.fecha) : hist;
     let base = null, esperando = false;
@@ -316,6 +347,7 @@ function analizar(B, ctx, mes){
     } else {
       const f0 = propias.find(f => vivo(f.bat[i]?.r)); base = f0 ? f0.bat[i].r : null;
     }
+    if (rep && rep.modelo && rep.modelo !== mod){ est = peor(est, "warn"); m.push(`Reemplazada con ${rep.modelo} en un banco ${mod}: no se recomienda mezclar modelos en un banco`); }
     if (esperando){ m.push(`Reemplazada el ${fdia(rep.fecha)}: esperando la primera medición de resistencia de la batería nueva`); r = null; }
     if (v == null || t == null){ est = "na"; m.push(v == null && t == null ? "El monitoreo no reporta voltaje ni temperatura" : v == null ? "El monitoreo no reporta voltaje" : "El monitoreo no reporta temperatura"); }
     if (v != null && vMed){
@@ -377,15 +409,16 @@ function analizar(B, ctx, mes){
   // banco
   const hb = []; let estB = "ok";
   if (mon.length){ estB = "na"; mon.forEach(t => hb.push({est:"na", t:`Monitoreo: ${t}.`})); }
-  if (tot.i != null && ctx.iMed && tot.i > ctx.iMed * L.iFact){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Corriente de flotación ${fx(tot.i,2)} A, ${fx(tot.i/ctx.iMed,1)} veces la mediana de los bancos (${fx(ctx.iMed,2)} A).`}); }
+  const iMed = ctx.iMed[mod];
+  if (tot.i != null && iMed && ctx.nMod[mod] >= 3 && tot.i > iMed * L.iFact){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Corriente de flotación ${fx(tot.i,2)} A, ${fx(tot.i/iMed,1)} veces la mediana de los bancos ${mod} (${fx(iMed,2)} A).`}); }
   if (tot.riz != null && vivo(tot.v) && tot.riz/10/tot.v > L.rizPct){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Rizado ${Math.round(tot.riz)} mV = ${fx(tot.riz/10/tot.v,2)} % del voltaje del banco (límite ${L.rizPct} %).`}); }
   const vCelda = vivo(tot.v) ? tot.v / (n * celdas) : null;
-  if (vCelda != null && ((F.vMin && vCelda < F.vMin) || (F.vMax && vCelda > F.vMax))){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Flotación promedio ${fx(vCelda,3)} V/celda, fuera del rango de la ficha (${F.vMin}–${F.vMax}).`}); }
-  conMal.forEach(c => { estB = peor(estB, c.est); hb.push({est:c.est, t:`Conexión ${c.k}: ${fx(c.x,3)} mΩ (${pct(c.d)} vs las de su tipo). Limpiar y reapretar.`}); });
+  if (vCelda != null && ((F.vMin && vCelda < F.vMin) || (F.vMax && vCelda > F.vMax))){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Flotación promedio ${fx(vCelda,3)} V/celda, fuera del rango de ${mod} (${F.vMin}–${F.vMax}).`}); }
+  conMal.forEach(c => { estB = peor(estB, c.est); hb.push({est:c.est, t:`Conexión ${c.k}: ${fx(c.x,3)} mΩ (${pct(c.d)} vs las de su tipo). Limpiar y reapretar${F.torque ? " a " + F.torque : ""}.`}); });
   bats.filter(b => b.est === "bad" || b.est === "warn").sort((a, b) => NIVEL[b.est]-NIVEL[a.est] || a.n-b.n)
     .forEach(b => { estB = peor(estB, b.est); hb.push({est:b.est, t:`Batería ${b.n}: ${b.m.join("; ")}.`}); });
   const cuenta = {ok:0, warn:0, bad:0, na:0}; bats.forEach(b => cuenta[b.est]++);
-  return {B, clave:`${B.lado}|${B.ups}|${B.banco}`, hist, delMes, u, p, bats, vMed, rMed, tProm, conMal, hb, estB, cuenta, mon, nV, nT, n, ultR, diasR, difSuma, vCelda};
+  return {B, clave, mod, F, hist, delMes, u, p, bats, vMed, rMed, tProm, conMal, hb, estB, cuenta, mon, nV, nT, n, ultR, diasR, difSuma, vCelda};
 }
 function rangos(ns){
   const out = []; let a = null, b = null;
@@ -410,8 +443,10 @@ function todo(){
   if (!ms.length) return;
   if (!mes || !ms.includes(mes)) mes = ms[ms.length-1];
   $("#mes").innerHTML = ms.map(m => `<option value="${m}">${mesTxt(m)}</option>`).reverse().join(""); $("#mes").value = mes;
-  const ims = [...bancos.values()].map(B => [...B.filas.values()].filter(f => dia(f.t).startsWith(mes)).sort((a,b)=>a.t.localeCompare(b.t)).pop()?.tot.i).filter(x => x > 0.05);
-  const ctx = {iMed: med(ims)};
+  // corriente de flotación: solo se compara entre bancos del mismo modelo (capacidades distintas)
+  const porMod = {};
+  bancos.forEach((B, k) => { const i = [...B.filas.values()].filter(f => dia(f.t).startsWith(mes)).sort((a,b)=>a.t.localeCompare(b.t)).pop()?.tot.i; if (i > 0.05) (porMod[modeloDe(k)] ||= []).push(i); });
+  const ctx = {iMed:Object.fromEntries(Object.entries(porMod).map(([m, a]) => [m, med(a)])), nMod:Object.fromEntries(Object.entries(porMod).map(([m, a]) => [m, a.length]))};
   A = new Map(); bancos.forEach((B, k) => { const a = analizar(B, ctx, mes); if (a) A.set(k, a); });
   if (!sel || !A.has(sel)) sel = [...A.keys()].sort()[0];
   const c = {ok:0, warn:0, bad:0, na:0}; let nb = 0, nRep = 0;
@@ -424,8 +459,8 @@ function todo(){
     <div class="kpi"><div class="l">↻ Reemplazadas registradas</div><div class="v">${nRep}</div></div>`;
   $("#lados").innerHTML = ["A","B"].map(l => `<div class="card"><h3>Rama ${l}</h3>${[1,2,3,4].map(u => `<div class="small muted" style="margin:8px 0 4px">UPS ${u}</div><div class="upsg">${["01","02","03","04"].map(b => {
       const k = `${l}|${u}|${b}`, a = A.get(k);
-      if (!a) return `<div class="bank vacio"><b>Banco ${+b}</b><span class="muted small">sin datos</span></div>`;
-      return `<button class="bank" data-k="${k}" aria-pressed="${k===sel}"><b>Banco ${+b}</b><span class="tag t-${a.estB}">${ICON[a.estB]} ${CORTO[a.estB]}</span>
+      if (!a) return `<div class="bank vacio"><b>Banco ${+b} <span class="mtag">${modeloDe(k)}</span></b><span class="muted small">sin datos</span></div>`;
+      return `<button class="bank" data-k="${k}" aria-pressed="${k===sel}"><b>Banco ${+b} <span class="mtag">${a.mod}</span></b><span class="tag t-${a.estB}">${ICON[a.estB]} ${CORTO[a.estB]}</span>
         <span class="row small">${a.cuenta.bad?`<span class="tag t-bad">✕ ${a.cuenta.bad}</span>`:""}${a.cuenta.warn?`<span class="tag t-warn">! ${a.cuenta.warn}</span>`:""}${a.cuenta.na?`<span class="tag t-na">? ${a.cuenta.na}</span>`:""}<span class="tag t-ok">✓ ${a.cuenta.ok}</span></span></button>`;
     }).join("")}</div>`).join("")}</div>`).join("");
   prioridades(); monitoreo(); detalle();
@@ -439,7 +474,7 @@ function prioridades(){
   todas.sort((x, y) => y.b.score - x.b.score);
   const lista = prioTodas ? todas : todas.slice(0, 15);
   $("#prio").innerHTML = todas.length ? `<thead><tr><th>#</th><th>Banco</th><th>Bat.</th><th>Estado</th><th>Motivo principal</th><th>R (mΩ)</th><th>vs base</th><th>vs banco</th><th>V</th><th>Edad</th></tr></thead><tbody>` +
-    lista.map(({a, b}, i) => `<tr class="clic" data-k="${a.clave}" data-n="${b.n}"><td>${i+1}</td><td>${a.B.lado} · UPS ${a.B.ups} · B${+a.B.banco}</td><td><b>${b.n}</b></td><td><span class="tag t-${b.est}">${ICON[b.est]} ${CORTO[b.est]}</span></td><td>${esc(b.m.find(x => !/^Reemplazada/.test(x)) || b.m[0] || "")}</td><td>${fx(b.r,3)}</td><td>${pct(b.dBase)}</td><td>${pct(b.dMed)}</td><td>${fx(b.v,3)}</td><td>${b.edad==null ? "—" : fx(b.edad,1)+" años"}</td></tr>`).join("") + `</tbody>`
+    lista.map(({a, b}, i) => `<tr class="clic" data-k="${a.clave}" data-n="${b.n}"><td>${i+1}</td><td>${a.B.lado} · UPS ${a.B.ups} · B${+a.B.banco} <span class="mtag">${a.mod}</span></td><td><b>${b.n}</b></td><td><span class="tag t-${b.est}">${ICON[b.est]} ${CORTO[b.est]}</span></td><td>${esc(b.m.find(x => !/^Reemplazada/.test(x)) || b.m[0] || "")}</td><td>${fx(b.r,3)}</td><td>${pct(b.dBase)}</td><td>${pct(b.dMed)}</td><td>${fx(b.v,3)}</td><td>${b.edad==null ? "—" : fx(b.edad,1)+" años"}</td></tr>`).join("") + `</tbody>`
     : `<tbody><tr><td>Ninguna batería requiere atención este mes.</td></tr></tbody>`;
   $("#prioMas").classList.toggle("hidden", todas.length <= 15);
   $("#prioMas").textContent = prioTodas ? "Mostrar solo las 15 primeras" : `Mostrar todas (${todas.length})`;
@@ -450,7 +485,7 @@ $("#prio").addEventListener("click", e => { const tr = e.target.closest("tr[data
 function monitoreo(){
   const ord = [...A.values()].sort((x, y) => x.clave.localeCompare(y.clave));
   $("#mon").innerHTML = `<thead><tr><th>Banco</th><th>Estado</th><th>Sensores V</th><th>Sensores T</th><th>Resistencia actualizada</th><th>Suma V vs banco</th><th>Detalle</th></tr></thead><tbody>` +
-    ord.map(a => { const e = a.mon.length ? "na" : "ok"; return `<tr class="clic" data-k="${a.clave}"><td>${a.B.lado} · UPS ${a.B.ups} · B${+a.B.banco}</td><td><span class="tag t-${e}">${e==="ok" ? "✓ OK" : "? Falla"}</span></td>
+    ord.map(a => { const e = a.mon.length ? "na" : "ok"; return `<tr class="clic" data-k="${a.clave}"><td>${a.B.lado} · UPS ${a.B.ups} · B${+a.B.banco} <span class="mtag">${a.mod}</span></td><td><span class="tag t-${e}">${e==="ok" ? "✓ OK" : "? Falla"}</span></td>
       <td>${a.nV}/${a.n}</td><td>${a.nT}/${a.n}</td><td>${a.ultR ? fdia(a.ultR) : "sin cambios"} (${a.diasR} d)</td><td>${a.difSuma==null ? "—" : fx(a.difSuma,1)+" %"}</td><td class="small">${a.mon.map(esc).join("<br>") || "—"}</td></tr>`; }).join("") + `</tbody>`;
 }
 $("#mon").addEventListener("click", e => { const tr = e.target.closest("tr[data-k]"); if (!tr) return; sel = tr.dataset.k; selBat = null; todo(); $("#det").scrollIntoView({behavior:"smooth"}); });
@@ -458,7 +493,7 @@ function detalle(){
   const a = A.get(sel); if (!a) return;
   const tot = a.u.tot;
   $("#detT").textContent = nombreB(a);
-  $("#detSub").textContent = `${mesTxt(mes)} · ${a.delMes.length} lecturas diarias · valores del ${fdia(a.u.t)} · historial desde el ${fdia(a.hist[0].t)}`;
+  $("#detSub").textContent = `Modelo ${a.mod}: ${a.F.nombre || "—"} · ${mesTxt(mes)} · ${a.delMes.length} lecturas diarias · valores del ${fdia(a.u.t)} · historial desde el ${fdia(a.hist[0].t)}`;
   const k = (l, v, cls="") => `<div class="kpi ${cls}"><div class="l">${l}</div><div class="v">${v}</div></div>`;
   const rizMal = tot.riz != null && vivo(tot.v) && tot.riz/10/tot.v > L.rizPct;
   $("#kBanco").innerHTML = k("Voltaje del banco", vivo(tot.v) ? fx(tot.v,1)+" V" : "Sin lectura", vivo(tot.v) ? "" : "warn")
@@ -467,8 +502,8 @@ function detalle(){
     + k("Flotación promedio", a.vCelda ? fx(a.vCelda,3)+" V/celda" : "—") + k("R mediana", fx(a.rMed,3)+" mΩ");
   $("#map").innerHTML = a.bats.map(b => `<button class="cell ${b.est}" data-n="${b.n}" aria-pressed="${b.n===selBat}" aria-label="Batería ${b.n}: ${TXT[b.est]}${b.rep?", reemplazada":""}">${b.rep?'<span class="nu" title="Reemplazada">↻</span>':""}${b.n}<i>${ICON[b.est]}</i></button>`).join("");
   $("#hall").innerHTML = a.hb.length ? `<ul class="f">${a.hb.map(h => `<li><span class="tag t-${h.est}">${ICON[h.est]}</span> ${esc(h.t)}</li>`).join("")}</ul>` : "<p>Sin hallazgos.</p>";
-  $("#tabla").innerHTML = `<thead><tr><th>Bat.</th><th>Estado</th><th>V</th><th>Δ V mediana</th><th>Tendencia V</th><th>R (mΩ)</th><th>R base</th><th>vs base</th><th>vs banco</th>${F.rRef?"<th>vs fabricante</th>":""}<th>T (°C)</th><th>Edad</th></tr></thead><tbody>` +
-    a.bats.map(b => `<tr><td>${b.n}${b.rep?" ↻":""}</td><td><span class="tag t-${b.est}">${ICON[b.est]} ${TXT[b.est]}</span></td><td>${fx(b.v,3)}</td><td>${b.dV==null?"—":(b.dV>0?"+":"")+fx(b.dV,3)}</td><td>${b.tend==null?"—":(b.tend>0?"+":"")+fx(b.tend,3)}</td><td>${fx(b.r,3)}</td><td>${fx(b.base,3)}</td><td>${pct(b.dBase)}</td><td>${pct(b.dMed)}</td>${F.rRef?`<td>${pct(b.dRef)}</td>`:""}<td>${fx(b.t,1)}</td><td>${b.edad==null?"—":fx(b.edad,1)}</td></tr>`).join("") + `</tbody>`;
+  $("#tabla").innerHTML = `<thead><tr><th>Bat.</th><th>Estado</th><th>V</th><th>Δ V mediana</th><th>Tendencia V</th><th>R (mΩ)</th><th>R base</th><th>vs base</th><th>vs banco</th>${a.F.rRef?"<th>vs fabricante</th>":""}<th>T (°C)</th><th>Edad</th></tr></thead><tbody>` +
+    a.bats.map(b => `<tr><td>${b.n}${b.rep?" ↻":""}</td><td><span class="tag t-${b.est}">${ICON[b.est]} ${TXT[b.est]}</span></td><td>${fx(b.v,3)}</td><td>${b.dV==null?"—":(b.dV>0?"+":"")+fx(b.dV,3)}</td><td>${b.tend==null?"—":(b.tend>0?"+":"")+fx(b.tend,3)}</td><td>${fx(b.r,3)}</td><td>${fx(b.base,3)}</td><td>${pct(b.dBase)}</td><td>${pct(b.dMed)}</td>${a.F.rRef?`<td>${pct(b.dRef)}</td>`:""}<td>${fx(b.t,1)}</td><td>${b.edad==null?"—":fx(b.edad,1)}</td></tr>`).join("") + `</tbody>`;
   bateria();
 }
 /* gráfica chica de una variable contra la referencia del banco, con límite y marcas de reemplazo */
@@ -516,9 +551,10 @@ function bateria(){
     <p class="small muted" style="margin:6px 0 0">Gráficas con todo el historial cargado hasta ${mesTxt(mes)}. Gexia mide la resistencia de vez en cuando, por eso su línea va en escalones.</p>
     <div class="card noprint" style="margin-bottom:0">
       <h3>Reemplazos de esta batería</h3>
-      ${reps.length ? `<ul class="f small">${reps.map(r => `<li>↻ ${fdia(r.fecha)}${r.serie ? ` · serie ${esc(r.serie)}` : ""}${r.nota ? ` · ${esc(r.nota)}` : ""} <button class="linkbtn" data-borrarrep="${r.id}">Quitar</button></li>`).join("")}</ul>` : `<p class="small muted" style="margin:0 0 6px">Sin reemplazos registrados.</p>`}
+      ${reps.length ? `<ul class="f small">${reps.map(r => `<li>↻ ${fdia(r.fecha)}${r.modelo ? ` · ${r.modelo}` : ""}${r.serie ? ` · serie ${esc(r.serie)}` : ""}${r.nota ? ` · ${esc(r.nota)}` : ""} <button class="linkbtn" data-borrarrep="${r.id}">Quitar</button></li>`).join("")}</ul>` : `<p class="small muted" style="margin:0 0 6px">Sin reemplazos registrados.</p>`}
       <div class="row small">
         <label>Fecha <input class="f" type="date" id="rFecha" value="${new Date().toISOString().slice(0,10)}"></label>
+        <label>Modelo <select id="rModelo">${Object.entries(cfg.modelos).map(([k, m]) => `<option value="${k}"${k===a.mod?" selected":""}>${k} · ${esc(m.nombre||"")}</option>`).join("")}</select></label>
         <label>Serie <input class="f" id="rSerie" placeholder="opcional" style="width:130px"></label>
         <label>Nota <input class="f" id="rNota" placeholder="opcional" style="width:160px"></label>
         <button class="btn sec" id="rGuardar">Registrar reemplazo</button>
@@ -526,7 +562,9 @@ function bateria(){
     </div>`;
   $("#rGuardar").onclick = () => {
     const fecha = $("#rFecha").value; if (!fecha) return;
-    reemplazos.push({id:Date.now().toString(36), clave:a.clave, n:b.n, fecha, serie:$("#rSerie").value.trim(), nota:$("#rNota").value.trim()});
+    const modelo = $("#rModelo").value;
+    if (modelo !== a.mod && !confirm(`El banco es ${a.mod} y elegiste ${modelo}. No se recomienda mezclar modelos en un banco. ¿Registrar de todos modos?`)) return;
+    reemplazos.push({id:Date.now().toString(36), clave:a.clave, n:b.n, fecha, modelo, serie:$("#rSerie").value.trim(), nota:$("#rNota").value.trim()});
     guardarRep(); todo();
   };
 }
