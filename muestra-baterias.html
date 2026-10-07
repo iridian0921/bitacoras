@@ -48,7 +48,12 @@ th,td{text-align:left;padding:6px;border-bottom:1px solid var(--line);vertical-a
 th{color:var(--muted);font-weight:600}
 .tw{overflow-x:auto}
 ul.f{margin:4px 0;padding-left:18px}ul.f li{margin:3px 0}
-svg.sp{width:100%;max-width:680px;height:auto;display:block}
+svg.sp{width:100%;max-width:520px;height:auto;display:block}
+.graf{display:grid;gap:10px;margin-top:8px}
+@media (min-width:900px){.graf{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.graf h4{margin:0 0 2px;font-size:14px}
+.graf .ley{font-size:12px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
+.graf .ley i{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle;margin-right:4px}
 .leyenda{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
 .hidden{display:none!important}
 .crit td:first-child{font-weight:600}
@@ -192,6 +197,12 @@ function analizar(B, ctx){
   for (let i = 1; i <= n; i++){ const x = u.bat[i] || {}; V.push(vivo(x.v) ? x.v : null); R.push(vivo(x.r) ? x.r : null); T.push(vivo(x.t) ? x.t : null); }
   // las R de baterías sin voltaje no cuentan para la mediana (suelen ser lecturas de sensores caídos)
   const vMed = med(V), rMed = med(R.filter((r, i) => V[i] != null)), tProm = avg(T);
+  // referencia del banco cada día: mediana de voltaje y resistencia (de baterías con lectura) y temperatura promedio
+  const refDia = filas.map(f => {
+    const vs = [], rs = [], tcs = [];
+    for (let i = 1; i <= n; i++){ const x = f.bat[i] || {}; if (vivo(x.v)){ vs.push(x.v); if (vivo(x.r)) rs.push(x.r); } if (vivo(x.t)) tcs.push(x.t); }
+    return {v:med(vs), r:med(rs), tc:avg(tcs)};
+  });
   const bats = [];
   for (let i = 1; i <= n; i++){
     const v = V[i-1], r = R[i-1], t = T[i-1], m = [];
@@ -217,7 +228,7 @@ function analizar(B, ctx){
     const v0 = vivo(p.bat[i]?.v) ? p.bat[i].v : null;
     const tend = v != null && v0 != null ? v - v0 : null;
     if (tend != null && tend < -0.05 && est !== "bad"){ m.push(`El voltaje bajó ${fx(-tend,3)} V en el periodo`); est = peor(est, "warn"); }
-    const serie = filas.map(f => ({t:f.t, v:vivo(f.bat[i]?.v) ? f.bat[i].v : null}));
+    const serie = filas.map((f, j) => ({t:f.t, v:vivo(f.bat[i]?.v) ? f.bat[i].v : null, r:vivo(f.bat[i]?.r) ? f.bat[i].r : null, tc:vivo(f.bat[i]?.t) ? f.bat[i].t : null, ref:refDia[j]}));
     bats.push({n:i, v, r, t, dR, dV: v != null && vMed ? v - vMed : null, tend, est, m, serie});
   }
   // conexiones: se comparan con la mediana de las de su tipo (puente corto o cable de nivel)
@@ -299,28 +310,47 @@ function detalle(){
     a.bats.map(b => `<tr><td>${b.n}</td><td><span class="tag t-${b.est}">${ICON[b.est]} ${TXT[b.est]}</span></td><td>${fx(b.v,3)}</td><td>${b.dV==null?"—":(b.dV>0?"+":"")+fx(b.dV,3)}</td><td>${b.tend==null?"—":(b.tend>0?"+":"")+fx(b.tend,3)}</td><td>${fx(b.r,3)}</td><td>${pct(b.dR)}</td><td>${fx(b.t,1)}</td></tr>`).join("") + `</tbody>`;
   bateria();
 }
+/* Gráfica chica de una variable de la batería contra la referencia del banco (línea punteada) y, si aplica, su límite. */
+function mini({pts, k, titulo, unidad, dec, col, refTxt, lim}){
+  const p = pts.filter(x => x[k] != null);
+  if (p.length < 2) return `<div><h4>${titulo}</h4><p class="small muted">Sin lecturas en el periodo.</p></div>`;
+  const W = 360, H = 140, Lm = 44, R = 6, T = 10, Bm = 20;
+  const ts = p.map(x => +new Date(x.t)), vs = p.map(x => x[k]), rf = p.map(x => x.ref?.[k]).filter(x => x != null);
+  const lv = lim && lim.v != null && isFinite(lim.v) ? lim.v : null;
+  let v0 = Math.min(...vs, ...rf), v1 = Math.max(...vs, ...rf);
+  if (lv != null){ v0 = Math.min(v0, lv); v1 = Math.max(v1, lv); }
+  const pad = (v1 - v0) * 0.12 || Math.abs(v1) * 0.02 || 0.05; v0 -= pad; v1 += pad;
+  const X = t => Lm + (t - ts[0]) / ((ts[ts.length-1] - ts[0]) || 1) * (W - Lm - R), Y = v => T + (1 - (v - v0)/(v1 - v0)) * (H - T - Bm);
+  const pl = (arr, f) => arr.map(x => X(+new Date(x.t)) + "," + Y(f(x))).join(" ");
+  const ult = vs[vs.length-1];
+  return `<div><h4>${titulo} <span class="muted" style="font-weight:400">· ${ult.toFixed(dec)} ${unidad}</span></h4>
+    <svg class="sp" viewBox="0 0 ${W} ${H}" role="img" aria-label="${titulo} de la batería en el periodo">
+      ${[v0+pad, (v0+v1)/2, v1-pad].map(v => `<line x1="${Lm}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${Lm-4}" y="${Y(v)+4}" text-anchor="end" font-size="11" fill="var(--muted)">${v.toFixed(dec)}</text>`).join("")}
+      ${lv != null ? `<line x1="${Lm}" x2="${W-R}" y1="${Y(lv)}" y2="${Y(lv)}" stroke="var(--bad)" stroke-dasharray="3 3"/><text x="${W-R}" y="${Y(lv)-3}" text-anchor="end" font-size="11" fill="var(--bad)">${lim.txt}</text>` : ""}
+      ${rf.length > 1 ? `<polyline fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4" points="${pl(p.filter(x => x.ref?.[k] != null), x => x.ref[k])}"/>` : ""}
+      <polyline fill="none" stroke="${col}" stroke-width="2" points="${pl(p, x => x[k])}"/>
+      <text x="${Lm}" y="${H-4}" font-size="11" fill="var(--muted)">${fdia(p[0].t)}</text><text x="${W-R}" y="${H-4}" text-anchor="end" font-size="11" fill="var(--muted)">${fdia(p[p.length-1].t)}</text>
+    </svg>
+    <div class="ley"><span><i style="border-color:${col}"></i>Batería</span><span><i style="border-color:var(--muted);border-top-style:dashed"></i>${refTxt}</span>${lv != null ? `<span><i style="border-color:var(--bad);border-top-style:dotted"></i>${lim.ley}</span>` : ""}</div></div>`;
+}
 function bateria(){
   const a = A.get(sel), box = $("#bat");
   const b = a && a.bats.find(x => x.n === selBat);
-  if (!b){ box.innerHTML = `<span class="muted small">Toca una batería del mapa para ver su detalle y la gráfica de su voltaje en el periodo.</span>`; return; }
-  const pts = b.serie.filter(p => p.v != null);
-  let svg = "";
-  if (pts.length > 1){
-    const W = 600, H = 150, Lm = 46, R = 8, T = 10, Bm = 22;
-    const ts = pts.map(p => +new Date(p.t)), vs = pts.map(p => p.v);
-    let v0 = Math.min(...vs, a.vMed ?? Infinity), v1 = Math.max(...vs, a.vMed ?? -Infinity); const pad = (v1-v0)*0.15 || 0.05; v0 -= pad; v1 += pad;
-    const X = t => Lm + (t - ts[0]) / ((ts[ts.length-1] - ts[0]) || 1) * (W - Lm - R), Y = v => T + (1 - (v - v0)/(v1 - v0)) * (H - T - Bm);
-    const col = {ok:"var(--ok)", warn:"var(--warn)", bad:"var(--bad)", na:"var(--na)"}[b.est];
-    svg = `<svg class="sp" viewBox="0 0 ${W} ${H}" role="img" aria-label="Voltaje de la batería ${b.n} en el periodo">
-      ${[v0+pad, (v0+v1)/2, v1-pad].map(v => `<line x1="${Lm}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${Lm-4}" y="${Y(v)+4}" text-anchor="end" font-size="11" fill="var(--muted)">${v.toFixed(2)}</text>`).join("")}
-      ${a.vMed ? `<line x1="${Lm}" x2="${W-R}" y1="${Y(a.vMed)}" y2="${Y(a.vMed)}" stroke="var(--muted)" stroke-dasharray="5 4"/><text x="${W-R}" y="${Y(a.vMed)-4}" text-anchor="end" font-size="11" fill="var(--muted)">mediana del banco ${a.vMed.toFixed(3)}</text>` : ""}
-      <polyline fill="none" stroke="${col}" stroke-width="2" points="${pts.map(p => X(+new Date(p.t))+","+Y(p.v)).join(" ")}"/>
-      <text x="${Lm}" y="${H-5}" font-size="11" fill="var(--muted)">${fdia(pts[0].t)}</text><text x="${W-R}" y="${H-5}" text-anchor="end" font-size="11" fill="var(--muted)">${fdia(pts[pts.length-1].t)}</text></svg>`;
-  }
+  if (!b){ box.innerHTML = `<span class="muted small">Toca una batería del mapa para ver su detalle y las gráficas de voltaje, resistencia interna y temperatura en el periodo.</span>`; return; }
+  const col = {ok:"var(--ok)", warn:"var(--warn)", bad:"var(--bad)", na:"var(--na)"}[b.est];
+  const s = b.serie, refR = s.length ? s[s.length-1].ref?.r : null;
+  const tMax = Math.max(...s.map(x => x.tc ?? -Infinity));
   box.innerHTML = `<h3>Batería ${b.n} <span class="tag t-${b.est}">${ICON[b.est]} ${TXT[b.est]}</span></h3>
     <div class="small">Voltaje ${fx(b.v,3)} V · Resistencia ${fx(b.r,3)} mΩ · Temperatura ${fx(b.t,1)} °C</div>
     ${b.m.length ? `<ul class="f small">${b.m.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="small muted">Dentro de los límites.</p>`}
-    ${svg || `<p class="small muted">Sin voltaje registrado en el periodo.</p>`}`;
+    <div class="graf">
+      ${mini({pts:s, k:"v", titulo:"Voltaje", unidad:"V", dec:3, col, refTxt:"Mediana del banco"})}
+      ${mini({pts:s, k:"r", titulo:"Resistencia interna", unidad:"mΩ", dec:3, col, refTxt:"Mediana del banco",
+        lim: refR ? {v:refR*(1+L.rWarn), txt:"+20 %", ley:"Vigilar (+20 % de la mediana)"} : null})}
+      ${mini({pts:s, k:"tc", titulo:"Temperatura", unidad:"°C", dec:1, col, refTxt:"Promedio del banco",
+        lim: tMax > L.tWarn - 5 ? {v:L.tWarn, txt:L.tWarn+" °C", ley:"Vigilar ("+L.tWarn+" °C)"} : null})}
+    </div>
+    <p class="small muted" style="margin:6px 0 0">La resistencia la mide Gexia periódicamente (en agosto cambió el 10 y 11), por eso su línea es casi plana dentro de un mes; con varios meses cargados se verá la tendencia.</p>`;
 }
 $("#lados").addEventListener("click", e => { const b = e.target.closest("[data-k]"); if (!b) return; sel = b.dataset.k; selBat = null; todo(); $("#det").scrollIntoView({behavior:"smooth"}); });
 $("#map").addEventListener("click", e => { const c = e.target.closest("[data-n]"); if (!c) return; selBat = +c.dataset.n; detalle(); });
