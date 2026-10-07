@@ -66,7 +66,7 @@ svg.sp{width:100%;max-width:520px;height:auto;display:block}
 .form input{width:100%}
 .form h4{grid-column:1/-1;margin:10px 0 0}
 #tModelos input{width:100%;min-width:80px;font-size:14px;padding:6px}
-#tModelos input[data-k="nombre"]{min-width:220px}#tModelos input[data-k="torque"]{min-width:150px}#tModelos input[type="date"]{min-width:140px}
+#tModelos input[data-k="nombre"]{min-width:220px}#tModelos input[data-k="potencia"]{min-width:190px}#tModelos input[data-k="torque"]{min-width:150px}#tModelos input[type="date"]{min-width:140px}
 #tModelos td:first-child{font-weight:700}
 .asg{display:grid;grid-template-columns:auto repeat(4,minmax(0,1fr));gap:4px 6px;align-items:center;font-size:14px}
 .asg select{font-size:14px;padding:5px;width:100%}
@@ -136,7 +136,7 @@ svg.sp{width:100%;max-width:520px;height:auto;display:block}
   <h2 id="sAju">Modelos, asignación por banco y límites</h2>
   <div class="card noprint tw">
     <h3>Modelos de batería</h3>
-    <div class="muted small">Datos de la placa y de la ficha técnica. Un campo vacío no se evalúa (por ejemplo, la flotación de M3 hasta tener su placa).</div>
+    <div class="muted small">Datos de la placa y de la ficha técnica. Un campo vacío no se evalúa (por ejemplo, la resistencia de referencia hasta tener las fichas técnicas).</div>
     <table id="tModelos" style="margin-top:6px"></table>
   </div>
   <div class="card noprint">
@@ -189,9 +189,10 @@ const vivo = x => x != null && x > 0.5;
 /* ===== modelos, asignación por banco y límites (punto 5) ===== */
 /* Catálogo según el levantamiento de modelos (07/10/26). Flotación por celda = placa ÷ 6 celdas. */
 const MODELOS_DEF = {
-  M1:{nombre:"EnerSys DataSafe HX 12HX540-FR", ah:null, rRef:null, vMin:2.25, vMax:2.283, celdas:6, torque:"6.8 N·m (60 in·lb)", instalacion:""},
-  M2:{nombre:"CSB HRL12540W FR", ah:null, rRef:null, vMin:2.25, vMax:2.30, celdas:6, torque:"", instalacion:""},
-  M3:{nombre:"Ritar HR12-520W", ah:null, rRef:null, vMin:null, vMax:null, celdas:6, torque:"", instalacion:""}
+  // placas: M1 flotación 13.6 ± 0.1 V; M2 13.5–13.8 V; M3 13.6–13.8 V (todas a 25 °C, 6 celdas)
+  M1:{nombre:"EnerSys DataSafe HX 12HX540-FR", potencia:"540 W/celda, 15 min", ah:null, rRef:null, vMin:2.25, vMax:2.283, celdas:6, torque:"6.8 N·m (60 in·lb)", instalacion:""},
+  M2:{nombre:"CSB HRL12540W FR", potencia:"540 W/celda a 1.67 V, 15 min", ah:null, rRef:null, vMin:2.25, vMax:2.30, celdas:6, torque:"", instalacion:""},
+  M3:{nombre:"Ritar HR12-520W", potencia:"520 W/celda, 15 min", ah:145, rRef:null, vMin:2.267, vMax:2.30, celdas:6, torque:"", instalacion:""}
 };
 const ASIGN_DEF = (() => {
   const a = {};
@@ -223,7 +224,7 @@ const CAMPOS = [
   ["L","iFact","Corriente de flotación: Vigilar si es N veces la mediana de bancos del mismo modelo"],["L","rizPct","Rizado: Vigilar arriba de (% del voltaje del banco)"],
   ["L","rDias","Monitoreo: resistencia sin actualizar más de (días)"],["L","sumaPct","Monitoreo: suma de voltajes vs banco, diferencia máx. (%)"]
 ];
-const COLM = [["nombre","Marca y modelo","text"],["ah","Ah","number"],["rRef","R ref. (mΩ)","number"],["vMin","Flot. mín. V/celda","number"],["vMax","Flot. máx. V/celda","number"],["celdas","Celdas","number"],["torque","Torque","text"],["instalacion","Instalación","date"]];
+const COLM = [["nombre","Marca y modelo","text"],["potencia","Potencia","text"],["ah","Ah","number"],["rRef","R ref. (mΩ)","number"],["vMin","Flot. mín. V/celda","number"],["vMax","Flot. máx. V/celda","number"],["celdas","Celdas","number"],["torque","Torque","text"],["instalacion","Instalación","date"]];
 function pintarForm(){
   $("#form").innerHTML = CAMPOS.map(c => `<label for="c-${c[1]}">${c[2]}</label><input class="f" id="c-${c[1]}" data-k="${c[1]}" type="number" step="any" inputmode="decimal" value="${esc(cfg.L[c[1]] ?? "")}">`).join("");
   $("#tModelos").innerHTML = `<thead><tr><th>Clave</th>${COLM.map(c => `<th>${c[1]}</th>`).join("")}</tr></thead><tbody>` +
