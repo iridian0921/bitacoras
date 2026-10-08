@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calidad eléctrica · muestra</title>
+<style>
+:root{
+  --bg:#e9edf1;--surface:#f8fafb;--ink:#18212b;--muted:#5a6878;--line:#c9d2db;--accent:#2438b5;
+  --ok:#1f7a45;--okbg:#dcf1e3;--warn:#8a5a00;--warnbg:#fff0c2;--bad:#b4390f;--badbg:#fbe3d8;--na:#5f6b78;--nabg:#e3e7ec;
+  --serie:#3a56d4;
+  --lcd:#b9e35a;--lcdink:#1c2a06;--lcdline:#7fa62c;
+  --fb:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;--fm:ui-monospace,"Cascadia Mono","Roboto Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#10161d;--surface:#18212b;--ink:#e6ebf0;--muted:#9aa8b6;--line:#2e3b48;--accent:#8ea2ff;
+  --ok:#5cc98a;--okbg:#173325;--warn:#f2c14e;--warnbg:#3a3214;--bad:#ff8a5c;--badbg:#3a1f14;--na:#9aa8b6;--nabg:#26303b;
+  --serie:#8ea2ff;--lcd:#a9d24c;--lcdline:#6d8f22}}
+:root[data-theme="dark"]{
+  --bg:#10161d;--surface:#18212b;--ink:#e6ebf0;--muted:#9aa8b6;--line:#2e3b48;--accent:#8ea2ff;
+  --ok:#5cc98a;--okbg:#173325;--warn:#f2c14e;--warnbg:#3a3214;--bad:#ff8a5c;--badbg:#3a1f14;--na:#9aa8b6;--nabg:#26303b;
+  --serie:#8ea2ff;--lcd:#a9d24c;--lcdline:#6d8f22}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 var(--fb);font-variant-numeric:tabular-nums}
+.wrap{max-width:1100px;margin:0 auto;padding:12px 16px 48px}
+h1{font-size:26px;margin:6px 0 2px}h2{font-size:20px;margin:22px 0 8px;scroll-margin-top:60px}h3{margin:0 0 6px;font-size:17px}
+.muted{color:var(--muted)}.small{font-size:13px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;margin:10px 0}
+.btn{border:0;border-radius:8px;padding:10px 14px;font:600 15px var(--fb);background:var(--accent);color:#fff;cursor:pointer}
+.btn.sec{background:var(--surface);color:var(--ink);border:1px solid var(--line)}
+.btn.danger{background:transparent;color:var(--bad);border:1px solid var(--bad)}
+.linkbtn{background:none;border:0;color:var(--accent);font:600 14px var(--fb);cursor:pointer;padding:2px 4px;text-decoration:underline}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap}
+.t-ok{background:var(--okbg);color:var(--ok)}.t-warn{background:var(--warnbg);color:var(--warn)}.t-bad{background:var(--badbg);color:var(--bad)}.t-na{background:var(--nabg);color:var(--na)}
+nav.sec{position:sticky;top:0;z-index:5;background:var(--bg);padding:8px 0;display:flex;gap:6px;overflow-x:auto}
+nav.sec a{flex:0 0 auto;border:1px solid var(--line);background:var(--surface);color:var(--ink);text-decoration:none;font:600 14px var(--fb);padding:7px 12px;border-radius:999px}
+select,input.f{font:500 16px var(--fb);padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);max-width:100%}
+label.l{display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--muted)}
+/* pantallas del Circuit Monitor */
+.pant{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+.lcd{background:var(--lcd);color:var(--lcdink);border-radius:8px;padding:8px 10px 10px;font:600 15px var(--fm);border:3px solid #2b3238}
+.lcd .tt{letter-spacing:.04em;margin-bottom:4px;display:flex;justify-content:space-between;gap:6px}
+.lcd .tt span{font:500 11px var(--fb);opacity:.75}
+.lcd .ln{display:grid;grid-template-columns:minmax(0,1fr) 112px 44px;align-items:center;gap:4px;margin:3px 0}
+.lcd .ln.fp{grid-template-columns:minmax(0,1fr) 84px 72px}
+.lcd input,.lcd select{font:600 16px var(--fm);color:var(--lcdink);background:rgba(255,255,255,.35);border:1px solid var(--lcdline);border-radius:5px;padding:4px 6px;width:100%;text-align:right;min-width:0}
+.lcd select{text-align:left;padding:4px 2px}
+.lcd input:focus,.lcd select:focus{outline:2px solid var(--lcdink);outline-offset:1px}
+.lcd .u{font-size:13px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.kpi{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.kpi .l{font-size:12px;color:var(--muted)}.kpi .v{font-size:20px;font-weight:700}.kpi .s{font-size:12px;color:var(--muted)}
+.kpi.bad{border-color:var(--bad)}.kpi.warn{border-color:var(--warn)}
+.meds{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.med{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--surface);cursor:pointer;text-align:left;color:var(--ink);font:inherit;display:flex;flex-direction:column;gap:4px}
+.med[aria-pressed="true"]{outline:3px solid var(--accent);outline-offset:1px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:6px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}
+.tw{overflow-x:auto}
+ul.f{margin:4px 0;padding-left:18px}ul.f li{margin:4px 0}
+svg.sp{width:100%;height:auto;display:block}
+.graf{display:grid;gap:12px}
+@media (min-width:900px){.graf{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.graf h4{margin:0 0 2px;font-size:14px}
+.graf .ley{font-size:12px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
+.graf .ley i{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle;margin-right:4px}
+.form{display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:8px 10px;align-items:center;font-size:15px;max-width:640px}
+.form input{width:100%}
+#tMed input,#tMed select{width:100%;min-width:90px;font-size:14px;padding:6px}
+#tMed input[data-k="nombre"]{min-width:220px}
+.hidden{display:none!important}
+.crit td:first-child{font-weight:600;white-space:nowrap}
+.eval li .tag{margin-right:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Calidad eléctrica</h1>
+  <div class="muted">Muestra: lecturas de la carátula del PowerLogic Circuit Monitor (Square D) en los alimentadores de media tensión. Los datos se guardan solo en este navegador.</div>
+  <nav class="sec" aria-label="Secciones">
+    <a href="#sCap">Captura</a><a href="#sEst">Estado</a><a href="#sTen">Tendencia</a><a href="#sHis">Historial</a><a href="#sMed">Medidores y límites</a><a href="#sCri">Criterios</a>
+  </nav>
+
+  <h2 id="sCap">Captura</h2>
+  <div class="card">
+    <div class="row" style="align-items:flex-end">
+      <label class="l">Medidor <select id="cMed"></select></label>
+      <label class="l">Fecha y hora <input class="f" type="datetime-local" id="cHora"></label>
+      <span class="small muted" id="cHoraTxt">Vacío: se toma la hora al guardar.</span>
+    </div>
+    <p class="small muted" style="margin:8px 0">Captura en el orden de las pantallas del medidor (flechas ▲▼). Puedes escribir decimales con coma, como en la carátula (0,989). Deja en blanco lo que no leíste.</p>
+    <div class="pant" id="pant"></div>
+    <div class="card" style="margin-bottom:0">
+      <h3>Evaluación de esta captura <span id="cEst"></span></h3>
+      <div id="cEval" class="small"></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="guardar">Guardar lectura</button>
+      <button class="btn sec" id="limpiar">Limpiar</button>
+      <button class="btn sec" id="ejemplo">Cargar lectura de ejemplo</button>
+      <span class="small" id="cSt" role="status"></span>
+    </div>
+  </div>
+
+  <h2 id="sEst">Estado de los medidores</h2>
+  <div class="muted small">Última lectura de cada medidor. Toca uno para ver su detalle, tendencia e historial.</div>
+  <div class="meds" id="meds" style="margin-top:8px"></div>
+  <div class="card" id="det">
+    <h3 id="detT"></h3>
+    <div class="small muted" id="detSub"></div>
+    <div class="kpis" id="kpis" style="margin-top:8px"></div>
+    <h3 style="margin-top:12px">Hallazgos</h3>
+    <div id="detEval" class="small"></div>
+  </div>
+
+  <h2 id="sTen">Tendencia</h2>
+  <div class="card"><div class="graf" id="graf"></div></div>
+
+  <h2 id="sHis">Historial</h2>
+  <div class="card tw"><table id="hist"></table>
+    <div class="row" style="margin-top:8px"><button class="btn sec" id="csv">Descargar CSV</button></div></div>
+
+  <h2 id="sMed">Medidores y límites</h2>
+  <div class="card tw">
+    <h3>Medidores</h3>
+    <p class="small muted" style="margin:0 0 6px">La corriente nominal da el % de carga. La relación Isc/IL (corriente de cortocircuito del punto entre la demanda máxima) fija el límite de THD de corriente de IEEE 519; si no la conoces, déjala vacía y se usa el límite más estricto (5 %).</p>
+    <table id="tMed"></table>
+    <div class="row" style="margin-top:8px"><button class="btn sec" id="addMed">Agregar medidor</button></div>
+  </div>
+  <div class="card">
+    <h3>Límites</h3>
+    <div class="form" id="form"></div>
+    <div class="row" style="margin-top:10px"><button class="btn" id="gCfg">Guardar</button><button class="btn sec" id="dCfg">Valores recomendados</button><span class="small" id="cfgSt" role="status"></span></div>
+  </div>
+  <div class="card">
+    <h3>Datos guardados</h3>
+    <div class="small" id="datos"></div>
+    <div class="row" style="margin-top:8px"><button class="btn danger" id="borrar">Borrar todas las lecturas</button></div>
+  </div>
+
+  <h2 id="sCri">Criterios</h2>
+  <div class="card tw">
+    <table class="crit"><tbody>
+      <tr><td>Tensión</td><td>Contra la nominal del medidor (13,800 V), por cada par de fases. ANSI C84.1 para media tensión: fuera del <b>rango A (13,460–14,490 V, −2.5 % / +5 %): Vigilar</b>; fuera del <b>rango B (13,110–14,520 V, −5 % / +5.2 %): Crítico</b>.</td></tr>
+      <tr><td>Desbalance de tensión</td><td>Máxima desviación de las tensiones L-L contra su promedio (NEMA). <b>Más de 2 %: Vigilar</b>; <b>más de 3 %: Crítico</b> (ANSI C84.1 recomienda menos de 3 %; arriba de 2 % los motores se calientan).</td></tr>
+      <tr><td>Desplazamiento de neutro</td><td>Cada tensión L-N contra la que le toca (promedio L-L ÷ √3). Con L-L balanceada, una diferencia grande indica que el neutro del sistema se movió respecto a tierra: aislamiento degradado o fuga a tierra incipiente, un TP o su fusible, o la capacitancia del sistema si es no aterrizado. <b>Más de 3 %: Vigilar</b>; <b>más de 10 %: Crítico</b> (una falla a tierra franca lo lleva hasta 73 %).</td></tr>
+      <tr><td>Corriente</td><td>Desbalance (máxima desviación contra el promedio): <b>más de 10 % Vigilar</b>, <b>más de 20 % Crítico</b>; solo se evalúa con más de 10 A. Carga contra la corriente nominal del alimentador: <b>más de 80 % Vigilar</b>, <b>más de 100 % Crítico</b>. En alimentadores de 3 hilos la corriente de neutro no aplica.</td></tr>
+      <tr><td>Frecuencia</td><td><b>Fuera de 59.8–60.2 Hz: Vigilar</b> (rango normal del Código de Red); <b>fuera de 59.5–60.5 Hz: Crítico</b>.</td></tr>
+      <tr><td>Factor de potencia</td><td>FP real (incluye armónicos). <b>Menor de 0.95: Vigilar</b> (mínimo del Código de Red para centros de carga); <b>menor de 0.90: Crítico</b> (CFE cobra cargo por FP bajo 0.90). Un FP adelantado (Ade) se reporta para revisar bancos de capacitores o filtros.</td></tr>
+      <tr><td>THD de tensión</td><td>El mayor de L-N y L-L. IEEE 519-2014 de 1 a 69 kV: <b>5 % total</b>. <b>Arriba de 4 %: Vigilar</b>; <b>arriba de 5 %: Crítico</b>.</td></tr>
+      <tr><td>THD de corriente</td><td>IEEE 519-2014 (tabla 2, 120 V a 69 kV) según Isc/IL: menos de 20 → 5 %; 20–50 → 8 %; 50–100 → 12 %; 100–1000 → 15 %; más de 1000 → 20 %. <b>Arriba del 80 % del límite: Vigilar</b>; <b>arriba del límite: Crítico</b>. IEEE 519 evalúa TDD contra la demanda máxima; el medidor muestra THD a la carga del momento, así que compararlo directo es conservador.</td></tr>
+      <tr><td>Factor K</td><td>Calentamiento adicional por armónicos en transformadores (la carátula lo muestra con «%», pero es un factor). <b>Más de 4: Vigilar</b> (un transformador estándar es K-1; los K-4 aguantan hasta 4).</td></tr>
+      <tr><td>Revisión de captura</td><td>Se cruzan las pantallas: voltaje y corriente del Resumen contra los promedios por fase, kW del Resumen contra 3Φ Potencia, kVA contra √(kW² + kVAR²) y contra √3·V·I, y FP contra kW ÷ kVA. Si no cuadran, puede ser un error de dedo o pantallas leídas en momentos distintos con la carga cambiando. No cambia el estado, solo avisa.</td></tr>
+      <tr><td>Marco en México</td><td>Código de Red (CRE), requerimientos para centros de carga: tensión, frecuencia, factor de potencia y armónicos (retoma IEEE 519). ANSI C84.1 para rangos de tensión. NOM-001-SEDE-2012 regula la instalación, no la calidad de energía.</td></tr>
+    </tbody></table>
+  </div>
+</div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fx = (v, d=1) => v == null || !isFinite(v) ? "—" : v.toLocaleString("es-MX", {minimumFractionDigits:d, maximumFractionDigits:d});
+const pct = (v, d=1) => v == null || !isFinite(v) ? "—" : (v > 0 ? "+" : "") + fx(v*100, d) + " %";
+const avg = a => { const b = a.filter(x => x != null && isFinite(x)); return b.length ? b.reduce((s, x) => s + x, 0) / b.length : null; };
+const num = s => { if (s == null) return null; const t = String(s).trim().replace(/\s/g, "").replace(",", "."); if (t === "") return null; const n = Number(t); return isFinite(n) ? n : null; };
+const fecha = t => new Date(t).toLocaleString("es-MX", {day:"2-digit", month:"short", year:"2-digit", hour:"2-digit", minute:"2-digit"});
+const desb = a => { const b = a.filter(x => x != null); if (b.length < 3) return null; const m = avg(b); return m ? Math.max(...b.map(x => Math.abs(x - m))) / m : null; };
+const ICON = {ok:"✓", warn:"!", bad:"✕", na:"?"}, TXT = {ok:"Normal", warn:"Vigilar", bad:"Crítico", na:"Sin datos"};
+const NIVEL = {na:0, ok:1, warn:2, bad:3};
+const peor = (a, b) => NIVEL[b] > NIVEL[a] ? b : a;
+const RAIZ3 = Math.sqrt(3);
+
+/* ===== pantallas del Circuit Monitor, en el orden de la carátula ===== */
+const PANT = [
+  {t:"RESUMEN 3Φ", c:[["res_v","Voltaje","V"],["res_i","Intensidad","A"],["res_kw","Potencia","kW"]]},
+  {t:"INTENSIDAD", c:[["iR","R","A"],["iS","S","A"],["iT","T","A"]]},
+  {t:"INTENSIDAD", s:"neutro", c:[["iN","N","A"]]},
+  {t:"TENSION L-L", c:[["vRS","R-S","V"],["vST","S-T","V"],["vTR","T-R","V"]]},
+  {t:"TENSION L-N", c:[["vR","R","V"],["vS","S","V"],["vT","T","V"]]},
+  {t:"3Φ POTENCIA", c:[["kw","Activa","kW"],["kvar","Reactiva","kVAR"],["kva","Aparente","kVA"]]},
+  {t:"3Φ FACTOR DE POT", fp:true, c:[["fpR","FP Real"],["fpD","FP Despl"]]},
+  {t:"FRECUENCIA", c:[["hz","Frecuenc.","Hz"]]},
+  {t:"THD EN TENSION L-N", c:[["thvR","R","%"],["thvS","S","%"],["thvT","T","%"]]},
+  {t:"THD EN TENSION L-L", c:[["thvRS","R-S","%"],["thvST","S-T","%"],["thvTR","T-R","%"]]},
+  {t:"THD AMPS", c:[["thiR","R","%"],["thiS","S","%"],["thiT","T","%"]]},
+  {t:"FACTOR K", s:"la carátula muestra «%»", c:[["kR","R",""],["kS","S",""],["kT","T",""]]}
+];
+const CAMPOS = PANT.flatMap(p => p.c.map(c => c[0])).concat(["fpRt","fpDt"]);
+const EJEMPLO = {res_v:"13670", res_i:"86", res_kw:"2012", iR:"84", iS:"88", iT:"88", iN:"0", vRS:"13658", vST:"13731", vTR:"13646", vR:"8248", vS:"7597", vT:"7869",
+  kw:"2019", kvar:"304", kva:"2041", fpR:"0,989", fpRt:"Ret", fpD:"0,990", fpDt:"Ret", hz:"60,03", thvR:"1,4", thvS:"1,5", thvT:"1,5", thvRS:"0,9", thvST:"0,8", thvTR:"0,9",
+  thiR:"4,3", thiS:"3,9", thiT:"3,7", kR:"1,1", kS:"1,1", kT:"1,0"};
+
+/* ===== configuración ===== */
+const KEY = "calidad-electrica-muestra";
+const DEF_L = {aMin:-2.464, aMax:5, bMin:-5, bMax:5.218, desV:2, desVBad:3, despN:3, despNBad:10, desI:10, desIBad:20, iMin:10, carga:80, cargaBad:100,
+  hzMin:59.8, hzMax:60.2, hzMinBad:59.5, hzMaxBad:60.5, fp:0.95, fpBad:0.90, thdV:5, thdVWarn:4, thdIWarnPct:80, kWarn:4, tolV:1, tolI:3, tolP:3, tolFP:0.02};
+const MED_DEF = [{id:"m1", nombre:"Alimentador 2 Emergente", vn:13800, in:null, isc:null, hilos:3}];
+const leer = () => { try{ return JSON.parse(localStorage.getItem(KEY) || "null") || {}; }catch{ return {}; } };
+let D = leer();
+D = {med:D.med?.length ? D.med : MED_DEF.map(m => ({...m})), lect:D.lect || [], L:{...DEF_L, ...(D.L || {})}};
+let L = D.L;
+const guardar = () => { try{ localStorage.setItem(KEY, JSON.stringify(D)); return true; }catch{ return false; } };
+const medDe = id => D.med.find(m => m.id === id);
+let sel = D.med[0]?.id;
+
+/* límite de THD de corriente según Isc/IL (IEEE 519-2014, tabla 2, 120 V – 69 kV) */
+const limTHDI = isc => !isc ? 5 : isc < 20 ? 5 : isc < 50 ? 8 : isc < 100 ? 12 : isc < 1000 ? 15 : 20;
+
+/* ===== evaluación de una lectura ===== */
+function evaluar(r, m){
+  const g = k => num(r[k]);
+  const it = [], rev = []; let est = "na";
+  const add = (e, t) => { it.push({e, t}); est = peor(est, e); };
+  const vLLs = [g("vRS"), g("vST"), g("vTR")], vLNs = [g("vR"), g("vS"), g("vT")], is = [g("iR"), g("iS"), g("iT")];
+  const vLL = avg(vLLs) ?? g("res_v"), iProm = avg(is) ?? g("res_i");
+  const c = {vLL, iProm, desV:desb(vLLs), desI:null, despN:null, carga:null, thdV:null, thdI:null, k:null, kw:g("kw") ?? g("res_kw"), fp:g("fpR"), hz:g("hz")};
+  // tensión
+  if (vLL != null && m.vn){
+    const pares = [["R-S", vLLs[0]], ["S-T", vLLs[1]], ["T-R", vLLs[2]]].filter(p => p[1] != null);
+    const lista = pares.length ? pares : [["Resumen", vLL]];
+    const dv = lista.map(([n, v]) => [n, v, v/m.vn - 1]);
+    const peorV = dv.reduce((a, b) => Math.abs(b[2]) > Math.abs(a[2]) ? b : a);
+    const fueraB = dv.filter(([, , d]) => d*100 < L.bMin || d*100 > L.bMax), fueraA = dv.filter(([, , d]) => d*100 < L.aMin || d*100 > L.aMax);
+    if (fueraB.length) add("bad", `Tensión ${fueraB.map(([n, v, d]) => `${n} ${fx(v,0)} V (${pct(d)})`).join(", ")}: fuera del rango B de ANSI C84.1 (${fx(m.vn*(1+L.bMin/100),0)}–${fx(m.vn*(1+L.bMax/100),0)} V).`);
+    else if (fueraA.length) add("warn", `Tensión ${fueraA.map(([n, v, d]) => `${n} ${fx(v,0)} V (${pct(d)})`).join(", ")}: fuera del rango A de ANSI C84.1 (${fx(m.vn*(1+L.aMin/100),0)}–${fx(m.vn*(1+L.aMax/100),0)} V).`);
+    else add("ok", `Tensión L-L ${fx(vLL,0)} V promedio (${pct(vLL/m.vn - 1)} de ${fx(m.vn,0)} V); la más alejada, ${peorV[0]} ${pct(peorV[2])}.`);
+  }
+  if (c.desV != null){
+    const e = c.desV*100 > L.desVBad ? "bad" : c.desV*100 > L.desV ? "warn" : "ok";
+    add(e, `Desbalance de tensión L-L ${fx(c.desV*100,2)} %${e === "ok" ? "" : ` (límite ${e === "bad" ? L.desVBad : L.desV} %)`}.`);
+  }
+  // desplazamiento de neutro: L-N contra L-L ÷ √3
+  if (vLNs.every(x => x != null) && vLL){
+    const ref = vLL / RAIZ3, ds = vLNs.map(v => v/ref - 1);
+    c.despN = Math.max(...ds.map(Math.abs));
+    const e = c.despN*100 > L.despNBad ? "bad" : c.despN*100 > L.despN ? "warn" : "ok";
+    const det = ["R","S","T"].map((f, j) => `${f} ${fx(vLNs[j],0)} V (${pct(ds[j])})`).join(", ");
+    if (e === "ok") add("ok", `Tensión L-N pareja: ${det}, contra ${fx(ref,0)} V esperados.`);
+    else {
+      const llOk = c.desV == null || c.desV*100 <= L.desV;
+      const thLN = avg([g("thvR"), g("thvS"), g("thvT")]), thLL = avg([g("thvRS"), g("thvST"), g("thvTR")]);
+      const sec0 = thLN != null && thLL != null && thLN > thLL * 1.3 ? ` El THD L-N (${fx(thLN,1)} %) es mayor que el L-L (${fx(thLL,1)} %): hay componente de secuencia cero, que solo ven las mediciones contra tierra.` : "";
+      add(e, `Desplazamiento de neutro ${fx(c.despN*100,1)} %: ${det}, contra ${fx(ref,0)} V esperados${llOk ? ", con la tensión L-L balanceada" : ""}. Revisar aislamiento y fugas a tierra (cables, terminales, apartarrayos), TP y fusibles de este medidor; comparar con otro alimentador de la misma barra y con la tensión residual (3V0) del relevador.${sec0}`);
+    }
+  }
+  // corriente
+  if (is.every(x => x != null) && iProm > L.iMin){
+    c.desI = desb(is);
+    const e = c.desI*100 > L.desIBad ? "bad" : c.desI*100 > L.desI ? "warn" : "ok";
+    add(e, `Corriente R ${fx(is[0],0)} A, S ${fx(is[1],0)} A, T ${fx(is[2],0)} A: desbalance ${fx(c.desI*100,1)} %${e === "ok" ? "" : ` (límite ${e === "bad" ? L.desIBad : L.desI} %)`}.`);
+  }
+  if (m.in && (iProm != null)){
+    const iMax = Math.max(...is.filter(x => x != null), iProm); c.carga = iMax / m.in;
+    const e = c.carga*100 > L.cargaBad ? "bad" : c.carga*100 > L.carga ? "warn" : "ok";
+    add(e, `Carga ${fx(c.carga*100,0)} % de ${fx(m.in,0)} A nominales (fase más cargada ${fx(iMax,0)} A).`);
+  }
+  if (m.hilos === 4 && g("iN") != null && iProm) { const rn = g("iN") / iProm; if (rn > 0.5) add("warn", `Corriente de neutro ${fx(g("iN"),0)} A, ${fx(rn*100,0)} % del promedio de fases (cargas no lineales o desbalance).`); }
+  // frecuencia
+  if (c.hz != null){
+    const e = c.hz < L.hzMinBad || c.hz > L.hzMaxBad ? "bad" : c.hz < L.hzMin || c.hz > L.hzMax ? "warn" : "ok";
+    add(e, `Frecuencia ${fx(c.hz,2)} Hz${e === "ok" ? "" : ` (rango normal ${fx(L.hzMin,1)}–${fx(L.hzMax,1)} Hz)`}.`);
+  }
+  // factor de potencia
+  if (c.fp != null){
+    const ade = r.fpRt === "Ade", e = c.fp < L.fpBad ? "bad" : c.fp < L.fp ? "warn" : "ok";
+    add(ade && e === "ok" && c.fp < 0.99 ? "warn" : e, `FP real ${fx(c.fp,3)} ${ade ? "adelantado" : "atrasado"}${g("fpD") != null ? ` (desplazamiento ${fx(g("fpD"),3)})` : ""}${e !== "ok" ? `: menor de ${fx(e === "bad" ? L.fpBad : L.fp,2)}` : ""}${ade ? ". Adelantado: revisar bancos de capacitores o filtros conectados con poca carga" : ""}.`);
+  }
+  // THD de tensión
+  const thv = [g("thvR"), g("thvS"), g("thvT"), g("thvRS"), g("thvST"), g("thvTR")].filter(x => x != null);
+  if (thv.length){
+    c.thdV = Math.max(...thv);
+    const e = c.thdV > L.thdV ? "bad" : c.thdV > L.thdVWarn ? "warn" : "ok";
+    add(e, `THD de tensión máximo ${fx(c.thdV,1)} % (límite IEEE 519 de 1 a 69 kV: ${fx(L.thdV,0)} %).`);
+  }
+  // THD de corriente
+  const thi = [g("thiR"), g("thiS"), g("thiT")].filter(x => x != null);
+  if (thi.length){
+    c.thdI = Math.max(...thi); const lim = limTHDI(m.isc);
+    const e = c.thdI > lim ? "bad" : c.thdI > lim * L.thdIWarnPct/100 ? "warn" : "ok";
+    add(e, `THD de corriente máximo ${fx(c.thdI,1)} % (límite ${fx(lim,0)} %${m.isc ? ` con Isc/IL ${fx(m.isc,0)}` : ", el más estricto: sin Isc/IL capturado"}).`);
+  }
+  // factor K
+  const ks = [g("kR"), g("kS"), g("kT")].filter(x => x != null);
+  if (ks.length){ c.k = Math.max(...ks); add(c.k > L.kWarn ? "warn" : "ok", `Factor K máximo ${fx(c.k,1)}${c.k > L.kWarn ? `: arriba de ${L.kWarn}, revisar el factor K del transformador que alimenta` : " (carga prácticamente lineal)"}.`); }
+  // revisión cruzada de la captura
+  const chk = (a, b, tol, txt) => { if (a != null && b != null && b !== 0 && Math.abs(a/b - 1)*100 > tol) rev.push(txt(a/b - 1)); };
+  if (avg(vLLs) != null) chk(g("res_v"), avg(vLLs), L.tolV, d => `Voltaje del Resumen ${fx(g("res_v"),0)} V contra promedio L-L ${fx(avg(vLLs),0)} V (${pct(d)}).`);
+  if (avg(is) != null) chk(g("res_i"), avg(is), L.tolI, d => `Intensidad del Resumen ${fx(g("res_i"),0)} A contra promedio de fases ${fx(avg(is),1)} A (${pct(d)}).`);
+  chk(g("res_kw"), g("kw"), L.tolP, d => `Potencia del Resumen ${fx(g("res_kw"),0)} kW contra 3Φ Potencia ${fx(g("kw"),0)} kW (${pct(d)}).`);
+  if (g("kw") != null && g("kvar") != null) chk(g("kva"), Math.hypot(g("kw"), g("kvar")), L.tolP, d => `kVA ${fx(g("kva"),0)} contra √(kW² + kVAR²) = ${fx(Math.hypot(g("kw"), g("kvar")),0)} (${pct(d)}).`);
+  if (vLL && iProm) chk(g("kva"), RAIZ3*vLL*iProm/1000, L.tolP + 2, d => `kVA ${fx(g("kva"),0)} contra √3 × V × I = ${fx(RAIZ3*vLL*iProm/1000,0)} (${pct(d)}).`);
+  if (g("kw") != null && g("kva") && c.fp != null && Math.abs(g("kw")/g("kva") - c.fp) > L.tolFP) rev.push(`FP real ${fx(c.fp,3)} contra kW ÷ kVA = ${fx(g("kw")/g("kva"),3)}.`);
+  return {est, it, rev, c};
+}
+
+/* ===== captura ===== */
+function pintarPant(){
+  $("#pant").innerHTML = PANT.map(p => `<div class="lcd"><div class="tt">${p.t}${p.s ? `<span>${p.s}</span>` : ""}</div>${p.c.map(([k, n, u]) => p.fp
+    ? `<label class="ln fp"><span>${n}</span><input inputmode="decimal" autocomplete="off" data-c="${k}" aria-label="${p.t} ${n}"><select data-c="${k}t" aria-label="${n} atrasado o adelantado"><option>Ret</option><option>Ade</option></select></label>`
+    : `<label class="ln"><span>${n}</span><input inputmode="decimal" autocomplete="off" data-c="${k}" aria-label="${p.t} ${n}"><span class="u">${u}</span></label>`).join("")}</div>`).join("");
+  document.querySelectorAll("#pant [data-c]").forEach(x => x.addEventListener("input", vivo));
+}
+const leerCap = () => Object.fromEntries([...document.querySelectorAll("#pant [data-c]")].map(x => [x.dataset.c, x.value.trim()]));
+const ponerCap = r => document.querySelectorAll("#pant [data-c]").forEach(x => { x.value = r[x.dataset.c] ?? (x.tagName === "SELECT" ? "Ret" : ""); });
+const lista = (ev, vacio) => {
+  const a = ev.it.slice().sort((x, y) => NIVEL[y.e] - NIVEL[x.e]);
+  return (a.length ? `<ul class="f eval">${a.map(x => `<li><span class="tag t-${x.e}">${ICON[x.e]} ${TXT[x.e]}</span>${esc(x.t)}</li>`).join("")}</ul>` : `<p class="muted">${vacio}</p>`)
+    + (ev.rev.length ? `<p style="margin:8px 0 2px"><b>Revisión de captura</b> <span class="muted">(no cambia el estado)</span></p><ul class="f">${ev.rev.map(t => `<li>${esc(t)} Puede ser un error de dedo o pantallas leídas en momentos distintos.</li>`).join("")}</ul>` : "");
+};
+function vivo(){
+  const m = medDe($("#cMed").value); if (!m) return;
+  const ev = evaluar(leerCap(), m);
+  $("#cEst").innerHTML = ev.it.length ? `<span class="tag t-${ev.est}">${ICON[ev.est]} ${TXT[ev.est]}</span>` : "";
+  $("#cEval").innerHTML = lista(ev, "Captura valores para ver la evaluación.");
+}
+$("#cHora").addEventListener("input", () => $("#cHoraTxt").textContent = $("#cHora").value ? "Hora corregida a mano." : "Vacío: se toma la hora al guardar.");
+$("#limpiar").onclick = () => { ponerCap({}); $("#cHora").value = ""; $("#cHora").dispatchEvent(new Event("input")); $("#cSt").textContent = ""; vivo(); };
+$("#ejemplo").onclick = () => { ponerCap(EJEMPLO); $("#cSt").textContent = "Lectura de las fotos del Alimentador 2 Emergente (08/10/26). Revisa y toca Guardar."; vivo(); };
+$("#guardar").onclick = () => {
+  const r = leerCap(), m = medDe($("#cMed").value);
+  if (!m) return;
+  if (!Object.entries(r).some(([k, v]) => !k.endsWith("t") && v !== "")){ $("#cSt").textContent = "No hay valores capturados."; return; }
+  const malos = Object.entries(r).filter(([k, v]) => !k.endsWith("t") && v !== "" && num(v) == null).map(([k]) => k);
+  if (malos.length){ $("#cSt").textContent = `Revisa los campos con texto que no es número (${malos.length}).`; return; }
+  const manual = $("#cHora").value, t = manual ? new Date(manual).toISOString() : new Date().toISOString();
+  D.lect.push({id:Date.now().toString(36) + Math.random().toString(36).slice(2,6), med:m.id, t, manual:!!manual, guardado:new Date().toISOString(), v:r});
+  D.lect.sort((a, b) => a.t.localeCompare(b.t));
+  $("#cSt").textContent = guardar() ? `Guardada: ${m.nombre}, ${fecha(t)}.` : "No se pudo guardar en este navegador.";
+  sel = m.id; ponerCap({}); $("#cHora").value = ""; $("#cHora").dispatchEvent(new Event("input")); vivo(); todo();
+};
+
+/* ===== gráfica chica de una serie con líneas de límite ===== */
+function graf({pts, titulo, unidad, dec, lims=[]}){
+  const p = pts.filter(x => x.v != null && isFinite(x.v));
+  if (p.length < 2) return `<div><h4>${titulo}</h4><p class="small muted">${p.length ? `Una lectura: ${fx(p[0].v,dec)} ${unidad}. Se necesitan al menos dos para la tendencia.` : "Sin lecturas."}</p></div>`;
+  const W = 420, H = 150, Lm = 54, R = 8, T = 10, Bm = 20;
+  const ts = p.map(x => +new Date(x.t)), vs = p.map(x => x.v), lv = lims.filter(l => l.v != null && isFinite(l.v));
+  let v0 = Math.min(...vs), v1 = Math.max(...vs);
+  for (const l of lv){ if (l.siempre || (l.v > v0 - (v1-v0)*1.5 - Math.abs(v1)*0.02 && l.v < v1 + (v1-v0)*1.5 + Math.abs(v1)*0.02)){ v0 = Math.min(v0, l.v); v1 = Math.max(v1, l.v); } }
+  const pad = (v1 - v0) * 0.12 || Math.abs(v1) * 0.02 || 0.5; v0 -= pad; v1 += pad;
+  const X = t => Lm + (t - ts[0]) / ((ts[ts.length-1] - ts[0]) || 1) * (W - Lm - R), Y = v => T + (1 - (v - v0)/(v1 - v0)) * (H - T - Bm);
+  const vis = lv.filter(l => l.v >= v0 && l.v <= v1);
+  return `<div><h4>${titulo} <span class="muted" style="font-weight:400">· última ${fx(vs[vs.length-1],dec)} ${unidad}</span></h4>
+    <svg class="sp" viewBox="0 0 ${W} ${H}" role="img" aria-label="${titulo}: ${p.length} lecturas">
+      ${[v0+pad, (v0+v1)/2, v1-pad].map(v => `<line x1="${Lm}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${Lm-4}" y="${Y(v)+4}" text-anchor="end" font-size="11" fill="var(--muted)">${fx(v,dec)}</text>`).join("")}
+      ${vis.map(l => `<line x1="${Lm}" x2="${W-R}" y1="${Y(l.v)}" y2="${Y(l.v)}" stroke="${l.col}" stroke-dasharray="4 3"/><text x="${W-R}" y="${Y(l.v)-3}" text-anchor="end" font-size="11" fill="${l.col}">${l.txt}</text>`).join("")}
+      <polyline fill="none" stroke="var(--serie)" stroke-width="2" points="${p.map((x, j) => X(ts[j]) + "," + Y(x.v)).join(" ")}"/>
+      ${p.map((x, j) => `<circle cx="${X(ts[j])}" cy="${Y(x.v)}" r="3" fill="var(--serie)"><title>${fecha(x.t)}: ${fx(x.v,dec)} ${unidad}</title></circle>`).join("")}
+      <text x="${Lm}" y="${H-4}" font-size="11" fill="var(--muted)">${fecha(p[0].t)}</text><text x="${W-R}" y="${H-4}" text-anchor="end" font-size="11" fill="var(--muted)">${fecha(p[p.length-1].t)}</text>
+    </svg>
+    ${(ley => ley.length ? `<div class="ley">${ley.map(l => `<span><i style="border-color:${l.col};border-top-style:dashed"></i>${l.ley}</span>`).join("")}</div>` : "")(vis.filter((l, j) => l.ley && vis.findIndex(o => o.ley === l.ley) === j))}</div>`;
+}
+
+/* ===== estado, detalle, tendencia, historial ===== */
+const lectDe = id => D.lect.filter(x => x.med === id);
+function todo(){
+  $("#cMed").innerHTML = D.med.map(m => `<option value="${m.id}"${m.id === ($("#cMed").value || sel) ? " selected" : ""}>${esc(m.nombre)}</option>`).join("");
+  if (!medDe(sel)) sel = D.med[0]?.id;
+  $("#meds").innerHTML = D.med.map(m => {
+    const ls = lectDe(m.id), u = ls[ls.length-1], ev = u ? evaluar(u.v, m) : null;
+    return `<button class="med" data-m="${m.id}" aria-pressed="${m.id === sel}"><b>${esc(m.nombre)}</b>
+      ${ev ? `<span class="tag t-${ev.est}">${ICON[ev.est]} ${TXT[ev.est]}</span><span class="small muted">${fecha(u.t)} · ${ls.length} lectura${ls.length === 1 ? "" : "s"}</span>` : `<span class="tag t-na">Sin lecturas</span>`}</button>`;
+  }).join("");
+  document.querySelectorAll("#meds .med").forEach(b => b.onclick = () => { sel = b.dataset.m; todo(); });
+  detalle(); tendencia(); historial(); pintarMed(); datos();
+}
+function detalle(){
+  const m = medDe(sel); if (!m) return;
+  const ls = lectDe(m.id), u = ls[ls.length-1];
+  $("#detT").textContent = m.nombre;
+  $("#detSub").textContent = `${fx(m.vn,0)} V nominal · ${m.hilos} hilos${m.in ? ` · ${fx(m.in,0)} A nominales` : ""}${u ? ` · última lectura ${fecha(u.t)}${u.manual ? " ✎" : ""}` : ""}`;
+  if (!u){ $("#kpis").innerHTML = ""; $("#detEval").innerHTML = `<p class="muted">Sin lecturas de este medidor.</p>`; return; }
+  const ev = evaluar(u.v, m), c = ev.c, g = k => num(u.v[k]);
+  const k = (l, v, s="", cls="") => `<div class="kpi ${cls}"><div class="l">${l}</div><div class="v">${v}</div>${s ? `<div class="s">${s}</div>` : ""}</div>`;
+  const cls = txt => ev.it.find(x => x.t.startsWith(txt) && x.e !== "ok")?.e || "";
+  $("#kpis").innerHTML = k("Tensión L-L", c.vLL ? fx(c.vLL,0)+" V" : "—", c.vLL ? pct(c.vLL/m.vn - 1)+" del nominal" : "", cls("Tensión"))
+    + k("Desbalance V", c.desV != null ? fx(c.desV*100,2)+" %" : "—", "", cls("Desbalance"))
+    + k("Desplaz. neutro", c.despN != null ? fx(c.despN*100,1)+" %" : "—", "L-N vs L-L÷√3", cls("Desplazamiento"))
+    + k("Corriente", c.iProm != null ? fx(c.iProm,1)+" A" : "—", c.carga != null ? fx(c.carga*100,0)+" % de carga" : (c.desI != null ? "desbalance "+fx(c.desI*100,1)+" %" : ""), cls("Corriente") || cls("Carga"))
+    + k("Potencia", c.kw != null ? fx(c.kw,0)+" kW" : "—", g("kva") != null ? fx(g("kva"),0)+" kVA · "+fx(g("kvar"),0)+" kVAR" : "")
+    + k("Factor de potencia", c.fp != null ? fx(c.fp,3) : "—", u.v.fpRt === "Ade" ? "adelantado" : c.fp != null ? "atrasado" : "", cls("FP"))
+    + k("Frecuencia", c.hz != null ? fx(c.hz,2)+" Hz" : "—", "", cls("Frecuencia"))
+    + k("THD V / THD I", `${fx(c.thdV,1)} / ${fx(c.thdI,1)} %`, "máximos por fase", cls("THD"));
+  $("#detEval").innerHTML = lista(ev, "Sin datos para evaluar.");
+}
+function tendencia(){
+  const m = medDe(sel); if (!m){ $("#graf").innerHTML = ""; return; }
+  const ls = lectDe(m.id).map(x => ({t:x.t, c:evaluar(x.v, m).c}));
+  const s = f => ls.map(x => ({t:x.t, v:f(x.c)}));
+  const W = "var(--warn)", B = "var(--bad)";
+  const limTHI = limTHDI(m.isc);
+  $("#graf").innerHTML = [
+    graf({pts:s(c => c.vLL), titulo:"Tensión L-L promedio", unidad:"V", dec:0, lims:[
+      {v:m.vn*(1+L.aMax/100), txt:"A máx.", col:W, ley:`Rango A ${fx(m.vn*(1+L.aMin/100),0)}–${fx(m.vn*(1+L.aMax/100),0)} V`}, {v:m.vn*(1+L.aMin/100), txt:"A mín.", col:W, ley:`Rango A ${fx(m.vn*(1+L.aMin/100),0)}–${fx(m.vn*(1+L.aMax/100),0)} V`, siempre:true},
+      {v:m.vn, txt:"nominal", col:"var(--muted)", siempre:true}]}),
+    graf({pts:s(c => c.despN != null ? c.despN*100 : null), titulo:"Desplazamiento de neutro", unidad:"%", dec:1, lims:[{v:L.despN, txt:`${L.despN} %`, col:W, ley:`Vigilar (${L.despN} %)`, siempre:true}, {v:L.despNBad, txt:`${L.despNBad} %`, col:B, ley:`Crítico (${L.despNBad} %)`}]}),
+    graf({pts:s(c => c.desV != null ? c.desV*100 : null), titulo:"Desbalance de tensión L-L", unidad:"%", dec:2, lims:[{v:L.desV, txt:`${L.desV} %`, col:W, ley:`Vigilar (${L.desV} %)`, siempre:true}]}),
+    graf({pts:s(c => c.iProm), titulo:"Corriente promedio", unidad:"A", dec:1, lims:m.in ? [{v:m.in*L.carga/100, txt:`${L.carga} %`, col:W, ley:`${L.carga} % de ${fx(m.in,0)} A`}] : []}),
+    graf({pts:s(c => c.kw), titulo:"Potencia activa", unidad:"kW", dec:0}),
+    graf({pts:s(c => c.fp), titulo:"Factor de potencia real", unidad:"", dec:3, lims:[{v:L.fp, txt:fx(L.fp,2), col:W, ley:`Mínimo ${fx(L.fp,2)} (Código de Red)`, siempre:true}]}),
+    graf({pts:s(c => c.thdV), titulo:"THD de tensión (máximo)", unidad:"%", dec:1, lims:[{v:L.thdV, txt:`${L.thdV} %`, col:B, ley:`Límite IEEE 519 (${L.thdV} %)`, siempre:true}]}),
+    graf({pts:s(c => c.thdI), titulo:"THD de corriente (máximo)", unidad:"%", dec:1, lims:[{v:limTHI, txt:`${limTHI} %`, col:B, ley:`Límite IEEE 519 (${limTHI} %)`, siempre:true}]}),
+    graf({pts:s(c => c.hz), titulo:"Frecuencia", unidad:"Hz", dec:2, lims:[{v:L.hzMax, txt:fx(L.hzMax,1), col:W, ley:`Rango normal ${fx(L.hzMin,1)}–${fx(L.hzMax,1)} Hz`}, {v:L.hzMin, txt:fx(L.hzMin,1), col:W, ley:`Rango normal ${fx(L.hzMin,1)}–${fx(L.hzMax,1)} Hz`}]})
+  ].join("");
+}
+function historial(){
+  const m = medDe(sel), ls = m ? lectDe(m.id).slice().reverse() : [];
+  $("#hist").innerHTML = ls.length ? `<thead><tr><th>Fecha</th><th>Estado</th><th>V L-L</th><th>Desb. V</th><th>Despl. N</th><th>I prom.</th><th>kW</th><th>FP</th><th>Hz</th><th>THD V</th><th>THD I</th><th>Captura</th><th></th></tr></thead><tbody>` +
+    ls.map(x => { const ev = evaluar(x.v, m), c = ev.c;
+      return `<tr><td>${fecha(x.t)}${x.manual ? ` <span title="Hora corregida a mano">✎</span>` : ""}</td><td><span class="tag t-${ev.est}">${ICON[ev.est]} ${TXT[ev.est]}</span></td><td>${fx(c.vLL,0)}</td><td>${c.desV != null ? fx(c.desV*100,2)+" %" : "—"}</td><td>${c.despN != null ? fx(c.despN*100,1)+" %" : "—"}</td><td>${fx(c.iProm,1)}</td><td>${fx(c.kw,0)}</td><td>${fx(c.fp,3)}</td><td>${fx(c.hz,2)}</td><td>${fx(c.thdV,1)}</td><td>${fx(c.thdI,1)}</td><td>${ev.rev.length ? `<span class="tag t-warn" title="${esc(ev.rev.join(" "))}">Revisar</span>` : "OK"}</td><td><button class="linkbtn" data-borrar="${x.id}">Borrar</button></td></tr>`; }).join("") + `</tbody>`
+    : `<tbody><tr><td class="muted">Sin lecturas de este medidor.</td></tr></tbody>`;
+  document.querySelectorAll("[data-borrar]").forEach(b => b.onclick = () => { if (!confirm("¿Borrar esta lectura?")) return; D.lect = D.lect.filter(x => x.id !== b.dataset.borrar); guardar(); todo(); });
+}
+$("#csv").onclick = () => {
+  const m = medDe(sel); if (!m) return;
+  const cols = ["fecha","hora_manual",...CAMPOS], ls = lectDe(m.id);
+  const csv = [cols.join(","), ...ls.map(x => [x.t, x.manual ? "si" : "", ...CAMPOS.map(k => { const v = x.v[k] ?? ""; return k.endsWith("t") ? v : (num(v) ?? ""); })].join(","))].join("\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + csv], {type:"text/csv"})); a.download = `calidad-${m.nombre.replace(/\W+/g, "_")}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+
+/* ===== medidores y límites ===== */
+const COLS = [["nombre","Nombre","text"],["vn","V nominal L-L","number"],["in","I nominal (A)","number"],["isc","Isc/IL","number"],["hilos","Hilos","select"]];
+function pintarMed(){
+  $("#tMed").innerHTML = `<thead><tr>${COLS.map(c => `<th>${c[1]}</th>`).join("")}<th></th></tr></thead><tbody>` + D.med.map(m => `<tr>${COLS.map(([k, , ty]) => `<td>${ty === "select"
+      ? `<select data-mid="${m.id}" data-k="${k}"><option${m.hilos === 3 ? " selected" : ""}>3</option><option${m.hilos === 4 ? " selected" : ""}>4</option></select>`
+      : `<input class="f" data-mid="${m.id}" data-k="${k}" type="${ty}" ${ty === "number" ? 'step="any" inputmode="decimal"' : ""} value="${esc(m[k] ?? "")}">`}</td>`).join("")}<td>${D.med.length > 1 ? `<button class="linkbtn" data-quitar="${m.id}">Quitar</button>` : ""}</td></tr>`).join("") + `</tbody>`;
+  document.querySelectorAll("#tMed [data-mid]").forEach(x => x.onchange = () => {
+    const m = medDe(x.dataset.mid), k = x.dataset.k;
+    m[k] = k === "nombre" ? (x.value.trim() || m.nombre) : x.value === "" ? null : Number(x.value);
+    if (k === "vn" && !m.vn) m.vn = 13800;
+    guardar(); todo();
+  });
+  document.querySelectorAll("[data-quitar]").forEach(b => b.onclick = () => {
+    const n = lectDe(b.dataset.quitar).length;
+    if (!confirm(`¿Quitar este medidor${n ? ` y sus ${n} lecturas` : ""}?`)) return;
+    D.med = D.med.filter(m => m.id !== b.dataset.quitar); D.lect = D.lect.filter(x => x.med !== b.dataset.quitar); guardar(); todo();
+  });
+}
+$("#addMed").onclick = () => { const id = "m" + Date.now().toString(36); D.med.push({id, nombre:`Alimentador ${D.med.length + 1}`, vn:13800, in:null, isc:null, hilos:3}); sel = id; guardar(); todo(); };
+const FORM = [
+  ["aMin","Tensión rango A, mínimo (%)"],["aMax","Tensión rango A, máximo (%)"],["bMin","Tensión rango B, mínimo (%)"],["bMax","Tensión rango B, máximo (%)"],
+  ["desV","Desbalance de tensión: Vigilar (%)"],["desVBad","Desbalance de tensión: Crítico (%)"],["despN","Desplazamiento de neutro: Vigilar (%)"],["despNBad","Desplazamiento de neutro: Crítico (%)"],
+  ["desI","Desbalance de corriente: Vigilar (%)"],["desIBad","Desbalance de corriente: Crítico (%)"],["iMin","Evaluar desbalance de corriente desde (A)"],["carga","Carga: Vigilar (% de I nominal)"],["cargaBad","Carga: Crítico (%)"],
+  ["hzMin","Frecuencia mínima normal (Hz)"],["hzMax","Frecuencia máxima normal (Hz)"],["hzMinBad","Frecuencia mínima, Crítico (Hz)"],["hzMaxBad","Frecuencia máxima, Crítico (Hz)"],
+  ["fp","FP: Vigilar abajo de"],["fpBad","FP: Crítico abajo de"],["thdVWarn","THD de tensión: Vigilar arriba de (%)"],["thdV","THD de tensión: Crítico arriba de (%)"],["thdIWarnPct","THD de corriente: Vigilar desde (% del límite)"],["kWarn","Factor K: Vigilar arriba de"],
+  ["tolV","Revisión de captura: tolerancia de voltaje (%)"],["tolI","Revisión de captura: tolerancia de corriente (%)"],["tolP","Revisión de captura: tolerancia de potencia (%)"],["tolFP","Revisión de captura: tolerancia de FP"]
+];
+const pintarForm = () => $("#form").innerHTML = FORM.map(([k, t]) => `<label for="L-${k}">${t}</label><input class="f" id="L-${k}" data-k="${k}" type="number" step="any" inputmode="decimal" value="${L[k]}">`).join("");
+$("#gCfg").onclick = () => { document.querySelectorAll("#form input").forEach(x => L[x.dataset.k] = x.value === "" ? DEF_L[x.dataset.k] : Number(x.value)); $("#cfgSt").textContent = guardar() ? "Guardado." : "No se pudo guardar."; pintarForm(); todo(); vivo(); };
+$("#dCfg").onclick = () => { D.L = L = {...DEF_L}; pintarForm(); $("#cfgSt").textContent = "Valores recomendados cargados: toca Guardar para aplicarlos."; };
+function datos(){
+  let kb = 0; try{ kb = (localStorage.getItem(KEY) || "").length / 1024; }catch{}
+  $("#datos").textContent = `${D.lect.length} lectura${D.lect.length === 1 ? "" : "s"} de ${D.med.length} medidor${D.med.length === 1 ? "" : "es"} · ${fx(kb,1)} KB en este navegador.`;
+}
+$("#borrar").onclick = () => { if (!D.lect.length || !confirm(`¿Borrar las ${D.lect.length} lecturas? Los medidores y límites se conservan.`)) return; D.lect = []; guardar(); todo(); };
+$("#cMed").onchange = vivo;
+
+pintarPant(); pintarForm(); todo(); vivo();
+})();
+</script>
+</body>
+</html>
