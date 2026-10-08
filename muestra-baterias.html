@@ -125,6 +125,7 @@ svg.sp{width:100%;max-width:520px;height:auto;display:block}
         <div id="bat" class="card" style="margin-bottom:0"></div>
       </div>
       <div class="card"><h3>Hallazgos del banco</h3><div id="hall"></div></div>
+      <div class="card noprint"><h3>Referencia de resistencia del banco</h3><div id="refB"></div></div>
       <div class="card tw"><h3>Detalle por batería</h3><table id="tabla"></table></div>
     </div>
 
@@ -160,7 +161,8 @@ svg.sp{width:100%;max-width:520px;height:auto;display:block}
     <table class="crit"><tbody>
       <tr><td>Resistencia interna</td><td>Se compara contra tres referencias y manda la peor: <b>la resistencia de referencia del modelo</b>, <b>la línea base de la propia batería</b> (su primera medición, o la primera después de un reemplazo) y <b>la mediana del banco</b>. Matriz de umbrales a 25 °C: hasta <b>+30 % Normal</b>, <b>arriba de +30 % Advertencia</b> (Vigilar), <b>arriba de +40 % Falla</b> (Reemplazar y programar prueba de capacidad).
         <table class="crit" style="margin-top:6px"><thead><tr><th>Modelo</th><th>Referencia</th><th>Normal</th><th>Advertencia</th><th>Falla</th></tr></thead><tbody id="matrizR"></tbody></table>
-        Los mismos porcentajes se aplican contra la línea base y la mediana del banco. Además, si sube <b>10 % o más en 30 días</b>, se marca Vigilar aunque siga en Normal. Tendencia óhmica según IEEE 1188 (mantenimiento de VRLA) e IEEE 1491 (monitoreo); los umbrales se ajustan por modelo abajo.</td></tr>
+        Los mismos porcentajes se aplican contra la línea base y la mediana del banco. En cada banco puedes cambiar la referencia de la ficha por la <b>referencia real</b>: el promedio de sus baterías sanas en una medición (lo ideal, 72 h después de la puesta en servicio, ya estable en flotación).
+        <b>Confirmación:</b> Gexia exporta un dato por día, así que el retardo de 5–10 s se configura en Gexia; aquí una Falla nueva se muestra como Advertencia "por confirmar" hasta que la siguiente medición la repita. <b>Histéresis:</b> para salir de una alarma la resistencia tiene que bajar 2 puntos debajo del umbral. <b>Temperatura:</b> la resistencia sube cuando la batería está fría; con un coeficiente del fabricante (% por °C) se lleva a 25 °C antes de comparar (apagado de inicio). Además, si sube <b>10 % o más en 30 días</b>, se marca Vigilar aunque siga en Normal. Tendencia óhmica según IEEE 1188 (mantenimiento de VRLA) e IEEE 1491 (monitoreo); los umbrales se ajustan por modelo abajo.</td></tr>
       <tr><td>Voltaje de flotación</td><td>Por batería, contra la mediana del banco: <b>más de 0.25 V Vigilar</b>, <b>más de 0.60 V Crítico</b> (~0.1 V por celda: celda en corto o sulfatada). Por banco, el promedio por celda (voltaje total ÷ celdas) debe quedar en el rango de flotación de la ficha.</td></tr>
       <tr><td>Temperatura</td><td><b>Más de 30 °C o 3 °C arriba del promedio del banco: Vigilar</b>; <b>más de 35 °C: Crítico</b>. Referencia 25 °C: la vida de una VRLA se reduce a la mitad por cada ~8–10 °C arriba (IEEE 1188).</td></tr>
       <tr><td>Conexiones</td><td>Contra la mediana de las conexiones del mismo tipo en el banco: <b>+20 % Vigilar</b> (limpiar y reapretar, IEEE 1188), <b>+50 % Crítico</b>.</td></tr>
@@ -204,14 +206,14 @@ const ASIGN_DEF = (() => {
   ["B|3|01","B|3|02","B|4|02"].forEach(k => a[k] = "M3");
   return a;
 })();
-const DEF = {L:{rWarn:0.30, rBad:0.40, rMes:0.10, vWarn:0.25, vBad:0.60, tWarn:30, tDelta:3, tBad:35, cWarn:0.20, cBad:0.50, iFact:2, rizPct:0.5, rDias:45, sumaPct:2}};
+const DEF = {L:{rWarn:0.30, rBad:0.40, rMes:0.10, rHist:2, rTc:0, vWarn:0.25, vBad:0.60, tWarn:30, tDelta:3, tBad:35, cWarn:0.20, cBad:0.50, iFact:2, rizPct:0.5, rDias:45, sumaPct:2}};
 const CFG_KEY = "bitacora-baterias-cfg", REP_KEY = "bitacora-baterias-reemplazos";
 const leerLS = (k, d) => { try{ return JSON.parse(localStorage.getItem(k) || "null") ?? d; }catch{ return d; } };
 let cfg = leerLS(CFG_KEY, {});
 const modelosGuardados = cfg.modelos || {};
 if (cfg.ficha && !cfg.modelos) modelosGuardados.M1 = {rRef:cfg.ficha.rRef, ah:cfg.ficha.ah, instalacion:cfg.ficha.instalacion};   // ficha única de la versión anterior
 cfg = {modelos:Object.fromEntries(Object.entries(MODELOS_DEF).map(([k, m]) => [k, {...m, ...Object.fromEntries(Object.entries(modelosGuardados[k] || {}).filter(([, v]) => v != null && v !== ""))}])),
-       asign:{...ASIGN_DEF, ...(cfg.asign||{})}, L:{...DEF.L, ...(cfg.L||{})}};
+       asign:{...ASIGN_DEF, ...(cfg.asign||{})}, L:{...DEF.L, ...(cfg.L||{})}, refBanco:cfg.refBanco || {}};
 let L = cfg.L;
 const modeloDe = clave => cfg.asign[clave] || "M1";
 /* umbrales de resistencia del modelo como fracción (30 → 0.30); sin dato, los generales */
@@ -222,6 +224,7 @@ let reemplazos = leerLS(REP_KEY, []);
 const guardarRep = () => { try{ localStorage.setItem(REP_KEY, JSON.stringify(reemplazos)); }catch{} };
 const CAMPOS = [
   ["L","rMes","Resistencia: subida en 30 días para Vigilar (fracción)"],
+  ["L","rHist","Resistencia: histéresis para salir de una alarma (puntos de %)"],["L","rTc","Resistencia: compensación por temperatura (% por °C abajo de 25 °C; 0 = sin compensar)"],
   ["L","vWarn","Voltaje: Vigilar si se aparta de la mediana más de (V)"],["L","vBad","Voltaje: Crítico si se aparta más de (V)"],
   ["L","tWarn","Temperatura: Vigilar arriba de (°C)"],["L","tDelta","Temperatura: Vigilar si supera el promedio del banco por (°C)"],["L","tBad","Temperatura: Crítico arriba de (°C)"],
   ["L","cWarn","Conexiones: Vigilar desde (fracción)"],["L","cBad","Conexiones: Crítico desde (fracción)"],
@@ -323,13 +326,18 @@ function leer(nombre, txt){
 const repDe = (clave, n, hasta) => reemplazos.filter(r => r.clave===clave && r.n===n && (!hasta || r.fecha <= hasta)).sort((a,b) => a.fecha.localeCompare(b.fecha)).pop() || null;
 
 /* ===== análisis de un banco en el mes elegido ===== */
+/* Resistencia llevada a 25 °C: R25 = R / (1 + k·(25 − T)), k en %/°C. r0 guarda la lectura cruda para saber cuándo midió Gexia. */
+const a25 = (r, t) => !L.rTc || !vivo(r) || !(t > 10 && t < 45) ? r : r / (1 + L.rTc/100 * (25 - t));
+const compensar = f => ({...f, bat:Object.fromEntries(Object.entries(f.bat).map(([i, x]) => [i, {...x, r0:x.r, r:a25(x.r, x.t)}]))});
 function analizar(B, ctx, mes){
   const todas = [...B.filas.values()].sort((a, b) => a.t.localeCompare(b.t));
-  const hist = todas.filter(f => dia(f.t).slice(0,7) <= mes);
+  const hist = todas.filter(f => dia(f.t).slice(0,7) <= mes).map(compensar);
   const delMes = hist.filter(f => dia(f.t).startsWith(mes));
   if (!delMes.length) return null;
   const u = delMes[delMes.length-1], p = delMes[0], hoy = dia(u.t);
   const clave = `${B.lado}|${B.ups}|${B.banco}`, mod = modeloDe(clave), F = fichaDe(clave);
+  // referencia de resistencia: la real del banco si se fijó; si no, la de la ficha del modelo
+  const RB = cfg.refBanco[clave], rRef = RB?.r || F.rRef || null, refNom = RB?.r ? "la referencia real del banco" : "la referencia del fabricante";
   const n = Object.keys(u.bat).length || 40, celdas = F.celdas || 6;
   const V = [], R = [], T = [];
   for (let i = 1; i <= n; i++){ const x = u.bat[i] || {}; V.push(vivo(x.v) ? x.v : null); R.push(vivo(x.r) ? x.r : null); T.push(vivo(x.t) ? x.t : null); }
@@ -349,8 +357,8 @@ function analizar(B, ctx, mes){
     let base = null, esperando = false;
     if (rep){
       // Gexia sigue reportando la resistencia de la batería anterior hasta que vuelve a medir
-      const antes = hist.filter(f => dia(f.t) < rep.fecha).map(f => f.bat[i]?.r).filter(vivo).pop();
-      const nueva = propias.find(f => vivo(f.bat[i]?.r) && f.bat[i].r !== antes);
+      const antes = hist.filter(f => dia(f.t) < rep.fecha).map(f => f.bat[i]?.r0).filter(vivo).pop();
+      const nueva = propias.find(f => vivo(f.bat[i]?.r0) && f.bat[i].r0 !== antes);
       if (nueva) base = nueva.bat[i].r; else esperando = true;
     } else {
       const f0 = propias.find(f => vivo(f.bat[i]?.r)); base = f0 ? f0.bat[i].r : null;
@@ -366,15 +374,28 @@ function analizar(B, ctx, mes){
     // resistencia contra línea base, mediana del banco y referencia del fabricante: manda la peor
     const dMed = r != null && rMed ? r/rMed - 1 : null;
     const dBase = r != null && base ? r/base - 1 : null;
-    const dRef = r != null && F.rRef ? r/F.rRef - 1 : null;
+    const dRef = r != null && rRef ? r/rRef - 1 : null;
     if (r != null){
       const sospechosa = v == null;
-      const comps = [[dBase, "su línea base"], [dMed, "la mediana del banco"], [dRef, "la referencia del fabricante"]].filter(c => c[0] != null);
-      const [dPeor, contra] = comps.reduce((a, c) => c[0] > a[0] ? c : a, [-Infinity, ""]);
+      const peorDe = x => [[base, "su línea base"], [rMed, "la mediana del banco"], [rRef, refNom]].filter(c => c[0])
+        .map(c => [x/c[0] - 1, c[1], c[0]]).reduce((a, c) => c[0] > a[0] ? c : a, [-Infinity, "", null]);
+      const [dPeor, contra, contraV] = peorDe(r);
       const lr = limR(F), EPS = 1e-9;   // EPS: 3.38/2.60 − 1 debe quedar en +30 % exacto, no arriba
-      const abs = (f, x) => contra === "la referencia del fabricante" ? ` (${f} arriba de ${fx(F.rRef*(1+x),2)} mΩ)` : ` (${f} arriba de +${Math.round(x*100)} %)`;
-      if (dPeor > lr.b + EPS){ est = peor(est, sospechosa ? "na" : "bad"); m.push(`Resistencia ${fx(r,3)} mΩ, ${pct(dPeor)} contra ${contra}${abs("Falla", lr.b)}${sospechosa ? "; verificar sensor antes de reemplazar" : ""}`); }
-      else if (dPeor > lr.w + EPS){ est = peor(est, sospechosa ? "na" : "warn"); m.push(`Resistencia ${fx(r,3)} mΩ, ${pct(dPeor)} contra ${contra}${abs("Advertencia", lr.w)}`); }
+      const nivel = d => d > lr.b + EPS ? 2 : d > lr.w + EPS ? 1 : 0, umbral = [0, lr.w, lr.b], NOM = ["Normal", "Advertencia", "Falla"];
+      const lim = x => contra === "su línea base" || contra === "la mediana del banco" ? `+${Math.round(x*100)} %` : `${fx(contraV*(1+x),2)} mΩ`;
+      // medición anterior de Gexia (la última lectura cruda distinta de la actual, desde el reemplazo)
+      const cur0 = u.bat[i]?.r0, prev = propias.filter(f => vivo(f.bat[i]?.r0) && f.bat[i].r0 !== cur0 && f.t < u.t).pop();
+      let nv = nivel(dPeor), nota = "";
+      if (prev){
+        const nP = nivel(peorDe(prev.bat[i].r)[0]);
+        // confirmación (equivalente al retardo de alarma): una Falla nueva cuenta hasta que la repita la siguiente medición
+        if (nv === 2 && nP < 2){ nv = 1; nota = ` (pasa el umbral de Falla, ${lim(lr.b)}, pero falta confirmarla: la medición del ${fdia(prev.t)}, ${fx(prev.bat[i].r,3)} mΩ, no lo pasaba)`; }
+        // histéresis: para salir de una alarma tiene que bajar del umbral menos la banda
+        else if (nv < nP && dPeor > umbral[nP] - L.rHist/100){ nv = nP; nota = ` (ya estaba en ${NOM[nP]}; por histéresis sigue así hasta bajar de ${lim(umbral[nP] - L.rHist/100)})`; }
+      }
+      const txtR = `Resistencia ${fx(r,3)} mΩ${L.rTc ? " a 25 °C" : ""}, ${pct(dPeor)} contra ${contra}`;
+      if (nv === 2){ est = peor(est, sospechosa ? "na" : "bad"); m.push(`${txtR}${nota || ` (Falla arriba de ${lim(lr.b)})`}${sospechosa ? "; verificar sensor antes de reemplazar" : ""}`); }
+      else if (nv === 1){ est = peor(est, sospechosa ? "na" : "warn"); m.push(`${txtR}${nota || ` (Advertencia arriba de ${lim(lr.w)})`}`); }
       // velocidad de subida: contra la medición de hace 30 días o más
       const hace = propias.filter(f => new Date(f.t) <= new Date(u.t) - 30*DIA && vivo(f.bat[i]?.r)).pop();
       if (hace){ const s = r / hace.bat[i].r - 1; if (s >= L.rMes && dPeor <= lr.w + EPS){ est = peor(est, "warn"); m.push(`La resistencia subió ${pct(s)} desde el ${fdia(hace.t)}`); } }
@@ -407,7 +428,7 @@ function analizar(B, ctx, mes){
   if (nT < n) mon.push(`${n - nT} de ${n} sensores de temperatura sin reportar`);
   if (!vivo(tot.v)) mon.push("El banco no reporta voltaje total ni corriente");
   let ultR = null;
-  for (let j = hist.length-1; j > 0 && !ultR; j--) for (let i = 1; i <= n; i++) if (hist[j].bat[i]?.r !== hist[j-1].bat[i]?.r){ ultR = hist[j].t; break; }
+  for (let j = hist.length-1; j > 0 && !ultR; j--) for (let i = 1; i <= n; i++) if (hist[j].bat[i]?.r0 !== hist[j-1].bat[i]?.r0){ ultR = hist[j].t; break; }
   const diasR = Math.round((new Date(u.t) - new Date(ultR || hist[0].t)) / DIA);
   if (diasR > L.rDias) mon.push(ultR ? `La resistencia no se actualiza desde el ${fdia(ultR)} (${diasR} días)` : `La resistencia no ha cambiado desde el ${fdia(hist[0].t)}, inicio de los datos (${diasR} días)`);
   const sumV = nV === n ? V.reduce((s, x) => s + x, 0) : null;
@@ -428,7 +449,7 @@ function analizar(B, ctx, mes){
   bats.filter(b => b.est === "bad" || b.est === "warn").sort((a, b) => NIVEL[b.est]-NIVEL[a.est] || a.n-b.n)
     .forEach(b => { estB = peor(estB, b.est); hb.push({est:b.est, t:`Batería ${b.n}: ${b.m.join("; ")}.`}); });
   const cuenta = {ok:0, warn:0, bad:0, na:0}; bats.forEach(b => cuenta[b.est]++);
-  return {B, clave, mod, F, hist, delMes, u, p, bats, vMed, rMed, tProm, conMal, hb, estB, cuenta, mon, nV, nT, n, ultR, diasR, difSuma, vCelda};
+  return {B, clave, mod, F, rRef, RB, refNom, hist, delMes, u, p, bats, vMed, rMed, tProm, conMal, hb, estB, cuenta, mon, nV, nT, n, ultR, diasR, difSuma, vCelda};
 }
 function rangos(ns){
   const out = []; let a = null, b = null;
@@ -511,9 +532,10 @@ function detalle(){
     + k("Temperatura", fx(tot.t,1)+" °C") + k("Rizado", tot.riz ? Math.round(tot.riz)+" mV" : "—", rizMal ? "warn" : "")
     + k("Flotación promedio", a.vCelda ? fx(a.vCelda,3)+" V/celda" : "—") + k("R mediana", fx(a.rMed,3)+" mΩ");
   $("#map").innerHTML = a.bats.map(b => `<button class="cell ${b.est}" data-n="${b.n}" aria-pressed="${b.n===selBat}" aria-label="Batería ${b.n}: ${TXT[b.est]}${b.rep?", reemplazada":""}">${b.rep?'<span class="nu" title="Reemplazada">↻</span>':""}${b.n}<i>${ICON[b.est]}</i></button>`).join("");
+  refBanco(a);
   $("#hall").innerHTML = a.hb.length ? `<ul class="f">${a.hb.map(h => `<li><span class="tag t-${h.est}">${ICON[h.est]}</span> ${esc(h.t)}</li>`).join("")}</ul>` : "<p>Sin hallazgos.</p>";
-  $("#tabla").innerHTML = `<thead><tr><th>Bat.</th><th>Estado</th><th>V</th><th>Δ V mediana</th><th>Tendencia V</th><th>R (mΩ)</th><th>R base</th><th>vs base</th><th>vs banco</th>${a.F.rRef?"<th>vs fabricante</th>":""}<th>T (°C)</th><th>Edad</th></tr></thead><tbody>` +
-    a.bats.map(b => `<tr><td>${b.n}${b.rep?" ↻":""}</td><td><span class="tag t-${b.est}">${ICON[b.est]} ${TXT[b.est]}</span></td><td>${fx(b.v,3)}</td><td>${b.dV==null?"—":(b.dV>0?"+":"")+fx(b.dV,3)}</td><td>${b.tend==null?"—":(b.tend>0?"+":"")+fx(b.tend,3)}</td><td>${fx(b.r,3)}</td><td>${fx(b.base,3)}</td><td>${pct(b.dBase)}</td><td>${pct(b.dMed)}</td>${a.F.rRef?`<td>${pct(b.dRef)}</td>`:""}<td>${fx(b.t,1)}</td><td>${b.edad==null?"—":fx(b.edad,1)}</td></tr>`).join("") + `</tbody>`;
+  $("#tabla").innerHTML = `<thead><tr><th>Bat.</th><th>Estado</th><th>V</th><th>Δ V mediana</th><th>Tendencia V</th><th>R (mΩ)</th><th>R base</th><th>vs base</th><th>vs banco</th>${a.rRef?`<th>vs ${a.RB?.r ? "ref. real" : "fabricante"}</th>`:""}<th>T (°C)</th><th>Edad</th></tr></thead><tbody>` +
+    a.bats.map(b => `<tr><td>${b.n}${b.rep?" ↻":""}</td><td><span class="tag t-${b.est}">${ICON[b.est]} ${TXT[b.est]}</span></td><td>${fx(b.v,3)}</td><td>${b.dV==null?"—":(b.dV>0?"+":"")+fx(b.dV,3)}</td><td>${b.tend==null?"—":(b.tend>0?"+":"")+fx(b.tend,3)}</td><td>${fx(b.r,3)}</td><td>${fx(b.base,3)}</td><td>${pct(b.dBase)}</td><td>${pct(b.dMed)}</td>${a.rRef?`<td>${pct(b.dRef)}</td>`:""}<td>${fx(b.t,1)}</td><td>${b.edad==null?"—":fx(b.edad,1)}</td></tr>`).join("") + `</tbody>`;
   bateria();
 }
 /* gráfica chica de una variable contra la referencia del banco, con límite y marcas de reemplazo */
@@ -540,15 +562,52 @@ function mini({pts, k, titulo, unidad, dec, col, refTxt, lim, marcas=[]}){
     </svg>
     <div class="ley"><span><i style="border-color:${col}"></i>Batería</span><span><i style="border-color:var(--muted);border-top-style:dashed"></i>${refTxt}</span>${lims.map(l => `<span><i style="border-color:${l.col||"var(--bad)"};border-top-style:dotted"></i>${l.ley}</span>`).join("")}${mk.length ? `<span style="color:var(--accent)">↻ reemplazo</span>` : ""}</div></div>`;
 }
+/* Línea base real: promedio de los monoblocs sanos en una medición de Gexia (lo ideal, 72 h después de instalar,
+   con el banco estable en flotación). Sanos = con voltaje, sin reemplazo pendiente y dentro de +Advertencia de la mediana. */
+function medicionesR(a){
+  const h = a.hist, out = [];
+  h.forEach((f, j) => { if (j === 0 || Object.keys(f.bat).some(i => vivo(f.bat[i]?.r0) && f.bat[i].r0 !== h[j-1].bat[i]?.r0)) out.push(f); });
+  return out;
+}
+function promSanos(a, f){
+  const lr = limR(a.F), rs = [];
+  for (const [i, x] of Object.entries(f.bat)) if (vivo(x.v) && vivo(x.r)) rs.push(x.r);
+  const md = med(rs), ok = rs.filter(r => r <= md*(1 + lr.w));
+  return {r:avg(ok), n:ok.length, fuera:rs.length - ok.length};
+}
+function refBanco(a){
+  const box = $("#refB"), ms = medicionesR(a), inst = a.F.instalacion;
+  // propuesta: la primera medición 3 días (72 h) o más después de la instalación; sin fecha, la primera cargada
+  const prop = (inst && ms.find(f => new Date(f.t) - new Date(inst+"T00:00:00Z") >= 3*DIA)) || ms[0];
+  const RB = a.RB, fab = a.F.rRef;
+  box.innerHTML = `<p class="small" style="margin:0 0 6px">${RB?.r
+      ? `Usando la <b>referencia real del banco: ${fx(RB.r,3)} mΩ</b> (promedio de ${RB.n} baterías sanas, medición del ${fdia(RB.fecha)})${fab ? `, ${pct(RB.r/fab - 1)} contra la ficha (${fx(fab,2)} mΩ)` : ""}.`
+      : fab ? `Usando la <b>referencia de la ficha: ${fx(fab,2)} mΩ</b>.` : `Sin referencia: solo se compara contra la línea base y la mediana.`}
+    ${RB?.r && (RB.rTc || 0) !== (L.rTc || 0) ? `<b style="color:var(--warn)">Se fijó con otra compensación por temperatura; vuelve a fijarla.</b> ` : ""}Advertencia arriba de ${a.rRef ? fx(a.rRef*(1+limR(a.F).w),2)+" mΩ" : "—"}, Falla arriba de ${a.rRef ? fx(a.rRef*(1+limR(a.F).b),2)+" mΩ" : "—"}.</p>
+    <div class="row small"><label>Medición <select id="refFecha" style="max-width:220px">${ms.map(f => `<option value="${f.t}"${f===prop?" selected":""}>${fdia(f.t)}</option>`).join("")}</select></label>
+      <button class="btn" id="refUsar">Usar promedio de sanas</button>${RB?.r ? `<button class="linkbtn" id="refQuitar">Volver a la ficha</button>` : ""}</div>
+    <div class="small muted" id="refProp"></div>`;
+  const prev = () => {
+    const f = ms.find(x => x.t === $("#refFecha").value); if (!f) return null;
+    const pr = promSanos(a, f), d = fab && pr.r ? pr.r/fab - 1 : null;
+    $("#refProp").innerHTML = pr.r ? `Promedio de ${pr.n} baterías sanas: <b>${fx(pr.r,3)} mΩ</b>${pr.fuera ? ` (sin ${pr.fuera} arriba de +${Math.round(limR(a.F).w*100)} % de la mediana)` : ""}${d != null ? `, ${pct(d)} contra la ficha.` : "."}`
+      + (d != null && Math.abs(d) > 0.10 ? ` <b style="color:var(--warn)">Difiere más de 10 % de la ficha.</b> Si el banco no es nuevo, una referencia alta esconde el envejecimiento; úsala solo con una medición de puesta en servicio.` : "")
+      + (inst ? "" : " Sin fecha de instalación del modelo: no se puede saber si esta medición es de las primeras 72 h.") : "Sin resistencias en esa medición.";
+    return {f, pr};
+  };
+  prev(); $("#refFecha").onchange = prev;
+  $("#refUsar").onclick = () => { const x = prev(); if (!x?.pr.r) return; cfg.refBanco[a.clave] = {r:+x.pr.r.toFixed(3), n:x.pr.n, fecha:dia(x.f.t), rTc:L.rTc}; guardarCfg(); todo(); };
+  if ($("#refQuitar")) $("#refQuitar").onclick = () => { delete cfg.refBanco[a.clave]; guardarCfg(); todo(); };
+}
 function bateria(){
   const a = A.get(sel), box = $("#bat");
   const b = a && a.bats.find(x => x.n === selBat);
   if (!b){ box.innerHTML = `<span class="muted small">Toca una batería del mapa para ver su detalle, sus gráficas y registrar un reemplazo.</span>`; return; }
   const col = {ok:"var(--ok)", warn:"var(--warn)", bad:"var(--bad)", na:"var(--na)"}[b.est];
-  const s = b.serie, refR = b.base || s[s.length-1]?.ref?.r, F = fichaDe(a.clave), lr = limR(F);
-  // con referencia del fabricante: las dos líneas de la matriz en mΩ; sin ella, Advertencia sobre la línea base o la mediana
-  const limRes = F.rRef ? [{v:F.rRef*(1+lr.w), txt:fx(F.rRef*(1+lr.w),2), ley:`Advertencia (${fx(F.rRef*(1+lr.w),2)} mΩ)`, col:"var(--warn)"},
-                           {v:F.rRef*(1+lr.b), txt:fx(F.rRef*(1+lr.b),2), ley:`Falla (${fx(F.rRef*(1+lr.b),2)} mΩ)`}]
+  const s = b.serie, refR = b.base || s[s.length-1]?.ref?.r, F = fichaDe(a.clave), lr = limR(F), rf = a.rRef;
+  // con referencia (real del banco o de fábrica): las dos líneas de la matriz en mΩ; sin ella, Advertencia sobre la línea base o la mediana
+  const limRes = rf ? [{v:rf*(1+lr.w), txt:fx(rf*(1+lr.w),2), ley:`Advertencia (${fx(rf*(1+lr.w),2)} mΩ)`, col:"var(--warn)"},
+                       {v:rf*(1+lr.b), txt:fx(rf*(1+lr.b),2), ley:`Falla (${fx(rf*(1+lr.b),2)} mΩ)`}]
     : refR ? {v:refR*(1+lr.w), txt:"+"+Math.round(lr.w*100)+" %", ley:`Advertencia (+${Math.round(lr.w*100)} % de ${b.base ? "su línea base" : "la mediana"})`, col:"var(--warn)"} : null;
   const tMax = Math.max(...s.map(x => x.tc ?? -Infinity));
   const reps = reemplazos.filter(r => r.clave === a.clave && r.n === b.n).sort((x, y) => y.fecha.localeCompare(x.fecha));
@@ -557,7 +616,7 @@ function bateria(){
     ${b.m.length ? `<ul class="f small">${b.m.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="small muted">Dentro de los límites.</p>`}
     <div class="graf">
       ${mini({pts:s, k:"v", titulo:"Voltaje", unidad:"V", dec:3, col, refTxt:"Mediana del banco", marcas:reps.map(r => r.fecha)})}
-      ${mini({pts:s, k:"r", titulo:"Resistencia interna", unidad:"mΩ", dec:3, col, refTxt:"Mediana del banco", marcas:reps.map(r => r.fecha),
+      ${mini({pts:s, k:"r", titulo:L.rTc ? "Resistencia interna a 25 °C" : "Resistencia interna", unidad:"mΩ", dec:3, col, refTxt:"Mediana del banco", marcas:reps.map(r => r.fecha),
         lim: limRes})}
       ${mini({pts:s, k:"tc", titulo:"Temperatura", unidad:"°C", dec:1, col, refTxt:"Promedio del banco", marcas:reps.map(r => r.fecha),
         lim: tMax > L.tWarn - 5 ? {v:L.tWarn, txt:L.tWarn+" °C", ley:`Vigilar (${L.tWarn} °C)`} : null})}
