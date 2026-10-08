@@ -193,12 +193,12 @@ const vivo = x => x != null && x > 0.5;
 
 /* ===== modelos, asignación por banco y límites (punto 5) ===== */
 /* Catálogo según el levantamiento de modelos (07/10/26). Flotación por celda = placa ÷ 6 celdas.
-   Fichas técnicas (08/10/26): EnerSys 12HX540 (123 Ah a 8 h, 2.6 mΩ, torque 60 lb·in ± 5 %, máx. 88 lb·in, vida 10 años, −3.0 mV/°C/celda), CSB HRL (−3.3 mV/°C/celda), HRL12540W (rev. 05/31/24) y Ritar HR12-520W: resistencia, torque, vida de diseño y compensación de flotación.
+   Fichas técnicas (08/10/26): EnerSys 12HX540 (123 Ah a 8 h, 2.6 mΩ, torque 60 lb·in ± 5 %, máx. 88 lb·in, vida 10 años, −3.0 mV/°C/celda), CSB HRL (134 Ah equivalentes a 20 h, −3.3 mV/°C/celda), HRL12540W (rev. 05/31/24) y Ritar HR12-520W: resistencia, torque, vida de diseño y compensación de flotación.
    Resistencia: matriz de umbrales a 25 °C (08/10/26): referencia del fabricante, Advertencia arriba de +30 %, Falla arriba de +40 %. */
 const MODELOS_DEF = {
   // placas: M1 flotación 13.6 ± 0.1 V; M2 13.5–13.8 V; M3 13.6–13.8 V (todas a 25 °C, 6 celdas)
   M1:{nombre:"EnerSys DataSafe HX 12HX540-FR", potencia:"540 W/celda a 1.67 V, 15 min", ah:123, rRef:2.60, rAdv:30, rFalla:40, vMin:2.25, vMax:2.283, vTc:-3, celdas:6, torque:"6.8 N·m (60 lb·in) ± 5 %; máx. 10.0 N·m (88 lb·in)", vida:10, instalacion:""},
-  M2:{nombre:"CSB HRL12540W FR", potencia:"542 W/celda a 1.67 V, 15 min", ah:null, rRef:2.60, rAdv:30, rFalla:40, vMin:2.25, vMax:2.30, vTc:-3.3, celdas:6, torque:"5.1 ± 1.0 N·m (44.9 lbf·in), M6", vida:10, instalacion:""},
+  M2:{nombre:"CSB HRL12540W FR", potencia:"542 W/celda a 1.67 V, 15 min", ah:134, rRef:2.60, rAdv:30, rFalla:40, vMin:2.25, vMax:2.30, vTc:-3.3, celdas:6, torque:"5.1 ± 1.0 N·m (44.9 lbf·in), M6", vida:10, instalacion:""},
   M3:{nombre:"Ritar HR12-520W", potencia:"520 W/celda, 15 min", ah:145, rRef:4.50, rAdv:30, rFalla:40, vMin:2.267, vMax:2.30, vTc:-3, celdas:6, torque:"10–12 N·m, M8", vida:15, instalacion:""}
 };
 const ASIGN_DEF = (() => {
@@ -250,7 +250,7 @@ $("#guardarCfg").onclick = () => {
   guardarCfg(); L = cfg.L; $("#cfgSt").textContent = "Guardado."; pintarForm(); todo();
 };
 $("#defCfg").onclick = () => { cfg.L = {...DEF.L}; cfg.asign = {...ASIGN_DEF};
-  for (const [k, m] of Object.entries(MODELOS_DEF)) if (cfg.modelos[k]) for (const c of ["rRef","rAdv","rFalla","vMin","vMax","vTc","torque","vida"]) cfg.modelos[k][c] = m[c]; pintarForm(); $("#cfgSt").textContent = "Límites, umbrales de resistencia por modelo y asignación del levantamiento cargados: toca Guardar para aplicarlos."; };
+  for (const [k, m] of Object.entries(MODELOS_DEF)) if (cfg.modelos[k]) for (const c of ["ah","potencia","rRef","rAdv","rFalla","vMin","vMax","vTc","torque","vida"]) cfg.modelos[k][c] = m[c]; pintarForm(); $("#cfgSt").textContent = "Límites, umbrales de resistencia por modelo y asignación del levantamiento cargados: toca Guardar para aplicarlos."; };
 
 const NIVEL = {ok:0, na:1, warn:2, bad:3};
 const peor = (a, b) => NIVEL[b] > NIVEL[a] ? b : a;
