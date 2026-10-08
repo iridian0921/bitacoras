@@ -158,7 +158,9 @@ svg.sp{width:100%;max-width:520px;height:auto;display:block}
   <h2>Criterios</h2>
   <div class="card tw">
     <table class="crit"><tbody>
-      <tr><td>Resistencia interna</td><td>Se compara contra tres referencias y manda la peor: <b>la línea base de la propia batería</b> (su primera medición, o la primera después de un reemplazo), <b>la mediana del banco</b> y, si la capturas en la ficha, <b>la resistencia de referencia del fabricante</b>. <b>+20 % Vigilar</b>, <b>+50 % Reemplazar</b> y programar prueba de capacidad. Además, si sube <b>10 % o más en 30 días</b>, se marca Vigilar aunque siga abajo del +20 %. Tendencia óhmica según IEEE 1188 (mantenimiento de VRLA) e IEEE 1491 (monitoreo); los porcentajes son los habituales de fabricantes y se ajustan abajo.</td></tr>
+      <tr><td>Resistencia interna</td><td>Se compara contra tres referencias y manda la peor: <b>la resistencia de referencia del modelo</b>, <b>la línea base de la propia batería</b> (su primera medición, o la primera después de un reemplazo) y <b>la mediana del banco</b>. Matriz de umbrales a 25 °C: hasta <b>+30 % Normal</b>, <b>arriba de +30 % Advertencia</b> (Vigilar), <b>arriba de +40 % Falla</b> (Reemplazar y programar prueba de capacidad).
+        <table class="crit" style="margin-top:6px"><thead><tr><th>Modelo</th><th>Referencia</th><th>Normal</th><th>Advertencia</th><th>Falla</th></tr></thead><tbody id="matrizR"></tbody></table>
+        Los mismos porcentajes se aplican contra la línea base y la mediana del banco. Además, si sube <b>10 % o más en 30 días</b>, se marca Vigilar aunque siga en Normal. Tendencia óhmica según IEEE 1188 (mantenimiento de VRLA) e IEEE 1491 (monitoreo); los umbrales se ajustan por modelo abajo.</td></tr>
       <tr><td>Voltaje de flotación</td><td>Por batería, contra la mediana del banco: <b>más de 0.25 V Vigilar</b>, <b>más de 0.60 V Crítico</b> (~0.1 V por celda: celda en corto o sulfatada). Por banco, el promedio por celda (voltaje total ÷ celdas) debe quedar en el rango de flotación de la ficha.</td></tr>
       <tr><td>Temperatura</td><td><b>Más de 30 °C o 3 °C arriba del promedio del banco: Vigilar</b>; <b>más de 35 °C: Crítico</b>. Referencia 25 °C: la vida de una VRLA se reduce a la mitad por cada ~8–10 °C arriba (IEEE 1188).</td></tr>
       <tr><td>Conexiones</td><td>Contra la mediana de las conexiones del mismo tipo en el banco: <b>+20 % Vigilar</b> (limpiar y reapretar, IEEE 1188), <b>+50 % Crítico</b>.</td></tr>
@@ -187,12 +189,13 @@ const mesTxt = m => new Date(m+"-15T12:00:00Z").toLocaleDateString("es-MX", {mon
 const vivo = x => x != null && x > 0.5;
 
 /* ===== modelos, asignación por banco y límites (punto 5) ===== */
-/* Catálogo según el levantamiento de modelos (07/10/26). Flotación por celda = placa ÷ 6 celdas. */
+/* Catálogo según el levantamiento de modelos (07/10/26). Flotación por celda = placa ÷ 6 celdas.
+   Resistencia: matriz de umbrales a 25 °C (08/10/26): referencia del fabricante, Advertencia arriba de +30 %, Falla arriba de +40 %. */
 const MODELOS_DEF = {
   // placas: M1 flotación 13.6 ± 0.1 V; M2 13.5–13.8 V; M3 13.6–13.8 V (todas a 25 °C, 6 celdas)
-  M1:{nombre:"EnerSys DataSafe HX 12HX540-FR", potencia:"540 W/celda, 15 min", ah:null, rRef:null, vMin:2.25, vMax:2.283, celdas:6, torque:"6.8 N·m (60 in·lb)", instalacion:""},
-  M2:{nombre:"CSB HRL12540W FR", potencia:"540 W/celda a 1.67 V, 15 min", ah:null, rRef:null, vMin:2.25, vMax:2.30, celdas:6, torque:"", instalacion:""},
-  M3:{nombre:"Ritar HR12-520W", potencia:"520 W/celda, 15 min", ah:145, rRef:null, vMin:2.267, vMax:2.30, celdas:6, torque:"", instalacion:""}
+  M1:{nombre:"EnerSys DataSafe HX 12HX540-FR", potencia:"540 W/celda, 15 min", ah:null, rRef:2.60, rAdv:30, rFalla:40, vMin:2.25, vMax:2.283, celdas:6, torque:"6.8 N·m (60 in·lb)", instalacion:""},
+  M2:{nombre:"CSB HRL12540W FR", potencia:"540 W/celda a 1.67 V, 15 min", ah:null, rRef:2.60, rAdv:30, rFalla:40, vMin:2.25, vMax:2.30, celdas:6, torque:"", instalacion:""},
+  M3:{nombre:"Ritar HR12-520W", potencia:"520 W/celda, 15 min", ah:145, rRef:4.50, rAdv:30, rFalla:40, vMin:2.267, vMax:2.30, celdas:6, torque:"", instalacion:""}
 };
 const ASIGN_DEF = (() => {
   const a = {};
@@ -201,7 +204,7 @@ const ASIGN_DEF = (() => {
   ["B|3|01","B|3|02","B|4|02"].forEach(k => a[k] = "M3");
   return a;
 })();
-const DEF = {L:{rWarn:0.20, rBad:0.50, rMes:0.10, vWarn:0.25, vBad:0.60, tWarn:30, tDelta:3, tBad:35, cWarn:0.20, cBad:0.50, iFact:2, rizPct:0.5, rDias:45, sumaPct:2}};
+const DEF = {L:{rWarn:0.30, rBad:0.40, rMes:0.10, vWarn:0.25, vBad:0.60, tWarn:30, tDelta:3, tBad:35, cWarn:0.20, cBad:0.50, iFact:2, rizPct:0.5, rDias:45, sumaPct:2}};
 const CFG_KEY = "bitacora-baterias-cfg", REP_KEY = "bitacora-baterias-reemplazos";
 const leerLS = (k, d) => { try{ return JSON.parse(localStorage.getItem(k) || "null") ?? d; }catch{ return d; } };
 let cfg = leerLS(CFG_KEY, {});
@@ -211,12 +214,13 @@ cfg = {modelos:Object.fromEntries(Object.entries(MODELOS_DEF).map(([k, m]) => [k
        asign:{...ASIGN_DEF, ...(cfg.asign||{})}, L:{...DEF.L, ...(cfg.L||{})}};
 let L = cfg.L;
 const modeloDe = clave => cfg.asign[clave] || "M1";
+/* umbrales de resistencia del modelo como fracción (30 → 0.30); sin dato, los generales */
+const limR = F => ({w: F.rAdv != null && F.rAdv !== "" ? F.rAdv/100 : L.rWarn, b: F.rFalla != null && F.rFalla !== "" ? F.rFalla/100 : L.rBad});
 const fichaDe = clave => cfg.modelos[modeloDe(clave)] || {};
 const guardarCfg = () => { try{ localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }catch{} };
 let reemplazos = leerLS(REP_KEY, []);
 const guardarRep = () => { try{ localStorage.setItem(REP_KEY, JSON.stringify(reemplazos)); }catch{} };
 const CAMPOS = [
-  ["L","rWarn","Resistencia: Vigilar desde (fracción, 0.20 = +20 %)"],["L","rBad","Resistencia: Reemplazar desde (fracción)"],
   ["L","rMes","Resistencia: subida en 30 días para Vigilar (fracción)"],
   ["L","vWarn","Voltaje: Vigilar si se aparta de la mediana más de (V)"],["L","vBad","Voltaje: Crítico si se aparta más de (V)"],
   ["L","tWarn","Temperatura: Vigilar arriba de (°C)"],["L","tDelta","Temperatura: Vigilar si supera el promedio del banco por (°C)"],["L","tBad","Temperatura: Crítico arriba de (°C)"],
@@ -224,8 +228,10 @@ const CAMPOS = [
   ["L","iFact","Corriente de flotación: Vigilar si es N veces la mediana de bancos del mismo modelo"],["L","rizPct","Rizado: Vigilar arriba de (% del voltaje del banco)"],
   ["L","rDias","Monitoreo: resistencia sin actualizar más de (días)"],["L","sumaPct","Monitoreo: suma de voltajes vs banco, diferencia máx. (%)"]
 ];
-const COLM = [["nombre","Marca y modelo","text"],["potencia","Potencia","text"],["ah","Ah","number"],["rRef","R ref. (mΩ)","number"],["vMin","Flot. mín. V/celda","number"],["vMax","Flot. máx. V/celda","number"],["celdas","Celdas","number"],["torque","Torque","text"],["instalacion","Instalación","date"]];
+const COLM = [["nombre","Marca y modelo","text"],["potencia","Potencia","text"],["ah","Ah","number"],["rRef","R ref. (mΩ)","number"],["rAdv","R Advertencia (+%)","number"],["rFalla","R Falla (+%)","number"],["vMin","Flot. mín. V/celda","number"],["vMax","Flot. máx. V/celda","number"],["celdas","Celdas","number"],["torque","Torque","text"],["instalacion","Instalación","date"]];
 function pintarForm(){
+  $("#matrizR").innerHTML = Object.values(cfg.modelos).map(m => { const lr = limR(m), r = m.rRef;
+    return `<tr><td>${esc(m.nombre)}</td>${r ? `<td>${fx(r,2)} mΩ</td><td>≤ ${fx(r*(1+lr.w),2)} mΩ</td><td>${fx(r*(1+lr.w),2)}–${fx(r*(1+lr.b),2)} mΩ</td><td>&gt; ${fx(r*(1+lr.b),2)} mΩ</td>` : `<td colspan="4">Sin referencia: solo línea base y mediana (+${Math.round(lr.w*100)} % / +${Math.round(lr.b*100)} %)</td>`}</tr>`; }).join("");
   $("#form").innerHTML = CAMPOS.map(c => `<label for="c-${c[1]}">${c[2]}</label><input class="f" id="c-${c[1]}" data-k="${c[1]}" type="number" step="any" inputmode="decimal" value="${esc(cfg.L[c[1]] ?? "")}">`).join("");
   $("#tModelos").innerHTML = `<thead><tr><th>Clave</th>${COLM.map(c => `<th>${c[1]}</th>`).join("")}</tr></thead><tbody>` +
     Object.entries(cfg.modelos).map(([k, m]) => `<tr><td>${k}</td>${COLM.map(c => `<td><input class="f" data-m="${k}" data-k="${c[0]}" type="${c[2]}" ${c[2]==="number"?'step="any" inputmode="decimal"':""} value="${esc(m[c[0]] ?? "")}"></td>`).join("")}</tr>`).join("") + `</tbody>`;
@@ -238,7 +244,8 @@ $("#guardarCfg").onclick = () => {
   document.querySelectorAll("#asign select").forEach(sl => cfg.asign[sl.dataset.asg] = sl.value);
   guardarCfg(); L = cfg.L; $("#cfgSt").textContent = "Guardado."; pintarForm(); todo();
 };
-$("#defCfg").onclick = () => { cfg.L = {...DEF.L}; cfg.asign = {...ASIGN_DEF}; pintarForm(); $("#cfgSt").textContent = "Límites y asignación del levantamiento cargados: toca Guardar para aplicarlos."; };
+$("#defCfg").onclick = () => { cfg.L = {...DEF.L}; cfg.asign = {...ASIGN_DEF};
+  for (const [k, m] of Object.entries(MODELOS_DEF)) if (cfg.modelos[k]) for (const c of ["rRef","rAdv","rFalla","vMin","vMax"]) cfg.modelos[k][c] = m[c]; pintarForm(); $("#cfgSt").textContent = "Límites, umbrales de resistencia por modelo y asignación del levantamiento cargados: toca Guardar para aplicarlos."; };
 
 const NIVEL = {ok:0, na:1, warn:2, bad:3};
 const peor = (a, b) => NIVEL[b] > NIVEL[a] ? b : a;
@@ -364,11 +371,13 @@ function analizar(B, ctx, mes){
       const sospechosa = v == null;
       const comps = [[dBase, "su línea base"], [dMed, "la mediana del banco"], [dRef, "la referencia del fabricante"]].filter(c => c[0] != null);
       const [dPeor, contra] = comps.reduce((a, c) => c[0] > a[0] ? c : a, [-Infinity, ""]);
-      if (dPeor >= L.rBad){ est = peor(est, sospechosa ? "na" : "bad"); m.push(`Resistencia ${fx(r,3)} mΩ, ${pct(dPeor)} contra ${contra}${sospechosa ? "; verificar sensor antes de reemplazar" : ""}`); }
-      else if (dPeor >= L.rWarn){ est = peor(est, sospechosa ? "na" : "warn"); m.push(`Resistencia ${fx(r,3)} mΩ, ${pct(dPeor)} contra ${contra}`); }
+      const lr = limR(F), EPS = 1e-9;   // EPS: 3.38/2.60 − 1 debe quedar en +30 % exacto, no arriba
+      const abs = (f, x) => contra === "la referencia del fabricante" ? ` (${f} arriba de ${fx(F.rRef*(1+x),2)} mΩ)` : ` (${f} arriba de +${Math.round(x*100)} %)`;
+      if (dPeor > lr.b + EPS){ est = peor(est, sospechosa ? "na" : "bad"); m.push(`Resistencia ${fx(r,3)} mΩ, ${pct(dPeor)} contra ${contra}${abs("Falla", lr.b)}${sospechosa ? "; verificar sensor antes de reemplazar" : ""}`); }
+      else if (dPeor > lr.w + EPS){ est = peor(est, sospechosa ? "na" : "warn"); m.push(`Resistencia ${fx(r,3)} mΩ, ${pct(dPeor)} contra ${contra}${abs("Advertencia", lr.w)}`); }
       // velocidad de subida: contra la medición de hace 30 días o más
       const hace = propias.filter(f => new Date(f.t) <= new Date(u.t) - 30*DIA && vivo(f.bat[i]?.r)).pop();
-      if (hace){ const s = r / hace.bat[i].r - 1; if (s >= L.rMes && dPeor < L.rBad){ est = peor(est, "warn"); m.push(`La resistencia subió ${pct(s)} desde el ${fdia(hace.t)}`); } }
+      if (hace){ const s = r / hace.bat[i].r - 1; if (s >= L.rMes && dPeor <= lr.w + EPS){ est = peor(est, "warn"); m.push(`La resistencia subió ${pct(s)} desde el ${fdia(hace.t)}`); } }
     }
     if (t != null){
       if (t > L.tBad){ est = peor(est, "bad"); m.push(`Temperatura ${fx(t,1)} °C`); }
@@ -513,9 +522,9 @@ function mini({pts, k, titulo, unidad, dec, col, refTxt, lim, marcas=[]}){
   if (p.length < 2) return `<div><h4>${titulo}</h4><p class="small muted">Sin lecturas en el periodo.</p></div>`;
   const W = 360, H = 140, Lm = 44, R = 6, T = 10, Bm = 20;
   const ts = p.map(x => +new Date(x.t)), vs = p.map(x => x[k]), rf = p.map(x => x.ref?.[k]).filter(x => x != null);
-  const lv = lim && lim.v != null && isFinite(lim.v) ? lim.v : null;
+  const lims = [].concat(lim || []).filter(l => l.v != null && isFinite(l.v));
   let v0 = Math.min(...vs, ...rf), v1 = Math.max(...vs, ...rf);
-  if (lv != null){ v0 = Math.min(v0, lv); v1 = Math.max(v1, lv); }
+  for (const l of lims){ v0 = Math.min(v0, l.v); v1 = Math.max(v1, l.v); }
   const pad = (v1 - v0) * 0.12 || Math.abs(v1) * 0.02 || 0.05; v0 -= pad; v1 += pad;
   const X = t => Lm + (t - ts[0]) / ((ts[ts.length-1] - ts[0]) || 1) * (W - Lm - R), Y = v => T + (1 - (v - v0)/(v1 - v0)) * (H - T - Bm);
   const pl = (arr, f) => arr.map(x => X(+new Date(x.t)) + "," + Y(f(x))).join(" ");
@@ -524,19 +533,23 @@ function mini({pts, k, titulo, unidad, dec, col, refTxt, lim, marcas=[]}){
     <svg class="sp" viewBox="0 0 ${W} ${H}" role="img" aria-label="${titulo} de la batería en el periodo">
       ${[v0+pad, (v0+v1)/2, v1-pad].map(v => `<line x1="${Lm}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${Lm-4}" y="${Y(v)+4}" text-anchor="end" font-size="11" fill="var(--muted)">${v.toFixed(dec)}</text>`).join("")}
       ${mk.map(t => `<line x1="${X(t)}" x2="${X(t)}" y1="${T}" y2="${H-Bm}" stroke="var(--accent)" stroke-dasharray="2 3"/><text x="${X(t)+3}" y="${T+10}" font-size="11" fill="var(--accent)">↻</text>`).join("")}
-      ${lv != null ? `<line x1="${Lm}" x2="${W-R}" y1="${Y(lv)}" y2="${Y(lv)}" stroke="var(--bad)" stroke-dasharray="3 3"/><text x="${W-R}" y="${Y(lv)-3}" text-anchor="end" font-size="11" fill="var(--bad)">${lim.txt}</text>` : ""}
+      ${lims.map(l => `<line x1="${Lm}" x2="${W-R}" y1="${Y(l.v)}" y2="${Y(l.v)}" stroke="${l.col||"var(--bad)"}" stroke-dasharray="3 3"/><text x="${W-R}" y="${Y(l.v)-3}" text-anchor="end" font-size="11" fill="${l.col||"var(--bad)"}">${l.txt}</text>`).join("")}
       ${rf.length > 1 ? `<polyline fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4" points="${pl(p.filter(x => x.ref?.[k] != null), x => x.ref[k])}"/>` : ""}
       <polyline fill="none" stroke="${col}" stroke-width="2" points="${pl(p, x => x[k])}"/>
       <text x="${Lm}" y="${H-4}" font-size="11" fill="var(--muted)">${fdia(p[0].t)}</text><text x="${W-R}" y="${H-4}" text-anchor="end" font-size="11" fill="var(--muted)">${fdia(p[p.length-1].t)}</text>
     </svg>
-    <div class="ley"><span><i style="border-color:${col}"></i>Batería</span><span><i style="border-color:var(--muted);border-top-style:dashed"></i>${refTxt}</span>${lv != null ? `<span><i style="border-color:var(--bad);border-top-style:dotted"></i>${lim.ley}</span>` : ""}${mk.length ? `<span style="color:var(--accent)">↻ reemplazo</span>` : ""}</div></div>`;
+    <div class="ley"><span><i style="border-color:${col}"></i>Batería</span><span><i style="border-color:var(--muted);border-top-style:dashed"></i>${refTxt}</span>${lims.map(l => `<span><i style="border-color:${l.col||"var(--bad)"};border-top-style:dotted"></i>${l.ley}</span>`).join("")}${mk.length ? `<span style="color:var(--accent)">↻ reemplazo</span>` : ""}</div></div>`;
 }
 function bateria(){
   const a = A.get(sel), box = $("#bat");
   const b = a && a.bats.find(x => x.n === selBat);
   if (!b){ box.innerHTML = `<span class="muted small">Toca una batería del mapa para ver su detalle, sus gráficas y registrar un reemplazo.</span>`; return; }
   const col = {ok:"var(--ok)", warn:"var(--warn)", bad:"var(--bad)", na:"var(--na)"}[b.est];
-  const s = b.serie, refR = b.base || s[s.length-1]?.ref?.r;
+  const s = b.serie, refR = b.base || s[s.length-1]?.ref?.r, F = fichaDe(a.clave), lr = limR(F);
+  // con referencia del fabricante: las dos líneas de la matriz en mΩ; sin ella, Advertencia sobre la línea base o la mediana
+  const limRes = F.rRef ? [{v:F.rRef*(1+lr.w), txt:fx(F.rRef*(1+lr.w),2), ley:`Advertencia (${fx(F.rRef*(1+lr.w),2)} mΩ)`, col:"var(--warn)"},
+                           {v:F.rRef*(1+lr.b), txt:fx(F.rRef*(1+lr.b),2), ley:`Falla (${fx(F.rRef*(1+lr.b),2)} mΩ)`}]
+    : refR ? {v:refR*(1+lr.w), txt:"+"+Math.round(lr.w*100)+" %", ley:`Advertencia (+${Math.round(lr.w*100)} % de ${b.base ? "su línea base" : "la mediana"})`, col:"var(--warn)"} : null;
   const tMax = Math.max(...s.map(x => x.tc ?? -Infinity));
   const reps = reemplazos.filter(r => r.clave === a.clave && r.n === b.n).sort((x, y) => y.fecha.localeCompare(x.fecha));
   box.innerHTML = `<h3>Batería ${b.n} <span class="tag t-${b.est}">${ICON[b.est]} ${TXT[b.est]}</span></h3>
@@ -545,7 +558,7 @@ function bateria(){
     <div class="graf">
       ${mini({pts:s, k:"v", titulo:"Voltaje", unidad:"V", dec:3, col, refTxt:"Mediana del banco", marcas:reps.map(r => r.fecha)})}
       ${mini({pts:s, k:"r", titulo:"Resistencia interna", unidad:"mΩ", dec:3, col, refTxt:"Mediana del banco", marcas:reps.map(r => r.fecha),
-        lim: refR ? {v:refR*(1+L.rWarn), txt:"+"+Math.round(L.rWarn*100)+" %", ley:`Vigilar (+${Math.round(L.rWarn*100)} % de ${b.base ? "su línea base" : "la mediana"})`} : null})}
+        lim: limRes})}
       ${mini({pts:s, k:"tc", titulo:"Temperatura", unidad:"°C", dec:1, col, refTxt:"Promedio del banco", marcas:reps.map(r => r.fecha),
         lim: tMax > L.tWarn - 5 ? {v:L.tWarn, txt:L.tWarn+" °C", ley:`Vigilar (${L.tWarn} °C)`} : null})}
     </div>
@@ -555,7 +568,7 @@ function bateria(){
       ${reps.length ? `<ul class="f small">${reps.map(r => `<li>↻ ${fdia(r.fecha)}${r.modelo ? ` · ${r.modelo}` : ""}${r.serie ? ` · serie ${esc(r.serie)}` : ""}${r.nota ? ` · ${esc(r.nota)}` : ""} <button class="linkbtn" data-borrarrep="${r.id}">Quitar</button></li>`).join("")}</ul>` : `<p class="small muted" style="margin:0 0 6px">Sin reemplazos registrados.</p>`}
       <div class="row small">
         <label>Fecha <input class="f" type="date" id="rFecha" value="${new Date().toISOString().slice(0,10)}"></label>
-        <label>Modelo <select id="rModelo">${Object.entries(cfg.modelos).map(([k, m]) => `<option value="${k}"${k===a.mod?" selected":""}>${k} · ${esc(m.nombre||"")}</option>`).join("")}</select></label>
+        <label>Modelo <select id="rModelo" style="max-width:220px">${Object.entries(cfg.modelos).map(([k, m]) => `<option value="${k}"${k===a.mod?" selected":""}>${k} · ${esc(m.nombre||"")}</option>`).join("")}</select></label>
         <label>Serie <input class="f" id="rSerie" placeholder="opcional" style="width:130px"></label>
         <label>Nota <input class="f" id="rNota" placeholder="opcional" style="width:160px"></label>
         <button class="btn sec" id="rGuardar">Registrar reemplazo</button>
