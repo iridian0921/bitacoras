@@ -163,7 +163,8 @@ svg.sp{width:100%;max-width:520px;height:auto;display:block}
         <table class="crit" style="margin-top:6px"><thead><tr><th>Modelo</th><th>Referencia</th><th>Normal</th><th>Advertencia</th><th>Falla</th></tr></thead><tbody id="matrizR"></tbody></table>
         Los mismos porcentajes se aplican contra la línea base y la mediana del banco. En cada banco puedes cambiar la referencia de la ficha por la <b>referencia real</b>: el promedio de sus baterías sanas en una medición (lo ideal, 72 h después de la puesta en servicio, ya estable en flotación).
         <b>Confirmación:</b> Gexia exporta un dato por día, así que el retardo de 5–10 s se configura en Gexia; aquí una Falla nueva se muestra como Advertencia "por confirmar" hasta que la siguiente medición la repita. <b>Histéresis:</b> para salir de una alarma la resistencia tiene que bajar 2 puntos debajo del umbral. <b>Temperatura:</b> la resistencia sube cuando la batería está fría; con un coeficiente del fabricante (% por °C) se lleva a 25 °C antes de comparar (apagado de inicio). Además, si sube <b>10 % o más en 30 días</b>, se marca Vigilar aunque siga en Normal. Tendencia óhmica según IEEE 1188 (mantenimiento de VRLA) e IEEE 1491 (monitoreo); los umbrales se ajustan por modelo abajo.</td></tr>
-      <tr><td>Voltaje de flotación</td><td>Por batería, contra la mediana del banco: <b>más de 0.25 V Vigilar</b>, <b>más de 0.60 V Crítico</b> (~0.1 V por celda: celda en corto o sulfatada). Por banco, el promedio por celda (voltaje total ÷ celdas) debe quedar en el rango de flotación de la ficha.</td></tr>
+      <tr><td>Voltaje de flotación</td><td>Por batería, contra la mediana del banco: <b>más de 0.25 V Vigilar</b>, <b>más de 0.60 V Crítico</b> (~0.1 V por celda: celda en corto o sulfatada). Por banco, el promedio por celda (voltaje total ÷ celdas) debe quedar en el rango de flotación de la ficha (a 25 °C). Si la ficha trae compensación por temperatura (Ritar HR12-520W: −3 mV/°C/celda), el rango se corre a la temperatura promedio del banco: más frío, más voltaje.</td></tr>
+      <tr><td>Vida de diseño</td><td>Con la fecha de instalación del modelo (o la del reemplazo), al llegar al <b>80 % de la vida de diseño</b> se marca Vigilar para planear el reemplazo (IEEE 1188). CSB HRL12540W: 10 años en standby a 25 °C; Ritar HR12-520W: 15 años en flotación.</td></tr>
       <tr><td>Temperatura</td><td><b>Más de 30 °C o 3 °C arriba del promedio del banco: Vigilar</b>; <b>más de 35 °C: Crítico</b>. Referencia 25 °C: la vida de una VRLA se reduce a la mitad por cada ~8–10 °C arriba (IEEE 1188).</td></tr>
       <tr><td>Conexiones</td><td>Contra la mediana de las conexiones del mismo tipo en el banco: <b>+20 % Vigilar</b> (limpiar y reapretar, IEEE 1188), <b>+50 % Crítico</b>.</td></tr>
       <tr><td>Corriente de flotación</td><td>Más del doble de la mediana de los bancos: <b>Vigilar</b> (posible batería en falla o riesgo térmico, IEEE 1491).</td></tr>
@@ -192,12 +193,13 @@ const vivo = x => x != null && x > 0.5;
 
 /* ===== modelos, asignación por banco y límites (punto 5) ===== */
 /* Catálogo según el levantamiento de modelos (07/10/26). Flotación por celda = placa ÷ 6 celdas.
+   Fichas técnicas (08/10/26): CSB HRL12540W (rev. 05/31/24) y Ritar HR12-520W: resistencia, torque, vida de diseño y compensación de flotación.
    Resistencia: matriz de umbrales a 25 °C (08/10/26): referencia del fabricante, Advertencia arriba de +30 %, Falla arriba de +40 %. */
 const MODELOS_DEF = {
   // placas: M1 flotación 13.6 ± 0.1 V; M2 13.5–13.8 V; M3 13.6–13.8 V (todas a 25 °C, 6 celdas)
-  M1:{nombre:"EnerSys DataSafe HX 12HX540-FR", potencia:"540 W/celda, 15 min", ah:null, rRef:2.60, rAdv:30, rFalla:40, vMin:2.25, vMax:2.283, celdas:6, torque:"6.8 N·m (60 in·lb)", instalacion:""},
-  M2:{nombre:"CSB HRL12540W FR", potencia:"540 W/celda a 1.67 V, 15 min", ah:null, rRef:2.60, rAdv:30, rFalla:40, vMin:2.25, vMax:2.30, celdas:6, torque:"", instalacion:""},
-  M3:{nombre:"Ritar HR12-520W", potencia:"520 W/celda, 15 min", ah:145, rRef:4.50, rAdv:30, rFalla:40, vMin:2.267, vMax:2.30, celdas:6, torque:"", instalacion:""}
+  M1:{nombre:"EnerSys DataSafe HX 12HX540-FR", potencia:"540 W/celda, 15 min", ah:null, rRef:2.60, rAdv:30, rFalla:40, vMin:2.25, vMax:2.283, vTc:null, celdas:6, torque:"6.8 N·m (60 in·lb)", vida:null, instalacion:""},
+  M2:{nombre:"CSB HRL12540W FR", potencia:"542 W/celda a 1.67 V, 15 min", ah:null, rRef:2.60, rAdv:30, rFalla:40, vMin:2.25, vMax:2.30, vTc:null, celdas:6, torque:"5.1 ± 1.0 N·m (44.9 lbf·in), M6", vida:10, instalacion:""},
+  M3:{nombre:"Ritar HR12-520W", potencia:"520 W/celda, 15 min", ah:145, rRef:4.50, rAdv:30, rFalla:40, vMin:2.267, vMax:2.30, vTc:-3, celdas:6, torque:"10–12 N·m, M8", vida:15, instalacion:""}
 };
 const ASIGN_DEF = (() => {
   const a = {};
@@ -231,7 +233,7 @@ const CAMPOS = [
   ["L","iFact","Corriente de flotación: Vigilar si es N veces la mediana de bancos del mismo modelo"],["L","rizPct","Rizado: Vigilar arriba de (% del voltaje del banco)"],
   ["L","rDias","Monitoreo: resistencia sin actualizar más de (días)"],["L","sumaPct","Monitoreo: suma de voltajes vs banco, diferencia máx. (%)"]
 ];
-const COLM = [["nombre","Marca y modelo","text"],["potencia","Potencia","text"],["ah","Ah","number"],["rRef","R ref. (mΩ)","number"],["rAdv","R Advertencia (+%)","number"],["rFalla","R Falla (+%)","number"],["vMin","Flot. mín. V/celda","number"],["vMax","Flot. máx. V/celda","number"],["celdas","Celdas","number"],["torque","Torque","text"],["instalacion","Instalación","date"]];
+const COLM = [["nombre","Marca y modelo","text"],["potencia","Potencia","text"],["ah","Ah","number"],["rRef","R ref. (mΩ)","number"],["rAdv","R Advertencia (+%)","number"],["rFalla","R Falla (+%)","number"],["vMin","Flot. mín. V/celda","number"],["vMax","Flot. máx. V/celda","number"],["vTc","Comp. flot. mV/°C/celda","number"],["celdas","Celdas","number"],["torque","Torque","text"],["vida","Vida diseño (años)","number"],["instalacion","Instalación","date"]];
 function pintarForm(){
   $("#matrizR").innerHTML = Object.values(cfg.modelos).map(m => { const lr = limR(m), r = m.rRef;
     return `<tr><td>${esc(m.nombre)}</td>${r ? `<td>${fx(r,2)} mΩ</td><td>≤ ${fx(r*(1+lr.w),2)} mΩ</td><td>${fx(r*(1+lr.w),2)}–${fx(r*(1+lr.b),2)} mΩ</td><td>&gt; ${fx(r*(1+lr.b),2)} mΩ</td>` : `<td colspan="4">Sin referencia: solo línea base y mediana (+${Math.round(lr.w*100)} % / +${Math.round(lr.b*100)} %)</td>`}</tr>`; }).join("");
@@ -248,7 +250,7 @@ $("#guardarCfg").onclick = () => {
   guardarCfg(); L = cfg.L; $("#cfgSt").textContent = "Guardado."; pintarForm(); todo();
 };
 $("#defCfg").onclick = () => { cfg.L = {...DEF.L}; cfg.asign = {...ASIGN_DEF};
-  for (const [k, m] of Object.entries(MODELOS_DEF)) if (cfg.modelos[k]) for (const c of ["rRef","rAdv","rFalla","vMin","vMax"]) cfg.modelos[k][c] = m[c]; pintarForm(); $("#cfgSt").textContent = "Límites, umbrales de resistencia por modelo y asignación del levantamiento cargados: toca Guardar para aplicarlos."; };
+  for (const [k, m] of Object.entries(MODELOS_DEF)) if (cfg.modelos[k]) for (const c of ["rRef","rAdv","rFalla","vMin","vMax","vTc","torque","vida"]) cfg.modelos[k][c] = m[c]; pintarForm(); $("#cfgSt").textContent = "Límites, umbrales de resistencia por modelo y asignación del levantamiento cargados: toca Guardar para aplicarlos."; };
 
 const NIVEL = {ok:0, na:1, warn:2, bad:3};
 const peor = (a, b) => NIVEL[b] > NIVEL[a] ? b : a;
@@ -408,6 +410,8 @@ function analizar(B, ctx, mes){
     if (tend != null && tend < -0.05 && est !== "bad"){ m.push(`El voltaje bajó ${fx(-tend,3)} V en el mes`); est = peor(est, "warn"); }
     const desde = rep ? rep.fecha : F.instalacion;
     const edad = desde ? (new Date(hoy) - new Date(desde)) / (365.25*DIA) : null;
+    // IEEE 1188: planear el reemplazo al acercarse al fin de la vida de diseño
+    if (rep && edad != null && F.vida && edad >= 0.8 * F.vida){ est = peor(est, "warn"); m.push(`Edad ${fx(edad,1)} años: ${edad >= F.vida ? "pasó" : "llega al 80 % de"} su vida de diseño (${F.vida} años); planear el reemplazo`); }
     const serie = hist.map((f, j) => ({t:f.t, v:vivo(f.bat[i]?.v) ? f.bat[i].v : null, r:vivo(f.bat[i]?.r) ? f.bat[i].r : null, tc:vivo(f.bat[i]?.t) ? f.bat[i].t : null, ref:refDia[j]}));
     bats.push({n:i, v, r, t, base, dBase, dMed, dRef, dV: v != null && vMed ? v - vMed : null, tend, est, m, serie, rep, edad, esperando,
       score: NIVEL[est]*1000 + Math.max(dBase ?? 0, dMed ?? 0, dRef ?? 0)*100 + Math.abs(v != null && vMed ? v - vMed : 0)*50});
@@ -443,8 +447,15 @@ function analizar(B, ctx, mes){
   const iMed = ctx.iMed[mod];
   if (tot.i != null && iMed && ctx.nMod[mod] >= 3 && tot.i > iMed * L.iFact){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Corriente de flotación ${fx(tot.i,2)} A, ${fx(tot.i/iMed,1)} veces la mediana de los bancos ${mod} (${fx(iMed,2)} A).`}); }
   if (tot.riz != null && vivo(tot.v) && tot.riz/10/tot.v > L.rizPct){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Rizado ${Math.round(tot.riz)} mV = ${fx(tot.riz/10/tot.v,2)} % del voltaje del banco (límite ${L.rizPct} %).`}); }
+  // vida de diseño del banco (instalación del modelo); las baterías reemplazadas se evalúan por su fecha
+  const edadB = F.instalacion ? (new Date(hoy) - new Date(F.instalacion)) / (365.25*DIA) : null;
+  if (edadB != null && F.vida && edadB >= 0.8 * F.vida){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Banco con ${fx(edadB,1)} años: ${edadB >= F.vida ? "pasó" : "llega al 80 % de"} la vida de diseño de ${mod} (${F.vida} años); planear el reemplazo${bats.some(b => b.rep) ? " (sin contar las baterías reemplazadas)" : ""}.`}); }
   const vCelda = vivo(tot.v) ? tot.v / (n * celdas) : null;
-  if (vCelda != null && ((F.vMin && vCelda < F.vMin) || (F.vMax && vCelda > F.vMax))){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Flotación promedio ${fx(vCelda,3)} V/celda, fuera del rango de ${mod} (${F.vMin}–${F.vMax}).`}); }
+  // rango de flotación de la ficha (a 25 °C), corrido por la compensación del fabricante a la temperatura promedio del banco
+  const dT = F.vTc && tProm != null ? tProm - 25 : 0, cT = dT ? F.vTc/1000 * dT : 0;
+  const vMinT = F.vMin ? F.vMin + cT : null, vMaxT = F.vMax ? F.vMax + cT : null;
+  const rangoTxt = `${fx(vMinT,3)}–${fx(vMaxT,3)}${cT ? ` a ${fx(tProm,1)} °C, con ${F.vTc} mV/°C/celda` : ""}`;
+  if (vCelda != null && ((vMinT && vCelda < vMinT) || (vMaxT && vCelda > vMaxT))){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Flotación promedio ${fx(vCelda,3)} V/celda, fuera del rango de ${mod} (${rangoTxt}).`}); }
   conMal.forEach(c => { estB = peor(estB, c.est); hb.push({est:c.est, t:`Conexión ${c.k}: ${fx(c.x,3)} mΩ (${pct(c.d)} vs las de su tipo). Limpiar y reapretar${F.torque ? " a " + F.torque : ""}.`}); });
   bats.filter(b => b.est === "bad" || b.est === "warn").sort((a, b) => NIVEL[b.est]-NIVEL[a.est] || a.n-b.n)
     .forEach(b => { estB = peor(estB, b.est); hb.push({est:b.est, t:`Batería ${b.n}: ${b.m.join("; ")}.`}); });
