@@ -69,7 +69,7 @@ svg.sp{width:100%;height:auto;display:block}
 .form{display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:8px 10px;align-items:center;font-size:15px;max-width:640px}
 .form input{width:100%}
 #tMed input,#tMed select{width:100%;min-width:90px;font-size:14px;padding:6px}
-#tMed input[data-k="nombre"]{min-width:220px}
+#tMed input[data-k="nombre"]{min-width:220px}#tMed input[data-k="equipo"]{min-width:420px}
 .hidden{display:none!important}
 .crit td:first-child{font-weight:600;white-space:nowrap}
 .eval li .tag{margin-right:4px}
@@ -125,7 +125,7 @@ svg.sp{width:100%;height:auto;display:block}
   <h2 id="sMed">Medidores y límites</h2>
   <div class="card tw">
     <h3>Medidores</h3>
-    <p class="small muted" style="margin:0 0 6px">La corriente nominal da el % de carga. La relación Isc/IL (corriente de cortocircuito del punto entre la demanda máxima) fija el límite de THD de corriente de IEEE 519; si no la conoces, déjala vacía y se usa el límite más estricto (5 %).</p>
+    <p class="small muted" style="margin:0 0 6px">La corriente nominal da el % de carga: si usas la del interruptor (por ejemplo 1250 A del 3AH3165-2), el % sale bajo porque el límite real suele ser el cable o el transformador; usa el menor que conozcas. La relación Isc/IL (corriente de cortocircuito del punto entre la demanda máxima) fija el límite de THD de corriente de IEEE 519; si no la conoces, déjala vacía y se usa el límite más estricto (5 %).</p>
     <table id="tMed"></table>
     <div class="row" style="margin-top:8px"><button class="btn sec" id="addMed">Agregar medidor</button></div>
   </div>
@@ -146,7 +146,7 @@ svg.sp{width:100%;height:auto;display:block}
       <tr><td>Tensión</td><td>Contra la nominal del medidor (13,800 V), por cada par de fases. ANSI C84.1 para media tensión: fuera del <b>rango A (13,460–14,490 V, −2.5 % / +5 %): Vigilar</b>; fuera del <b>rango B (13,110–14,520 V, −5 % / +5.2 %): Crítico</b>.</td></tr>
       <tr><td>Desbalance de tensión</td><td>Máxima desviación de las tensiones L-L contra su promedio (NEMA). <b>Más de 2 %: Vigilar</b>; <b>más de 3 %: Crítico</b> (ANSI C84.1 recomienda menos de 3 %; arriba de 2 % los motores se calientan).</td></tr>
       <tr><td>Desplazamiento de neutro</td><td>Cada tensión L-N contra la que le toca (promedio L-L ÷ √3). Con L-L balanceada, una diferencia grande indica que el neutro del sistema se movió respecto a tierra: aislamiento degradado o fuga a tierra incipiente, un TP o su fusible, o la capacitancia del sistema si es no aterrizado. <b>Más de 3 %: Vigilar</b>; <b>más de 10 %: Crítico</b> (una falla a tierra franca lo lleva hasta 73 %).</td></tr>
-      <tr><td>Corriente</td><td>Desbalance (máxima desviación contra el promedio): <b>más de 10 % Vigilar</b>, <b>más de 20 % Crítico</b>; solo se evalúa con más de 10 A. Carga contra la corriente nominal del alimentador: <b>más de 80 % Vigilar</b>, <b>más de 100 % Crítico</b>. En alimentadores de 3 hilos la corriente de neutro no aplica.</td></tr>
+      <tr><td>Corriente</td><td>Desbalance (máxima desviación contra el promedio): <b>más de 10 % Vigilar</b>, <b>más de 20 % Crítico</b>; solo se evalúa con más de 10 A. Carga contra la corriente nominal del alimentador (la menor entre interruptor, cable y transformador): <b>más de 80 % Vigilar</b>, <b>más de 100 % Crítico</b>. En alimentadores de 3 hilos la corriente de neutro no aplica.</td></tr>
       <tr><td>Frecuencia</td><td><b>Fuera de 59.8–60.2 Hz: Vigilar</b> (rango normal del Código de Red); <b>fuera de 59.5–60.5 Hz: Crítico</b>.</td></tr>
       <tr><td>Factor de potencia</td><td>FP real (incluye armónicos). <b>Menor de 0.95: Vigilar</b> (mínimo del Código de Red para centros de carga); <b>menor de 0.90: Crítico</b> (CFE cobra cargo por FP bajo 0.90). Un FP adelantado (Ade) se reporta para revisar bancos de capacitores o filtros.</td></tr>
       <tr><td>THD de tensión</td><td>El mayor de L-N y L-L. IEEE 519-2014 de 1 a 69 kV: <b>5 % total</b>. <b>Arriba de 4 %: Vigilar</b>; <b>arriba de 5 %: Crítico</b>.</td></tr>
@@ -197,7 +197,8 @@ const EJEMPLO = {res_v:"13670", res_i:"86", res_kw:"2012", iR:"84", iS:"88", iT:
 const KEY = "calidad-electrica-muestra";
 const DEF_L = {aMin:-2.464, aMax:5, bMin:-5, bMax:5.218, desV:2, desVBad:3, despN:3, despNBad:10, desI:10, desIBad:20, iMin:10, carga:80, cargaBad:100,
   hzMin:59.8, hzMax:60.2, hzMinBad:59.5, hzMaxBad:60.5, fp:0.95, fpBad:0.90, thdV:5, thdVWarn:4, thdIWarnPct:80, kWarn:4, tolV:1, tolI:3, tolP:3, tolFP:0.02};
-const MED_DEF = [{id:"m1", nombre:"Alimentador 2 Emergente", vn:13800, in:null, isc:null, hilos:3}];
+const MED_DEF = [{id:"m1", nombre:"Alimentador 2 Emergente", vn:13800, in:1250, isc:null, hilos:3,
+  equipo:"K2 · Interruptor Siemens 3AH3165-2 (2004, serie BI/0351): 15 kV, 1250 A, 31.5 kA 3 s, BIL 95 kV, O-0.3 s-CO-3 min-CO"}];
 const leer = () => { try{ return JSON.parse(localStorage.getItem(KEY) || "null") || {}; }catch{ return {}; } };
 let D = leer();
 D = {med:D.med?.length ? D.med : MED_DEF.map(m => ({...m})), lect:D.lect || [], L:{...DEF_L, ...(D.L || {})}};
@@ -255,7 +256,7 @@ function evaluar(r, m){
   if (m.in && (iProm != null)){
     const iMax = Math.max(...is.filter(x => x != null), iProm); c.carga = iMax / m.in;
     const e = c.carga*100 > L.cargaBad ? "bad" : c.carga*100 > L.carga ? "warn" : "ok";
-    add(e, `Carga ${fx(c.carga*100,0)} % de ${fx(m.in,0)} A nominales (fase más cargada ${fx(iMax,0)} A).`);
+    add(e, `Carga ${fx(c.carga*100,c.carga < 0.1 ? 1 : 0)} % de ${fx(m.in,0)} A nominales (fase más cargada ${fx(iMax,0)} A).`);
   }
   if (m.hilos === 4 && g("iN") != null && iProm) { const rn = g("iN") / iProm; if (rn > 0.5) add("warn", `Corriente de neutro ${fx(g("iN"),0)} A, ${fx(rn*100,0)} % del promedio de fases (cargas no lineales o desbalance).`); }
   // frecuencia
@@ -371,7 +372,7 @@ function detalle(){
   const m = medDe(sel); if (!m) return;
   const ls = lectDe(m.id), u = ls[ls.length-1];
   $("#detT").textContent = m.nombre;
-  $("#detSub").textContent = `${fx(m.vn,0)} V nominal · ${m.hilos} hilos${m.in ? ` · ${fx(m.in,0)} A nominales` : ""}${u ? ` · última lectura ${fecha(u.t)}${u.manual ? " ✎" : ""}` : ""}`;
+  $("#detSub").textContent = `${fx(m.vn,0)} V nominal · ${m.hilos} hilos${m.in ? ` · ${fx(m.in,0)} A nominales` : ""}${m.equipo ? ` · ${m.equipo}` : ""}${u ? ` · última lectura ${fecha(u.t)}${u.manual ? " ✎" : ""}` : ""}`;
   if (!u){ $("#kpis").innerHTML = ""; $("#detEval").innerHTML = `<p class="muted">Sin lecturas de este medidor.</p>`; return; }
   const ev = evaluar(u.v, m), c = ev.c, g = k => num(u.v[k]);
   const k = (l, v, s="", cls="") => `<div class="kpi ${cls}"><div class="l">${l}</div><div class="v">${v}</div>${s ? `<div class="s">${s}</div>` : ""}</div>`;
@@ -422,14 +423,14 @@ $("#csv").onclick = () => {
 };
 
 /* ===== medidores y límites ===== */
-const COLS = [["nombre","Nombre","text"],["vn","V nominal L-L","number"],["in","I nominal (A)","number"],["isc","Isc/IL","number"],["hilos","Hilos","select"]];
+const COLS = [["nombre","Nombre","text"],["vn","V nominal L-L","number"],["in","I nominal (A)","number"],["isc","Isc/IL","number"],["hilos","Hilos","select"],["equipo","Equipo / placa","text"]];
 function pintarMed(){
   $("#tMed").innerHTML = `<thead><tr>${COLS.map(c => `<th>${c[1]}</th>`).join("")}<th></th></tr></thead><tbody>` + D.med.map(m => `<tr>${COLS.map(([k, , ty]) => `<td>${ty === "select"
       ? `<select data-mid="${m.id}" data-k="${k}"><option${m.hilos === 3 ? " selected" : ""}>3</option><option${m.hilos === 4 ? " selected" : ""}>4</option></select>`
       : `<input class="f" data-mid="${m.id}" data-k="${k}" type="${ty}" ${ty === "number" ? 'step="any" inputmode="decimal"' : ""} value="${esc(m[k] ?? "")}">`}</td>`).join("")}<td>${D.med.length > 1 ? `<button class="linkbtn" data-quitar="${m.id}">Quitar</button>` : ""}</td></tr>`).join("") + `</tbody>`;
   document.querySelectorAll("#tMed [data-mid]").forEach(x => x.onchange = () => {
     const m = medDe(x.dataset.mid), k = x.dataset.k;
-    m[k] = k === "nombre" ? (x.value.trim() || m.nombre) : x.value === "" ? null : Number(x.value);
+    m[k] = k === "nombre" ? (x.value.trim() || m.nombre) : k === "equipo" ? x.value.trim() : x.value === "" ? null : Number(x.value);
     if (k === "vn" && !m.vn) m.vn = 13800;
     guardar(); todo();
   });
