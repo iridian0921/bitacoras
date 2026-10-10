@@ -125,7 +125,7 @@ svg.sp{width:100%;height:auto;display:block}
   <h2 id="sMed">Medidores y límites</h2>
   <div class="card tw">
     <h3>Medidores</h3>
-    <p class="small muted" style="margin:0 0 6px">La corriente nominal da el % de carga: si usas la del interruptor (por ejemplo 1250 A del 3AH3165-2), el % sale bajo porque el límite real suele ser el cable o el transformador; usa el menor que conozcas. La relación Isc/IL (corriente de cortocircuito del punto entre la demanda máxima) fija el límite de THD de corriente de IEEE 519; si no la conoces, déjala vacía y se usa el límite más estricto (5 %).</p>
+    <p class="small muted" style="margin:0 0 6px">La corriente nominal da el % de carga: usa la menor entre el primario de los TC (300 A en este tablero), el cable y el transformador; la del interruptor (1250 A) da un % engañosamente bajo. La relación Isc/IL (corriente de cortocircuito del punto entre la demanda máxima) fija el límite de THD de corriente de IEEE 519; si no la conoces, déjala vacía y se usa el límite más estricto (5 %).</p>
     <table id="tMed"></table>
     <div class="row" style="margin-top:8px"><button class="btn sec" id="addMed">Agregar medidor</button></div>
   </div>
@@ -143,10 +143,10 @@ svg.sp{width:100%;height:auto;display:block}
   <h2 id="sCri">Criterios</h2>
   <div class="card tw">
     <table class="crit"><tbody>
-      <tr><td>Tensión</td><td>Contra la nominal del medidor (13,800 V), por cada par de fases. ANSI C84.1 para media tensión: fuera del <b>rango A (13,460–14,490 V, −2.5 % / +5 %): Vigilar</b>; fuera del <b>rango B (13,110–14,520 V, −5 % / +5.2 %): Crítico</b>.</td></tr>
+      <tr><td>Tensión</td><td>Contra la nominal del medidor, por cada par de fases, con los rangos de tensión de servicio de ANSI C84.1. Para <b>13.2 kV</b> (barra 8BK20 del tablero de acometida emergente): fuera del <b>rango A (12,870–13,860 V): Vigilar</b>; fuera del <b>rango B (12,540–13,970 V): Crítico</b>. Para 13.8 kV: A 13,460–14,490 V, B 13,110–14,520 V. Otros nominales usan los porcentajes de Límites.</td></tr>
       <tr><td>Desbalance de tensión</td><td>Máxima desviación de las tensiones L-L contra su promedio (NEMA). <b>Más de 2 %: Vigilar</b>; <b>más de 3 %: Crítico</b> (ANSI C84.1 recomienda menos de 3 %; arriba de 2 % los motores se calientan).</td></tr>
       <tr><td>Desplazamiento de neutro</td><td>Cada tensión L-N contra la que le toca (promedio L-L ÷ √3). Con L-L balanceada, una diferencia grande indica que el neutro del sistema se movió respecto a tierra: aislamiento degradado o fuga a tierra incipiente, un TP o su fusible, o la capacitancia del sistema si es no aterrizado. <b>Más de 3 %: Vigilar</b>; <b>más de 10 %: Crítico</b> (una falla a tierra franca lo lleva hasta 73 %).</td></tr>
-      <tr><td>Corriente</td><td>Desbalance (máxima desviación contra el promedio): <b>más de 10 % Vigilar</b>, <b>más de 20 % Crítico</b>; solo se evalúa con más de 10 A. Carga contra la corriente nominal del alimentador (la menor entre interruptor, cable y transformador): <b>más de 80 % Vigilar</b>, <b>más de 100 % Crítico</b>. En alimentadores de 3 hilos la corriente de neutro no aplica.</td></tr>
+      <tr><td>Corriente</td><td>Desbalance (máxima desviación contra el promedio): <b>más de 10 % Vigilar</b>, <b>más de 20 % Crítico</b>; solo se evalúa con más de 10 A. Carga contra la corriente nominal del alimentador (la menor entre TC, cable, transformador e interruptor): <b>más de 80 % Vigilar</b>, <b>más de 100 % Crítico</b>. En alimentadores de 3 hilos la corriente de neutro no aplica.</td></tr>
       <tr><td>Frecuencia</td><td><b>Fuera de 59.8–60.2 Hz: Vigilar</b> (rango normal del Código de Red); <b>fuera de 59.5–60.5 Hz: Crítico</b>.</td></tr>
       <tr><td>Factor de potencia</td><td>FP real (incluye armónicos). <b>Menor de 0.95: Vigilar</b> (mínimo del Código de Red para centros de carga); <b>menor de 0.90: Crítico</b> (CFE cobra cargo por FP bajo 0.90). Un FP adelantado (Ade) se reporta para revisar bancos de capacitores o filtros.</td></tr>
       <tr><td>THD de tensión</td><td>El mayor de L-N y L-L. IEEE 519-2014 de 1 a 69 kV: <b>5 % total</b>. <b>Arriba de 4 %: Vigilar</b>; <b>arriba de 5 %: Crítico</b>.</td></tr>
@@ -195,10 +195,12 @@ const EJEMPLO = {res_v:"13670", res_i:"86", res_kw:"2012", iR:"84", iS:"88", iT:
 
 /* ===== configuración ===== */
 const KEY = "calidad-electrica-muestra";
-const DEF_L = {aMin:-2.464, aMax:5, bMin:-5, bMax:5.218, desV:2, desVBad:3, despN:3, despNBad:10, desI:10, desIBad:20, iMin:10, carga:80, cargaBad:100,
+const DEF_L = {aMin:-2.5, aMax:5, bMin:-5, bMax:5.8, desV:2, desVBad:3, despN:3, despNBad:10, desI:10, desIBad:20, iMin:10, carga:80, cargaBad:100,
   hzMin:59.8, hzMax:60.2, hzMinBad:59.5, hzMaxBad:60.5, fp:0.95, fpBad:0.90, thdV:5, thdVWarn:4, thdIWarnPct:80, kWarn:4, tolV:1, tolI:3, tolP:3, tolFP:0.02};
-const MED_DEF = [{id:"m1", nombre:"Alimentador 2 Emergente", vn:13800, in:1250, isc:null, hilos:3,
-  equipo:"K2 · Interruptor Siemens 3AH3165-2 (2004, serie BI/0351): 15 kV, 1250 A, 31.5 kA 3 s, BIL 95 kV, O-0.3 s-CO-3 min-CO"}];
+/* Tablero de acometida emergente (diagrama unifilar): barra 8BK20 13.2 kV 1250 A 3F 3H 60 Hz, TC 300:5 A, relevador 7SJ6225,
+   medidor PowerLogic CM 3350. I nominal = primario de los TC (300 A): el medidor no ve más allá de su escala. */
+const MED_DEF = [{id:"m1", nombre:"Alimentador 2 Emergente", vn:13200, in:300, isc:null, hilos:3,
+  equipo:"Circuit Monitor CM 3350 · TC 300:5 A · relevador Siemens 7SJ6225 · interruptor 3AH3165-2 (2004, serie BI/0351): 15 kV, 1250 A, 31.5 kA 3 s, BIL 95 kV · barra 8BK20 13.2 kV 1250 A 3F 3H"}];
 const leer = () => { try{ return JSON.parse(localStorage.getItem(KEY) || "null") || {}; }catch{ return {}; } };
 let D = leer();
 D = {med:D.med?.length ? D.med : MED_DEF.map(m => ({...m})), lect:D.lect || [], L:{...DEF_L, ...(D.L || {})}};
@@ -207,6 +209,9 @@ const guardar = () => { try{ localStorage.setItem(KEY, JSON.stringify(D)); retur
 const medDe = id => D.med.find(m => m.id === id);
 let sel = D.med[0]?.id;
 
+/* ANSI C84.1, tabla 1 (tensión de servicio): rangos A y B en volts para los nominales de media tensión comunes en México */
+const ANSI = {13200:{a0:12870, a1:13860, b0:12540, b1:13970}, 13800:{a0:13460, a1:14490, b0:13110, b1:14520}};
+const rango = vn => ANSI[vn] || {a0:vn*(1+L.aMin/100), a1:vn*(1+L.aMax/100), b0:vn*(1+L.bMin/100), b1:vn*(1+L.bMax/100)};
 /* límite de THD de corriente según Isc/IL (IEEE 519-2014, tabla 2, 120 V – 69 kV) */
 const limTHDI = isc => !isc ? 5 : isc < 20 ? 5 : isc < 50 ? 8 : isc < 100 ? 12 : isc < 1000 ? 15 : 20;
 
@@ -224,9 +229,9 @@ function evaluar(r, m){
     const lista = pares.length ? pares : [["Resumen", vLL]];
     const dv = lista.map(([n, v]) => [n, v, v/m.vn - 1]);
     const peorV = dv.reduce((a, b) => Math.abs(b[2]) > Math.abs(a[2]) ? b : a);
-    const fueraB = dv.filter(([, , d]) => d*100 < L.bMin || d*100 > L.bMax), fueraA = dv.filter(([, , d]) => d*100 < L.aMin || d*100 > L.aMax);
-    if (fueraB.length) add("bad", `Tensión ${fueraB.map(([n, v, d]) => `${n} ${fx(v,0)} V (${pct(d)})`).join(", ")}: fuera del rango B de ANSI C84.1 (${fx(m.vn*(1+L.bMin/100),0)}–${fx(m.vn*(1+L.bMax/100),0)} V).`);
-    else if (fueraA.length) add("warn", `Tensión ${fueraA.map(([n, v, d]) => `${n} ${fx(v,0)} V (${pct(d)})`).join(", ")}: fuera del rango A de ANSI C84.1 (${fx(m.vn*(1+L.aMin/100),0)}–${fx(m.vn*(1+L.aMax/100),0)} V).`);
+    const rg = rango(m.vn), fueraB = dv.filter(([, v]) => v < rg.b0 || v > rg.b1), fueraA = dv.filter(([, v]) => v < rg.a0 || v > rg.a1);
+    if (fueraB.length) add("bad", `Tensión ${fueraB.map(([n, v, d]) => `${n} ${fx(v,0)} V (${pct(d)})`).join(", ")}: fuera del rango B de ANSI C84.1 (${fx(rg.b0,0)}–${fx(rg.b1,0)} V).`);
+    else if (fueraA.length) add("warn", `Tensión ${fueraA.map(([n, v, d]) => `${n} ${fx(v,0)} V (${pct(d)})`).join(", ")}: fuera del rango A de ANSI C84.1 (${fx(rg.a0,0)}–${fx(rg.a1,0)} V).`);
     else add("ok", `Tensión L-L ${fx(vLL,0)} V promedio (${pct(vLL/m.vn - 1)} de ${fx(m.vn,0)} V); la más alejada, ${peorV[0]} ${pct(peorV[2])}.`);
   }
   if (c.desV != null){
@@ -392,10 +397,10 @@ function tendencia(){
   const ls = lectDe(m.id).map(x => ({t:x.t, c:evaluar(x.v, m).c}));
   const s = f => ls.map(x => ({t:x.t, v:f(x.c)}));
   const W = "var(--warn)", B = "var(--bad)";
-  const limTHI = limTHDI(m.isc);
+  const limTHI = limTHDI(m.isc), rg = rango(m.vn);
   $("#graf").innerHTML = [
     graf({pts:s(c => c.vLL), titulo:"Tensión L-L promedio", unidad:"V", dec:0, lims:[
-      {v:m.vn*(1+L.aMax/100), txt:"A máx.", col:W, ley:`Rango A ${fx(m.vn*(1+L.aMin/100),0)}–${fx(m.vn*(1+L.aMax/100),0)} V`}, {v:m.vn*(1+L.aMin/100), txt:"A mín.", col:W, ley:`Rango A ${fx(m.vn*(1+L.aMin/100),0)}–${fx(m.vn*(1+L.aMax/100),0)} V`, siempre:true},
+      {v:rg.a1, txt:"A máx.", col:W, ley:`Rango A ${fx(rg.a0,0)}–${fx(rg.a1,0)} V`}, {v:rg.a0, txt:"A mín.", col:W, ley:`Rango A ${fx(rg.a0,0)}–${fx(rg.a1,0)} V`, siempre:true},
       {v:m.vn, txt:"nominal", col:"var(--muted)", siempre:true}]}),
     graf({pts:s(c => c.despN != null ? c.despN*100 : null), titulo:"Desplazamiento de neutro", unidad:"%", dec:1, lims:[{v:L.despN, txt:`${L.despN} %`, col:W, ley:`Vigilar (${L.despN} %)`, siempre:true}, {v:L.despNBad, txt:`${L.despNBad} %`, col:B, ley:`Crítico (${L.despNBad} %)`}]}),
     graf({pts:s(c => c.desV != null ? c.desV*100 : null), titulo:"Desbalance de tensión L-L", unidad:"%", dec:2, lims:[{v:L.desV, txt:`${L.desV} %`, col:W, ley:`Vigilar (${L.desV} %)`, siempre:true}]}),
@@ -431,7 +436,7 @@ function pintarMed(){
   document.querySelectorAll("#tMed [data-mid]").forEach(x => x.onchange = () => {
     const m = medDe(x.dataset.mid), k = x.dataset.k;
     m[k] = k === "nombre" ? (x.value.trim() || m.nombre) : k === "equipo" ? x.value.trim() : x.value === "" ? null : Number(x.value);
-    if (k === "vn" && !m.vn) m.vn = 13800;
+    if (k === "vn" && !m.vn) m.vn = 13200;
     guardar(); todo();
   });
   document.querySelectorAll("[data-quitar]").forEach(b => b.onclick = () => {
@@ -440,9 +445,9 @@ function pintarMed(){
     D.med = D.med.filter(m => m.id !== b.dataset.quitar); D.lect = D.lect.filter(x => x.med !== b.dataset.quitar); guardar(); todo();
   });
 }
-$("#addMed").onclick = () => { const id = "m" + Date.now().toString(36); D.med.push({id, nombre:`Alimentador ${D.med.length + 1}`, vn:13800, in:null, isc:null, hilos:3}); sel = id; guardar(); todo(); };
+$("#addMed").onclick = () => { const id = "m" + Date.now().toString(36); D.med.push({id, nombre:`Alimentador ${D.med.length + 1}`, vn:13200, in:null, isc:null, hilos:3}); sel = id; guardar(); todo(); };
 const FORM = [
-  ["aMin","Tensión rango A, mínimo (%)"],["aMax","Tensión rango A, máximo (%)"],["bMin","Tensión rango B, mínimo (%)"],["bMax","Tensión rango B, máximo (%)"],
+  ["aMin","Tensión rango A, mínimo (%; 13.2 y 13.8 kV usan la tabla ANSI)"],["aMax","Tensión rango A, máximo (%)"],["bMin","Tensión rango B, mínimo (%)"],["bMax","Tensión rango B, máximo (%)"],
   ["desV","Desbalance de tensión: Vigilar (%)"],["desVBad","Desbalance de tensión: Crítico (%)"],["despN","Desplazamiento de neutro: Vigilar (%)"],["despNBad","Desplazamiento de neutro: Crítico (%)"],
   ["desI","Desbalance de corriente: Vigilar (%)"],["desIBad","Desbalance de corriente: Crítico (%)"],["iMin","Evaluar desbalance de corriente desde (A)"],["carga","Carga: Vigilar (% de I nominal)"],["cargaBad","Carga: Crítico (%)"],
   ["hzMin","Frecuencia mínima normal (Hz)"],["hzMax","Frecuencia máxima normal (Hz)"],["hzMinBad","Frecuencia mínima, Crítico (Hz)"],["hzMaxBad","Frecuencia máxima, Crítico (Hz)"],
