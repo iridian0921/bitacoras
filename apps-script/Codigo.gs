@@ -12,12 +12,14 @@ const HOJAS = {
   interruptores: {nombre:"Interruptores", vista:["Fecha","Interruptor","Tablero","I1 (A)","I2 (A)","I3 (A)","IN (A)","Estado","Nota"]},
   equipos: {nombre:"Equipos interruptores", vista:["Identificador","Tablero","Rama","In (A)","Descripción","Línea base"]},
   calidad: {nombre:"Calidad de energía", vista:["Fecha","Medidor","V L-L (V)","I prom (A)","kW","FP","THD V (%)","THD I (%)","Estado","Nota"]},
-  medidores: {nombre:"Medidores calidad", vista:["Identificador","Ubicación","Descripción","V nominal","I nominal (A)","Icc 3F (A)"]}
+  medidores: {nombre:"Medidores calidad", vista:["Identificador","Ubicación","Descripción","V nominal","I nominal (A)","Icc 3F (A)"]},
+  baterias: {nombre:"Reemplazos baterías", vista:["Fecha","Banco","Batería","Modelo","Serie","Nota"]},
+  resumenes: {nombre:"Baterías por mes", vista:["Identificador","Mes","Banco","Modelo","Estado","Reemplazar","Vigilar","Sin lectura","R mediana (mΩ)","V/celda","Hallazgos"]}
 };
 const TECNICAS = ["Capturó","Guardado","Foto","Borrado","rev","id","datos"];
-const POR_BITACORA = {ups:"ups", interruptores:"interruptores", calidad:"calidad"};
+const POR_BITACORA = {ups:"ups", interruptores:"interruptores", calidad:"calidad", baterias:"baterias"};
 /* Bitácoras que comparten su catálogo de equipos, y la pestaña donde va. */
-const EQUIPOS_DE = {interruptores:"equipos", calidad:"medidores"};
+const EQUIPOS_DE = {interruptores:"equipos", calidad:"medidores", baterias:"resumenes"};
 
 function doGet(){
   return json({ok:true, mensaje:"El servidor de las bitácoras está activo. Copia esta dirección en la app (Ajustes → Compartir con el equipo)."});

@@ -107,7 +107,7 @@ textarea{width:100%;min-height:120px;margin-top:10px;font:12px monospace;box-siz
   };
   if (fase2 && !navigator.serviceWorker.controller){
     // refresca la caché del navegador para que la app no vuelva a tomar archivos viejos
-    await Promise.all(["./", "index.html", "ups.html", "interruptores.html", "calidad.html", "diagnostico.html", "comun.css", "comun.js", "sw.js", "manifest.webmanifest"]
+    await Promise.all(["./", "index.html", "ups.html", "interruptores.html", "calidad.html", "baterias.html", "diagnostico.html", "comun.css", "comun.js", "sw.js", "manifest.webmanifest"]
       .map(f => fetch(f, {cache: "reload"}).catch(() => null)));
   }
   $("#copiar").onclick = async () => {
