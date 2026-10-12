@@ -69,7 +69,8 @@ svg.sp{width:100%;height:auto;display:block}
 .form{display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:8px 10px;align-items:center;font-size:15px;max-width:640px}
 .form input{width:100%}
 #tMed input,#tMed select{width:100%;min-width:90px;font-size:14px;padding:6px}
-#tMed input[data-k="nombre"]{min-width:220px}#tMed input[data-k="equipo"]{min-width:420px}
+#tMed input[data-k="nombre"]{min-width:220px}#tMed input[data-k="equipo"],#tMed input[data-k="seguridad"]{min-width:420px}
+.segur{border:2px solid var(--warn);background:var(--warnbg);color:var(--ink);border-radius:8px;padding:8px 10px;font-size:14px;margin:8px 0}
 .hidden{display:none!important}
 .crit td:first-child{font-weight:600;white-space:nowrap}
 .eval li .tag{margin-right:4px}
@@ -90,6 +91,7 @@ svg.sp{width:100%;height:auto;display:block}
       <label class="l">Fecha y hora <input class="f" type="datetime-local" id="cHora"></label>
       <span class="small muted" id="cHoraTxt">Vacío: se toma la hora al guardar.</span>
     </div>
+    <div class="segur hidden" id="cSeg" role="note"></div>
     <p class="small muted" style="margin:8px 0">Captura en el orden de las pantallas del medidor (flechas ▲▼). Puedes escribir decimales con coma, como en la carátula (0,989). Deja en blanco lo que no leíste.</p>
     <div class="pant" id="pant"></div>
     <div class="card" style="margin-bottom:0">
@@ -125,7 +127,7 @@ svg.sp{width:100%;height:auto;display:block}
   <h2 id="sMed">Medidores y límites</h2>
   <div class="card tw">
     <h3>Medidores</h3>
-    <p class="small muted" style="margin:0 0 6px">La corriente nominal da el % de carga: usa la menor entre el primario de los TC (300 A en este tablero), el cable y el transformador; la del interruptor (1250 A) da un % engañosamente bajo. La relación Isc/IL (corriente de cortocircuito del punto entre la demanda máxima) fija el límite de THD de corriente de IEEE 519; si no la conoces, déjala vacía y se usa el límite más estricto (5 %).</p>
+    <p class="small muted" style="margin:0 0 6px">La corriente nominal da el % de carga: usa la menor entre el primario de los TC (300 A en este tablero), el cable y el transformador; la del interruptor (1250 A) da un % engañosamente bajo. La Icc trifásica (etiqueta de arco o estudio de corto circuito) entre la demanda IL fija el límite de THD de corriente de IEEE 519; sin IL se usa la mayor corriente registrada. Sin Icc se usa el límite más estricto (5 %). La columna Seguridad se muestra al capturar.</p>
     <table id="tMed"></table>
     <div class="row" style="margin-top:8px"><button class="btn sec" id="addMed">Agregar medidor</button></div>
   </div>
@@ -150,7 +152,7 @@ svg.sp{width:100%;height:auto;display:block}
       <tr><td>Frecuencia</td><td><b>Fuera de 59.8–60.2 Hz: Vigilar</b> (rango normal del Código de Red); <b>fuera de 59.5–60.5 Hz: Crítico</b>.</td></tr>
       <tr><td>Factor de potencia</td><td>FP real (incluye armónicos). <b>Menor de 0.95: Vigilar</b> (mínimo del Código de Red para centros de carga); <b>menor de 0.90: Crítico</b> (CFE cobra cargo por FP bajo 0.90). Un FP adelantado (Ade) se reporta para revisar bancos de capacitores o filtros.</td></tr>
       <tr><td>THD de tensión</td><td>El mayor de L-N y L-L. IEEE 519-2014 de 1 a 69 kV: <b>5 % total</b>. <b>Arriba de 4 %: Vigilar</b>; <b>arriba de 5 %: Crítico</b>.</td></tr>
-      <tr><td>THD de corriente</td><td>IEEE 519-2014 (tabla 2, 120 V a 69 kV) según Isc/IL: menos de 20 → 5 %; 20–50 → 8 %; 50–100 → 12 %; 100–1000 → 15 %; más de 1000 → 20 %. <b>Arriba del 80 % del límite: Vigilar</b>; <b>arriba del límite: Crítico</b>. IEEE 519 evalúa TDD contra la demanda máxima; el medidor muestra THD a la carga del momento, así que compararlo directo es conservador.</td></tr>
+      <tr><td>THD de corriente</td><td>IEEE 519-2014 (tabla 2, 120 V a 69 kV) según Isc/IL: menos de 20 → 5 %; 20–50 → 8 %; 50–100 → 12 %; 100–1000 → 15 %; más de 1000 → 20 %. La Icc sale de la etiqueta de arco eléctrico (TGMT-2: 3533 A trifásica). <b>Arriba del 80 % del límite: Vigilar</b>; <b>arriba del límite: Crítico</b>. IEEE 519 evalúa TDD contra la demanda máxima; el medidor muestra THD a la carga del momento, así que compararlo directo es conservador.</td></tr>
       <tr><td>Factor K</td><td>Calentamiento adicional por armónicos en transformadores (la carátula lo muestra con «%», pero es un factor). <b>Más de 4: Vigilar</b> (un transformador estándar es K-1; los K-4 aguantan hasta 4).</td></tr>
       <tr><td>Revisión de captura</td><td>Se cruzan las pantallas: voltaje y corriente del Resumen contra los promedios por fase, kW del Resumen contra 3Φ Potencia, kVA contra √(kW² + kVAR²) y contra √3·V·I, y FP contra kW ÷ kVA. Si no cuadran, puede ser un error de dedo o pantallas leídas en momentos distintos con la carga cambiando. No cambia el estado, solo avisa.</td></tr>
       <tr><td>Marco en México</td><td>Código de Red (CRE), requerimientos para centros de carga: tensión, frecuencia, factor de potencia y armónicos (retoma IEEE 519). ANSI C84.1 para rangos de tensión. NOM-001-SEDE-2012 regula la instalación, no la calidad de energía.</td></tr>
@@ -199,7 +201,9 @@ const DEF_L = {aMin:-2.5, aMax:5, bMin:-5, bMax:5.8, desV:2, desVBad:3, despN:3,
   hzMin:59.8, hzMax:60.2, hzMinBad:59.5, hzMaxBad:60.5, fp:0.95, fpBad:0.90, thdV:5, thdVWarn:4, thdIWarnPct:80, kWarn:4, tolV:1, tolI:3, tolP:3, tolFP:0.02};
 /* Tablero de acometida emergente (diagrama unifilar): barra 8BK20 13.2 kV 1250 A 3F 3H 60 Hz, TC 300:5 A, relevador 7SJ6225,
    medidor PowerLogic CM 3350. I nominal = primario de los TC (300 A): el medidor no ve más allá de su escala. */
-const MED_DEF = [{id:"m1", nombre:"Alimentador 2 Emergente", vn:13200, in:300, isc:null, hilos:3,
+/* Etiquetas de arco eléctrico del TGMT-2 (NFPA 70E 2015, SINAPEL, 19/10/2018): Icc 3F 3533 A, falla a tierra 1739 A. */
+const MED_DEF = [{id:"m1", nombre:"Alimentador 2 Emergente", vn:13200, in:300, icc:3533, il:null, hilos:3,
+  seguridad:"TGMT-2 · 13,200 VAC · riesgo de arco, no quitar tapas · EPP categoría 3, mínimo 25 cal/cm² (17 cal/cm² a 91 cm) · límite de arco 344 cm · guantes clase 2 · límite permitido 150 cm, restringido 70 cm · falla a tierra 1739 A · estudio NFPA 70E del 19/10/2018",
   equipo:"Circuit Monitor CM 3350 · TC 300:5 A · relevador Siemens 7SJ6225 · interruptor 3AH3165-2 (2004, serie BI/0351): 15 kV, 1250 A, 31.5 kA 3 s, BIL 95 kV · barra 8BK20 13.2 kV 1250 A 3F 3H"}];
 const leer = () => { try{ return JSON.parse(localStorage.getItem(KEY) || "null") || {}; }catch{ return {}; } };
 let D = leer();
@@ -214,6 +218,16 @@ const ANSI = {13200:{a0:12870, a1:13860, b0:12540, b1:13970}, 13800:{a0:13460, a
 const rango = vn => ANSI[vn] || {a0:vn*(1+L.aMin/100), a1:vn*(1+L.aMax/100), b0:vn*(1+L.bMin/100), b1:vn*(1+L.bMax/100)};
 /* límite de THD de corriente según Isc/IL (IEEE 519-2014, tabla 2, 120 V – 69 kV) */
 const limTHDI = isc => !isc ? 5 : isc < 20 ? 5 : isc < 50 ? 8 : isc < 100 ? 12 : isc < 1000 ? 15 : 20;
+/* Isc/IL: Icc trifásica del estudio de corto circuito entre la demanda IL. Sin IL capturada se usa la mayor corriente
+   promedio registrada en el historial (o la de la lectura): una IL mayor baja la relación y endurece el límite. */
+function razonIsc(m, iAhora){
+  if (m.icc){
+    const hist = D.lect.filter(x => x.med === m.id).map(x => avg([num(x.v.iR), num(x.v.iS), num(x.v.iT)]) ?? num(x.v.res_i)).filter(x => x != null);
+    const il = m.il || Math.max(iAhora ?? 0, ...hist, 0);
+    if (il > 0) return {r:m.icc/il, il, est:!m.il};
+  }
+  return m.isc ? {r:m.isc, il:null, est:false} : null;
+}
 
 /* ===== evaluación de una lectura ===== */
 function evaluar(r, m){
@@ -284,9 +298,9 @@ function evaluar(r, m){
   // THD de corriente
   const thi = [g("thiR"), g("thiS"), g("thiT")].filter(x => x != null);
   if (thi.length){
-    c.thdI = Math.max(...thi); const lim = limTHDI(m.isc);
+    c.thdI = Math.max(...thi); const rz = razonIsc(m, iProm), lim = limTHDI(rz?.r);
     const e = c.thdI > lim ? "bad" : c.thdI > lim * L.thdIWarnPct/100 ? "warn" : "ok";
-    add(e, `THD de corriente máximo ${fx(c.thdI,1)} % (límite ${fx(lim,0)} %${m.isc ? ` con Isc/IL ${fx(m.isc,0)}` : ", el más estricto: sin Isc/IL capturado"}).`);
+    add(e, `THD de corriente máximo ${fx(c.thdI,1)} % (límite ${fx(lim,0)} %${rz ? ` con Isc/IL ${fx(rz.r,0)}${rz.il ? `: Icc ${fx(m.icc,0)} A ÷ ${fx(rz.il,0)} A${rz.est ? ", la mayor corriente registrada; captura la demanda IL para afinarlo" : " de demanda"}` : ""}` : ", el más estricto: sin Icc capturada"}).`);
   }
   // factor K
   const ks = [g("kR"), g("kS"), g("kT")].filter(x => x != null);
@@ -318,6 +332,7 @@ const lista = (ev, vacio) => {
 };
 function vivo(){
   const m = medDe($("#cMed").value); if (!m) return;
+  $("#cSeg").classList.toggle("hidden", !m.seguridad); $("#cSeg").innerHTML = m.seguridad ? `<b>⚠ Seguridad:</b> ${esc(m.seguridad)}` : "";
   const ev = evaluar(leerCap(), m);
   $("#cEst").innerHTML = ev.it.length ? `<span class="tag t-${ev.est}">${ICON[ev.est]} ${TXT[ev.est]}</span>` : "";
   $("#cEval").innerHTML = lista(ev, "Captura valores para ver la evaluación.");
@@ -397,7 +412,7 @@ function tendencia(){
   const ls = lectDe(m.id).map(x => ({t:x.t, c:evaluar(x.v, m).c}));
   const s = f => ls.map(x => ({t:x.t, v:f(x.c)}));
   const W = "var(--warn)", B = "var(--bad)";
-  const limTHI = limTHDI(m.isc), rg = rango(m.vn);
+  const limTHI = limTHDI(razonIsc(m)?.r), rg = rango(m.vn);
   $("#graf").innerHTML = [
     graf({pts:s(c => c.vLL), titulo:"Tensión L-L promedio", unidad:"V", dec:0, lims:[
       {v:rg.a1, txt:"A máx.", col:W, ley:`Rango A ${fx(rg.a0,0)}–${fx(rg.a1,0)} V`}, {v:rg.a0, txt:"A mín.", col:W, ley:`Rango A ${fx(rg.a0,0)}–${fx(rg.a1,0)} V`, siempre:true},
@@ -428,14 +443,14 @@ $("#csv").onclick = () => {
 };
 
 /* ===== medidores y límites ===== */
-const COLS = [["nombre","Nombre","text"],["vn","V nominal L-L","number"],["in","I nominal (A)","number"],["isc","Isc/IL","number"],["hilos","Hilos","select"],["equipo","Equipo / placa","text"]];
+const COLS = [["nombre","Nombre","text"],["vn","V nominal L-L","number"],["in","I nominal (A)","number"],["icc","Icc 3F (A)","number"],["il","Demanda IL (A)","number"],["hilos","Hilos","select"],["equipo","Equipo / placa","text"],["seguridad","Seguridad (etiqueta de arco)","text"]];
 function pintarMed(){
   $("#tMed").innerHTML = `<thead><tr>${COLS.map(c => `<th>${c[1]}</th>`).join("")}<th></th></tr></thead><tbody>` + D.med.map(m => `<tr>${COLS.map(([k, , ty]) => `<td>${ty === "select"
       ? `<select data-mid="${m.id}" data-k="${k}"><option${m.hilos === 3 ? " selected" : ""}>3</option><option${m.hilos === 4 ? " selected" : ""}>4</option></select>`
       : `<input class="f" data-mid="${m.id}" data-k="${k}" type="${ty}" ${ty === "number" ? 'step="any" inputmode="decimal"' : ""} value="${esc(m[k] ?? "")}">`}</td>`).join("")}<td>${D.med.length > 1 ? `<button class="linkbtn" data-quitar="${m.id}">Quitar</button>` : ""}</td></tr>`).join("") + `</tbody>`;
   document.querySelectorAll("#tMed [data-mid]").forEach(x => x.onchange = () => {
     const m = medDe(x.dataset.mid), k = x.dataset.k;
-    m[k] = k === "nombre" ? (x.value.trim() || m.nombre) : k === "equipo" ? x.value.trim() : x.value === "" ? null : Number(x.value);
+    m[k] = k === "nombre" ? (x.value.trim() || m.nombre) : k === "equipo" || k === "seguridad" ? x.value.trim() : x.value === "" ? null : Number(x.value);
     if (k === "vn" && !m.vn) m.vn = 13200;
     guardar(); todo();
   });
@@ -445,7 +460,7 @@ function pintarMed(){
     D.med = D.med.filter(m => m.id !== b.dataset.quitar); D.lect = D.lect.filter(x => x.med !== b.dataset.quitar); guardar(); todo();
   });
 }
-$("#addMed").onclick = () => { const id = "m" + Date.now().toString(36); D.med.push({id, nombre:`Alimentador ${D.med.length + 1}`, vn:13200, in:null, isc:null, hilos:3}); sel = id; guardar(); todo(); };
+$("#addMed").onclick = () => { const id = "m" + Date.now().toString(36); D.med.push({id, nombre:`Alimentador ${D.med.length + 1}`, vn:13200, in:null, icc:null, il:null, hilos:3}); sel = id; guardar(); todo(); };
 const FORM = [
   ["aMin","Tensión rango A, mínimo (%; 13.2 y 13.8 kV usan la tabla ANSI)"],["aMax","Tensión rango A, máximo (%)"],["bMin","Tensión rango B, mínimo (%)"],["bMax","Tensión rango B, máximo (%)"],
   ["desV","Desbalance de tensión: Vigilar (%)"],["desVBad","Desbalance de tensión: Crítico (%)"],["despN","Desplazamiento de neutro: Vigilar (%)"],["despNBad","Desplazamiento de neutro: Crítico (%)"],
