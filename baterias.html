@@ -1,0 +1,1073 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#23484b">
+<title>Bitácora de baterías UPS</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="comun.css">
+<style>
+:root{--warn:#8a5a00;--na:#5f6b78;--nabg:#e3e7ec}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--warn:#f2c14e;--na:#9aa8b6;--nabg:#26303b}}
+:root[data-theme="dark"]{--warn:#f2c14e;--na:#9aa8b6;--nabg:#26303b}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap}
+.t-ok{background:var(--okbg);color:var(--ok)}.t-warn{background:var(--warnbg);color:var(--warn)}.t-bad{background:var(--badbg);color:var(--bad)}.t-na{background:var(--nabg);color:var(--na)}
+.small{font-size:13px}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:16px;text-align:center}
+.drop.on{border-color:var(--accent)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.kpi{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface)}
+.kpi .l{font-size:12px;color:var(--muted)}.kpi .v{font:700 24px/1.1 var(--fc)}
+.kpi.bad{border-color:var(--bad)}.kpi.warn{border-color:var(--warn)}
+.leyenda{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.lados{display:grid;gap:12px}
+@media (min-width:900px){.lados{grid-template-columns:1fr 1fr}}
+.lados .card h3{margin:0 0 4px;font:700 22px/1.1 var(--fc)}
+.upsg{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.bank{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--surface);cursor:pointer;text-align:left;color:var(--ink);font:inherit;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.bank[aria-pressed="true"]{outline:3px solid var(--accent);outline-offset:1px}
+.bank .row{gap:4px}
+.bank.vacio{opacity:.55;cursor:default}
+.mtag{font-size:12px;font-weight:700;color:var(--muted)}
+.map{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:4px}
+@media (max-width:520px){.map{grid-template-columns:repeat(8,minmax(0,1fr))}}
+.cell{border:0;border-radius:6px;padding:6px 0 4px;font:700 14px var(--fb);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px;min-height:46px;position:relative}
+.cell i{font-style:normal;font-size:12px;line-height:1}
+.cell .nu{position:absolute;top:1px;right:3px;font-size:10px;font-weight:700}
+.cell.ok{background:var(--okbg);color:var(--ok)}.cell.warn{background:var(--warnbg);color:var(--warn)}.cell.bad{background:var(--badbg);color:var(--bad)}.cell.na{background:var(--nabg);color:var(--na)}
+.cell[aria-pressed="true"]{outline:3px solid var(--ink);outline-offset:1px}
+tr.clic{cursor:pointer}tr.clic:hover{background:var(--bg)}
+td.wrapc{white-space:normal;min-width:220px}
+ul.f{margin:4px 0;padding-left:18px}ul.f li{margin:3px 0}
+svg.sp{width:100%;max-width:520px;height:auto;display:block}
+.graf{display:grid;gap:10px;margin-top:8px}
+@media (min-width:900px){.graf{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.graf h4{margin:0 0 2px;font-size:14px}
+.graf .ley,.ley{font-size:12px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
+.graf .ley i{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle;margin-right:4px}
+#tModelos input{width:100%;min-width:80px;font-size:14px;padding:6px}
+#tModelos input[data-k="nombre"]{min-width:220px}#tModelos input[data-k="potencia"]{min-width:190px}#tModelos input[data-k="torque"]{min-width:150px}
+#tModelos td:first-child{font-weight:700}
+#tBancos select,#tBancos input{font-size:14px;padding:5px}
+.crit td{white-space:normal;vertical-align:top}.crit td:first-child{font-weight:600;white-space:nowrap}
+.formg{display:grid;grid-template-columns:120px minmax(0,1fr);gap:8px;align-items:center}
+.formg input,.formg select{width:100%;min-width:0}
+input.plain{font:500 16px var(--fb);padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);max-width:100%}
+.cmp td.peor{color:var(--bad);font-weight:700}.cmp td.mejor{color:var(--ok);font-weight:600}
+@media (max-width:480px){.formg{grid-template-columns:minmax(0,1fr);gap:4px}.formg label{margin-top:6px;font-size:14px;color:var(--muted)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <a href="index.html" class="homelink noprint">← Bitácoras</a>
+  <h1>Bitácora de baterías UPS</h1>
+  <div class="sub">Lee las exportaciones CSV de Gexia (telemetría diaria por banco), marca el estado de cada batería y lleva el registro de reemplazos. Funciona sin internet.</div>
+</header>
+<nav role="tablist">
+  <button role="tab" data-tab="est" aria-selected="true">Estado</button>
+  <button role="tab" data-tab="ban" aria-selected="false">Banco</button>
+  <button role="tab" data-tab="ten" aria-selected="false">Mes a mes</button>
+  <button role="tab" data-tab="rem" aria-selected="false">Reemplazos</button>
+  <button role="tab" data-tab="inf" aria-selected="false">Informe</button>
+  <button role="tab" data-tab="cfg" aria-selected="false">Ajustes</button>
+</nav>
+<div id="storeNote" class="note hidden"></div>
+<div id="bakWarn" class="note hidden"></div>
+<button type="button" id="syncBar" class="sync-bar noprint hidden"></button>
+
+<section id="est" class="on">
+  <div class="card noprint">
+    <div class="drop" id="drop">
+      <p style="margin:0 0 10px">Carga uno o varios CSV de Gexia (puedes elegir los 32 bancos de una vez, de uno o varios meses)</p>
+      <label class="btn filebtn">Elegir archivos CSV<input type="file" id="files" accept=".csv,text/csv" multiple></label>
+      <p class="muted" style="margin:10px 0 0;font-size:13px">Se guardan en este teléfono para formar el historial. Cargar el mismo mes otra vez no duplica nada. Al equipo solo se comparte el resumen mensual de cada banco.</p>
+    </div>
+    <div class="small" id="cargados" style="margin-top:8px"></div>
+  </div>
+  <div id="vacio" class="card muted">Todavía no hay datos. Carga los CSV de Gexia para ver el estado de los bancos.</div>
+  <div id="res" class="hidden">
+    <div class="row"><label for="mes" class="muted">Mes evaluado</label><select id="mes"></select></div>
+    <h2>Estado general</h2>
+    <div class="kpis" id="kGlobal"></div>
+    <div class="leyenda">
+      <span class="tag t-ok">✓ OK</span><span class="tag t-warn">! Vigilar</span><span class="tag t-bad">✕ Reemplazar / crítico</span><span class="tag t-na">? Sin lectura del monitoreo</span><span class="tag t-na">☁ Resumen del equipo</span>
+    </div>
+    <div class="lados" id="lados"></div>
+    <h2>Prioridades de reemplazo y revisión</h2>
+    <p class="muted">Baterías que requieren atención en los bancos con CSV cargado, de la más urgente a la menos. Toca una fila para abrirla.</p>
+    <div class="card tbl-wrap"><table id="prio"></table><div class="row" style="margin-top:8px"><button class="linkbtn hidden" id="prioMas">Mostrar todas</button></div></div>
+    <h2>Salud del monitoreo Gexia</h2>
+    <p class="muted">Fallas del sistema de monitoreo, separadas de las fallas de baterías.</p>
+    <div class="card tbl-wrap"><table id="mon"></table></div>
+    <h2>Hallazgos de todos los bancos</h2>
+    <div class="card" id="hallTodos"></div>
+  </div>
+</section>
+
+<section id="ban">
+  <div class="row"><select id="banSel" aria-label="Banco"></select><select id="banMes" aria-label="Mes"></select></div>
+  <div id="banVacio" class="card muted hidden"></div>
+  <div id="det">
+    <h2 id="detT"></h2>
+    <div class="muted" id="detSub"></div>
+    <div class="kpis" id="kBanco" style="margin-top:8px"></div>
+    <div class="card">
+      <h3 style="margin-top:0">Mapa del banco <span class="muted">(toca una batería)</span></h3>
+      <div class="map" id="map"></div>
+      <div id="bat" class="card" style="margin-bottom:0"></div>
+    </div>
+    <div class="card noprint" id="repCard">
+      <h3 style="margin-top:0">Registrar reemplazo <span class="muted" id="repBat"></span></h3>
+      <div class="formg">
+        <label for="rN">Batería</label><select id="rN"></select>
+        <label for="rFecha">Fecha</label><input class="plain" type="date" id="rFecha">
+        <label for="rModelo">Modelo</label><select id="rModelo"></select>
+        <label for="rSerie">Serie</label><input class="plain" id="rSerie" placeholder="Opcional">
+        <label for="rNota">Nota</label><input class="plain" id="rNota" placeholder="Opcional, p. ej. motivo o resultado de la prueba">
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="btn sec filebtn">Tomar foto<input type="file" id="photoCam" accept="image/*" capture="environment"></label>
+        <label class="btn sec filebtn">Elegir de galería<input type="file" id="photoGal" accept="image/*"></label>
+      </div>
+      <div class="status" id="photoStatus"></div>
+      <img id="preview" class="thumb hidden" alt="Foto del reemplazo">
+      <button class="linkbtn hidden" id="photoDel">Quitar foto</button>
+      <div class="row" style="margin-top:10px"><button class="btn" id="saveBtn">Registrar reemplazo</button></div>
+      <div class="status" id="rStatus"></div>
+    </div>
+    <div class="card"><h3 style="margin-top:0">Hallazgos del banco</h3><div id="hall"></div></div>
+    <div class="card noprint"><h3 style="margin-top:0">Referencia de resistencia del banco</h3><div id="refB"></div></div>
+    <div class="card tbl-wrap"><h3 style="margin-top:0">Detalle por batería</h3><table id="tabla"></table></div>
+  </div>
+</section>
+
+<section id="ten">
+  <h2>Mes a mes</h2>
+  <p class="muted">Con el resumen mensual de cada banco (los tuyos y los que comparte el equipo).</p>
+  <div class="row">
+    <select id="tenBan" aria-label="Banco"></select>
+    <select id="metric" aria-label="Variable"></select>
+    <label><input type="checkbox" id="tenUps"> Con los demás bancos de su UPS</label>
+  </div>
+  <div class="card"><div id="chartBox"></div><div class="legend" id="legend"></div><div class="muted" id="tenNota" style="font-size:13px;margin-top:6px"></div></div>
+  <h2>Comparación contra el mes anterior</h2>
+  <div class="row"><select id="cmpMes" aria-label="Mes"></select></div>
+  <div class="card tbl-wrap"><table class="cmp" id="cmp"></table>
+    <p class="muted" style="margin-bottom:0;font-size:13px">En rojo, lo que empeoró: más baterías en Vigilar o Reemplazar, resistencia mediana +5 % o más, o estado peor. En verde, lo que mejoró.</p></div>
+</section>
+
+<section id="rem">
+  <h2>Reemplazos</h2>
+  <p class="muted">Se registran desde la pestaña <b>Banco</b>, tocando la batería. Aquí está el historial completo.</p>
+  <div class="row">
+    <select id="remBan" aria-label="Filtrar por banco"></select>
+    <button class="btn sec" id="csvBtn">Exportar a Excel (CSV)</button>
+  </div>
+  <div class="card tbl-wrap"><table id="remTbl"></table></div>
+</section>
+
+<section id="inf">
+  <h2 class="noprint">Informe mensual</h2>
+  <div class="card noprint">
+    <div class="cfg">
+      <label for="repSitio">Sitio</label><input class="plain" id="repSitio" placeholder="Ej. Data center, cuarto de baterías">
+      <label for="repElab">Elaboró</label><input class="plain" id="repElab" placeholder="Nombre y puesto">
+      <label for="repRevi">Revisó</label><input class="plain" id="repRevi" placeholder="Nombre y puesto">
+      <label for="repMes">Mes</label><select id="repMes"></select>
+    </div>
+    <div class="row" style="margin-top:10px;gap:16px">
+      <label><input type="checkbox" id="repTodas"> Todas las baterías con hallazgo (si no, las 20 más urgentes)</label>
+      <label><input type="checkbox" id="repFotos" checked> Fotos de los reemplazos</label>
+    </div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="repGen">Generar informe</button></div>
+    <div class="row hidden" id="repAcc" style="margin-top:10px">
+      <button class="btn sec" id="repPrint">Imprimir / PDF</button>
+      <button class="btn sec" id="repHtml">Descargar HTML</button>
+      <button class="btn sec" id="repShare">Compartir resumen</button>
+      <button class="btn sec" id="repCopy">Copiar resumen</button>
+    </div>
+    <div class="status" id="repStatus"></div>
+  </div>
+  <div id="rep"></div>
+</section>
+
+<section id="cfg">
+  <h2>Modelos de batería</h2>
+  <div class="card tbl-wrap">
+    <p class="muted" style="margin-top:0">Datos de la placa y de la ficha técnica. Un campo vacío no se evalúa.</p>
+    <table id="tModelos"></table>
+  </div>
+  <h2>Modelo e instalación de cada banco</h2>
+  <div class="card tbl-wrap">
+    <p class="muted" style="margin-top:0">Modelo según el levantamiento del 07/10/26. La fecha de instalación activa el aviso de vida de diseño (80 %) y propone la medición para la referencia real; si el banco no la tiene, se usa la del modelo.</p>
+    <table id="tBancos"></table>
+  </div>
+  <h2>Límites</h2>
+  <div class="card">
+    <div class="cfg" id="cfgForm"></div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="cfgSave">Guardar modelos, bancos y límites</button><button class="btn sec" id="cfgDef">Valores recomendados</button></div>
+    <div class="status" id="cfgStatus"></div>
+  </div>
+  <h2>Compartir con el equipo</h2>
+  <div class="card" id="syncCard"></div>
+  <h2>Respaldo</h2>
+  <div class="card">
+    <p class="muted" style="margin-top:0">Incluye modelos, bancos, límites, referencias, reemplazos y resúmenes mensuales. Los datos de Gexia son opcionales: pesan más y los CSV originales también sirven para volver a cargarlos. Las fotos no se incluyen.</p>
+    <label><input type="checkbox" id="bakDias"> Incluir los datos diarios de Gexia</label>
+    <div class="row" style="margin-top:8px">
+      <button class="btn" id="bakBtn">Descargar respaldo</button>
+      <label class="btn sec filebtn">Restaurar respaldo<input type="file" id="restore" accept=".json,application/json"></label>
+    </div>
+    <div class="status" id="bakStatus"></div>
+    <p class="muted" id="lastBak"></p>
+    <p class="muted" id="usage"></p>
+  </div>
+  <h2>Datos de Gexia guardados</h2>
+  <div class="card">
+    <div class="muted" id="guardado"></div>
+    <div class="row" style="margin-top:8px"><button class="btn danger" id="borrar">Borrar datos de Gexia</button></div>
+    <p class="muted" style="margin-bottom:0">Borra solo la telemetría cargada de los CSV. Los reemplazos, los resúmenes mensuales y los ajustes se conservan.</p>
+  </div>
+  <h2>Criterios</h2>
+  <div class="card tbl-wrap"><table class="crit"><tbody id="criterios"></tbody></table></div>
+</section>
+</div>
+<dialog id="dlg"><img id="dlgImg" alt="Foto de evidencia"><div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn sec" id="dlgClose">Cerrar</button></div></dialog>
+
+<script src="comun.js"></script>
+<script>
+(() => {
+const {$, esc, fdate, isoLocal, stamp, download, descargarCSV, estado} = Comun;
+const fx = (v, d=2) => v==null || !isFinite(v) ? "—" : (+v).toFixed(d);
+const pct = v => v==null || !isFinite(v) ? "—" : (v>0?"+":"")+(v*100).toFixed(0)+" %";
+const med = a => { const b = a.filter(x => x!=null && isFinite(x)).sort((x,y)=>x-y); if (!b.length) return null; const m = b.length>>1; return b.length%2 ? b[m] : (b[m-1]+b[m])/2; };
+const avg = a => { const b = a.filter(x => x!=null && isFinite(x)); return b.length ? b.reduce((s,x)=>s+x,0)/b.length : null; };
+const fdia = iso => new Date(iso.length===10 ? iso+"T12:00:00Z" : iso).toLocaleDateString("es-MX", {day:"2-digit", month:"short", year:"2-digit", timeZone:"UTC"});
+const DIA = 86400000;
+const dia = t => t.slice(0,10);
+const mesTxt = m => new Date(m+"-15T12:00:00Z").toLocaleDateString("es-MX", {month:"long", year:"numeric", timeZone:"UTC"});
+const vivo = x => x != null && x > 0.5;
+const CLAVES = ["A","B"].flatMap(l => [1,2,3,4].flatMap(u => ["01","02","03","04"].map(b => `${l}|${u}|${b}`)));
+const nombreK = k => { const [l, u, b] = k.split("|"); return `Rama ${l} · UPS ${u} · Banco ${+b}`; };
+const cortoK = k => { const [l, u, b] = k.split("|"); return `${l} · UPS ${u} · B${+b}`; };
+
+/* ================= modelos, asignación por banco y límites =================
+   Catálogo según el levantamiento de modelos (07/10/26) y las fichas técnicas (08/10/26).
+   Resistencia: matriz de umbrales a 25 °C: referencia del fabricante, Advertencia arriba de +30 %, Falla arriba de +40 %. */
+const MODELOS_DEF = {
+  M1:{nombre:"EnerSys DataSafe HX 12HX540-FR", potencia:"540 W/celda a 1.67 V, 15 min", ah:123, rRef:2.60, rAdv:30, rFalla:40, vMin:2.25, vMax:2.283, vTc:-3, celdas:6, torque:"6.8 N·m (60 lb·in) ± 5 %; máx. 10.0 N·m (88 lb·in)", vida:10, instalacion:""},
+  M2:{nombre:"CSB HRL12540W FR", potencia:"542 W/celda a 1.67 V, 15 min", ah:134, rRef:2.60, rAdv:30, rFalla:40, vMin:2.25, vMax:2.30, vTc:-3.3, celdas:6, torque:"5.1 ± 1.0 N·m (44.9 lbf·in), M6", vida:10, instalacion:""},
+  M3:{nombre:"Ritar HR12-520W", potencia:"520 W/celda, 15 min", ah:145, rRef:4.50, rAdv:30, rFalla:40, vMin:2.267, vMax:2.30, vTc:-3, celdas:6, torque:"10–12 N·m, M8", vida:15, instalacion:""}
+};
+const ASIGN_DEF = (() => {
+  const a = Object.fromEntries(CLAVES.map(k => [k, "M1"]));
+  ["A|4|01","A|4|02"].forEach(k => a[k] = "M2");
+  ["B|3|01","B|3|02","B|4|02"].forEach(k => a[k] = "M3");
+  return a;
+})();
+const DEF_L = {rWarn:0.30, rBad:0.40, rMes:0.10, rHist:2, rTc:0, vWarn:0.25, vBad:0.60, tWarn:30, tDelta:3, tBad:35, cWarn:0.20, cBad:0.50, iFact:2, rizPct:0.5, rDias:45, sumaPct:2};
+const CAMPOS = [
+  ["rMes","Resistencia: subida en 30 días para Vigilar (fracción)"],
+  ["rHist","Resistencia: histéresis para salir de una alarma (puntos de %)"],["rTc","Resistencia: compensación por temperatura (% por °C abajo de 25 °C; 0 = sin compensar)"],
+  ["vWarn","Voltaje: Vigilar si se aparta de la mediana más de (V)"],["vBad","Voltaje: Crítico si se aparta más de (V)"],
+  ["tWarn","Temperatura: Vigilar arriba de (°C)"],["tDelta","Temperatura: Vigilar si supera el promedio del banco por (°C)"],["tBad","Temperatura: Crítico arriba de (°C)"],
+  ["cWarn","Conexiones: Vigilar desde (fracción)"],["cBad","Conexiones: Crítico desde (fracción)"],
+  ["iFact","Corriente de flotación: Vigilar si es N veces la mediana de bancos del mismo modelo"],["rizPct","Rizado: Vigilar arriba de (% del voltaje del banco)"],
+  ["rDias","Monitoreo: resistencia sin actualizar más de (días)"],["sumaPct","Monitoreo: suma de voltajes vs banco, diferencia máx. (%)"]];
+const COLM = [["nombre","Marca y modelo","text"],["potencia","Potencia","text"],["ah","Ah","number"],["rRef","R ref. (mΩ)","number"],["rAdv","R Advertencia (+%)","number"],["rFalla","R Falla (+%)","number"],["vMin","Flot. mín. V/celda","number"],["vMax","Flot. máx. V/celda","number"],["vTc","Comp. flot. mV/°C/celda","number"],["celdas","Celdas","number"],["torque","Torque","text"],["vida","Vida diseño (años)","number"],["instalacion","Instalación del modelo","date"]];
+
+/* ================= almacenamiento =================
+   localStorage: cfg (modelos, bancos, límites, referencias), lecturas = reemplazos, equipos = resúmenes mensuales.
+   IndexedDB "bitacora-baterias": la telemetría diaria de Gexia, un registro por banco y día (la misma base que la muestra). */
+const LS = "bitacora-baterias-v1";
+let lsOk = true, P = null, reemplazos = [], resumenes = [];
+const armarCfg = c => ({...c, modelos:Object.fromEntries(Object.entries(MODELOS_DEF).map(([k, m]) => [k, {...m, ...Object.fromEntries(Object.entries(c.modelos?.[k] || {}).filter(([, v]) => v != null && v !== ""))}])),
+  asign:{...ASIGN_DEF, ...(c.asign || {})}, inst:c.inst || {}, L:{...DEF_L, ...(c.L || {})}, refBanco:c.refBanco || {}});
+function load(){
+  try{
+    let o = JSON.parse(localStorage.getItem(LS) || "null");
+    if (!o){
+      // primera vez: se traen los ajustes y reemplazos de la muestra (mismo navegador)
+      const c = JSON.parse(localStorage.getItem("bitacora-baterias-cfg") || "{}"), r = JSON.parse(localStorage.getItem("bitacora-baterias-reemplazos") || "[]");
+      o = {cfg:c, lecturas:r.map(x => ({id:"r" + x.id, ts:new Date(x.fecha + "T12:00").toISOString(), fecha:x.fecha, clave:x.clave, n:x.n, modelo:x.modelo, serie:x.serie, nota:x.nota, foto:false})), equipos:[]};
+    }
+    P = armarCfg(o.cfg || {}); reemplazos = o.lecturas || []; resumenes = o.equipos || [];
+  }catch{ lsOk = false; P = armarCfg({}); }
+}
+function persist(){ try{ localStorage.setItem(LS, JSON.stringify({cfg:P, lecturas:reemplazos, equipos:resumenes})); return true; }catch{ return false; } }
+let L = null;
+const modeloDe = clave => P.asign[clave] || "M1";
+const fichaDe = clave => P.modelos[modeloDe(clave)] || {};
+const instDe = clave => P.inst[clave] || fichaDe(clave).instalacion || "";
+/* umbrales de resistencia del modelo como fracción (30 → 0.30); sin dato, los generales */
+const limR = F => ({w: F.rAdv != null && F.rAdv !== "" ? F.rAdv/100 : L.rWarn, b: F.rFalla != null && F.rFalla !== "" ? F.rFalla/100 : L.rBad});
+const fotos = Comun.fotosDB("bitacora-baterias-fotos");
+
+const NIVEL = {ok:0, na:1, warn:2, bad:3};
+const peor = (a, b) => NIVEL[b] > NIVEL[a] ? b : a;
+const ICON = {ok:"✓", warn:"!", bad:"✕", na:"?"};
+const TXT = {ok:"OK", warn:"Vigilar", bad:"Reemplazar / crítico", na:"Sin lectura"};
+const CORTO = {ok:"OK", warn:"Vigilar", bad:"Crítico", na:"Sin lectura"};
+
+/* ================= telemetría de Gexia (IndexedDB) ================= */
+const bancos = new Map();          // clave "A|1|01" → {lado, ups, banco, filas:Map(t → fila)}
+let db = null;
+function abrirDB(){
+  return new Promise(res => {
+    try{
+      const rq = indexedDB.open("bitacora-baterias", 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore("dias");
+      rq.onsuccess = () => res(rq.result); rq.onerror = () => res(null);
+      setTimeout(() => res(null), 5000);
+    }catch{ res(null); }
+  });
+}
+const tx = (modo, f) => new Promise((res, rej) => { const t = db.transaction("dias", modo); const r = f(t.objectStore("dias")); t.oncomplete = () => res(r?.result); t.onerror = () => rej(t.error); });
+const todosDias = () => new Promise(res => { if (!db) return res([]); const t = db.transaction("dias"); const r = t.objectStore("dias").getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => res([]); });
+function agregarFila(clave, f){
+  const [lado, ups, banco] = clave.split("|");
+  const B = bancos.get(clave) || {lado, ups:+ups, banco, filas:new Map()};
+  B.filas.set(f.t, f); bancos.set(clave, B); return B;
+}
+async function cargarDB(){ (await todosDias()).forEach(x => agregarFila(x.clave, x.f)); }
+function parseCSV(txt){
+  const rows = []; let row = [], cur = "", q = false;
+  for (let i = 0; i < txt.length; i++){
+    const c = txt[i];
+    if (q){ if (c === '"'){ if (txt[i+1] === '"'){ cur += '"'; i++; } else q = false; } else cur += c; }
+    else if (c === '"') q = true;
+    else if (c === ","){ row.push(cur); cur = ""; }
+    else if (c === "\n" || c === "\r"){ if (c === "\r" && txt[i+1] === "\n") i++; row.push(cur); cur = ""; if (row.some(x => x !== "")) rows.push(row); row = []; }
+    else cur += c;
+  }
+  if (cur !== "" || row.length){ row.push(cur); if (row.some(x => x !== "")) rows.push(row); }
+  return rows;
+}
+const numv = s => { if (s == null || s === "") return null; const n = Number(s); return isFinite(n) ? n : null; };
+function leer(nombre, txt){
+  const rows = parseCSV(txt.replace(/^﻿/, ""));
+  if (rows.length < 2) throw new Error("archivo vacío");
+  const H = rows[0].map(h => h.trim()), iT = H.indexOf("time"), cols = [];
+  H.forEach((h, i) => {
+    let m;
+    if ((m = h.match(/^UPS(\d+)(Tens|Resist|Temp)B(\d+)Bat(\d+)$/))) cols.push({i, ups:+m[1], b:m[3], tipo:"bat", k:{Tens:"v",Resist:"r",Temp:"t"}[m[2]], n:+m[4]});
+    else if ((m = h.match(/^UPS(\d+)ConB(\d+)Bat(\d{4})$/))) cols.push({i, ups:+m[1], b:m[2], tipo:"con", n:m[3]});
+    else if ((m = h.match(/^UPS(\d+)(Tens|Corr|Temp|Rizado)B(\d+)$/))) cols.push({i, ups:+m[1], b:m[3], tipo:"tot", k:{Tens:"v",Corr:"i",Temp:"t",Rizado:"riz"}[m[2]]});
+  });
+  if (iT < 0 || !cols.length) throw new Error("no tiene el formato de Gexia");
+  const lado = ((nombre.match(/LADO[_ -]?([AB])/i) || [])[1] || "").toUpperCase();
+  if (!lado) throw new Error("el nombre del archivo no dice la rama (LADO_A o LADO_B)");
+  const clave = `${lado}|${cols[0].ups}|${cols[0].b}`, nuevas = [];
+  for (const r of rows.slice(1)){
+    const t = r[iT]; if (!t) continue;
+    const f = {t, bat:{}, con:{}, tot:{}};
+    for (const c of cols){
+      const v = numv(r[c.i]);
+      if (c.tipo === "bat") (f.bat[c.n] ||= {})[c.k] = v;
+      else if (c.tipo === "con") f.con[c.n] = v;
+      else f.tot[c.k] = v;
+    }
+    agregarFila(clave, f); nuevas.push(f);
+  }
+  return {clave, nuevas};
+}
+
+/* ================= análisis de un banco en un mes ================= */
+const repDe = (clave, n, hasta) => reemplazos.filter(r => r.clave===clave && r.n===n && (!hasta || r.fecha <= hasta)).sort((a,b) => a.fecha.localeCompare(b.fecha)).pop() || null;
+/* Resistencia llevada a 25 °C: R25 = R / (1 + k·(25 − T)), k en %/°C. r0 guarda la lectura cruda para saber cuándo midió Gexia. */
+const a25 = (r, t) => !L.rTc || !vivo(r) || !(t > 10 && t < 45) ? r : r / (1 + L.rTc/100 * (25 - t));
+const compensar = f => ({...f, bat:Object.fromEntries(Object.entries(f.bat).map(([i, x]) => [i, {...x, r0:x.r, r:a25(x.r, x.t)}]))});
+function rangos(ns){
+  const out = []; let a = null, b = null;
+  for (const n of ns){ if (a == null){ a = b = n; } else if (n === b+1) b = n; else { out.push(a===b ? a : `${a}–${b}`); a = b = n; } }
+  if (a != null) out.push(a===b ? a : `${a}–${b}`);
+  return out.join(", ");
+}
+function analizar(B, ctx, mes){
+  const todas = [...B.filas.values()].sort((a, b) => a.t.localeCompare(b.t));
+  const hist = todas.filter(f => dia(f.t).slice(0,7) <= mes).map(compensar);
+  const delMes = hist.filter(f => dia(f.t).startsWith(mes));
+  if (!delMes.length) return null;
+  const u = delMes[delMes.length-1], p = delMes[0], hoy = dia(u.t);
+  const clave = `${B.lado}|${B.ups}|${B.banco}`, mod = modeloDe(clave), F = fichaDe(clave), inst = instDe(clave);
+  // referencia de resistencia: la real del banco si se fijó; si no, la de la ficha del modelo
+  const RB = P.refBanco[clave], rRef = RB?.r || F.rRef || null, refNom = RB?.r ? "la referencia real del banco" : "la referencia del fabricante";
+  const n = Object.keys(u.bat).length || 40, celdas = F.celdas || 6;
+  const V = [], R = [], T = [];
+  for (let i = 1; i <= n; i++){ const x = u.bat[i] || {}; V.push(vivo(x.v) ? x.v : null); R.push(vivo(x.r) ? x.r : null); T.push(vivo(x.t) ? x.t : null); }
+  const vMed = med(V), rMed = med(R.filter((r, i) => V[i] != null)), tProm = avg(T);
+  const refDia = hist.map(f => {
+    const vs = [], rs = [], tcs = [];
+    for (let i = 1; i <= n; i++){ const x = f.bat[i] || {}; if (vivo(x.v)){ vs.push(x.v); if (vivo(x.r)) rs.push(x.r); } if (vivo(x.t)) tcs.push(x.t); }
+    return {v:med(vs), r:med(rs), tc:avg(tcs)};
+  });
+  const bats = [];
+  for (let i = 1; i <= n; i++){
+    const v = V[i-1], t = T[i-1], m = [];
+    let r = R[i-1], est = "ok";
+    const rep = repDe(clave, i, hoy);
+    // filas desde el reemplazo (o todo el historial) para la línea base y la tendencia
+    const propias = rep ? hist.filter(f => dia(f.t) >= rep.fecha) : hist;
+    let base = null, esperando = false;
+    if (rep){
+      // Gexia sigue reportando la resistencia de la batería anterior hasta que vuelve a medir
+      const antes = hist.filter(f => dia(f.t) < rep.fecha).map(f => f.bat[i]?.r0).filter(vivo).pop();
+      const nueva = propias.find(f => vivo(f.bat[i]?.r0) && f.bat[i].r0 !== antes);
+      if (nueva) base = nueva.bat[i].r; else esperando = true;
+    } else {
+      const f0 = propias.find(f => vivo(f.bat[i]?.r)); base = f0 ? f0.bat[i].r : null;
+    }
+    if (rep && rep.modelo && rep.modelo !== mod){ est = peor(est, "warn"); m.push(`Reemplazada con ${rep.modelo} en un banco ${mod}: no se recomienda mezclar modelos en un banco`); }
+    if (esperando){ m.push(`Reemplazada el ${fdia(rep.fecha)}: esperando la primera medición de resistencia de la batería nueva`); r = null; }
+    if (v == null || t == null){ est = "na"; m.push(v == null && t == null ? "El monitoreo no reporta voltaje ni temperatura" : v == null ? "El monitoreo no reporta voltaje" : "El monitoreo no reporta temperatura"); }
+    if (v != null && vMed){
+      const d = v - vMed;
+      if (Math.abs(d) > L.vBad){ est = peor(est, "bad"); m.push(`Voltaje ${fx(v,3)} V, ${d>0?"+":""}${fx(d,2)} V contra la mediana del banco`); }
+      else if (Math.abs(d) > L.vWarn){ est = peor(est, "warn"); m.push(`Voltaje ${fx(v,3)} V, ${d>0?"+":""}${fx(d,2)} V contra la mediana del banco`); }
+    }
+    // resistencia contra línea base, mediana del banco y referencia del fabricante: manda la peor
+    const dMed = r != null && rMed ? r/rMed - 1 : null;
+    const dBase = r != null && base ? r/base - 1 : null;
+    const dRef = r != null && rRef ? r/rRef - 1 : null;
+    if (r != null){
+      const sospechosa = v == null;
+      const peorDe = x => [[base, "su línea base"], [rMed, "la mediana del banco"], [rRef, refNom]].filter(c => c[0])
+        .map(c => [x/c[0] - 1, c[1], c[0]]).reduce((a, c) => c[0] > a[0] ? c : a, [-Infinity, "", null]);
+      const [dPeor, contra, contraV] = peorDe(r);
+      const lr = limR(F), EPS = 1e-9;   // EPS: 3.38/2.60 − 1 debe quedar en +30 % exacto, no arriba
+      const nivel = d => d > lr.b + EPS ? 2 : d > lr.w + EPS ? 1 : 0, umbral = [0, lr.w, lr.b], NOM = ["Normal", "Advertencia", "Falla"];
+      const lim = x => contra === "su línea base" || contra === "la mediana del banco" ? `+${Math.round(x*100)} %` : `${fx(contraV*(1+x),2)} mΩ`;
+      // medición anterior de Gexia (la última lectura cruda distinta de la actual, desde el reemplazo)
+      const cur0 = u.bat[i]?.r0, prev = propias.filter(f => vivo(f.bat[i]?.r0) && f.bat[i].r0 !== cur0 && f.t < u.t).pop();
+      let nv = nivel(dPeor), nota = "";
+      if (prev){
+        const nP = nivel(peorDe(prev.bat[i].r)[0]);
+        // confirmación (equivalente al retardo de alarma): una Falla nueva cuenta hasta que la repita la siguiente medición
+        if (nv === 2 && nP < 2){ nv = 1; nota = ` (pasa el umbral de Falla, ${lim(lr.b)}, pero falta confirmarla: la medición del ${fdia(prev.t)}, ${fx(prev.bat[i].r,3)} mΩ, no lo pasaba)`; }
+        // histéresis: para salir de una alarma tiene que bajar del umbral menos la banda
+        else if (nv < nP && dPeor > umbral[nP] - L.rHist/100){ nv = nP; nota = ` (ya estaba en ${NOM[nP]}; por histéresis sigue así hasta bajar de ${lim(umbral[nP] - L.rHist/100)})`; }
+      }
+      const txtR = `Resistencia ${fx(r,3)} mΩ${L.rTc ? " a 25 °C" : ""}, ${pct(dPeor)} contra ${contra}`;
+      if (nv === 2){ est = peor(est, sospechosa ? "na" : "bad"); m.push(`${txtR}${nota || ` (Falla arriba de ${lim(lr.b)})`}${sospechosa ? "; verificar sensor antes de reemplazar" : ""}`); }
+      else if (nv === 1){ est = peor(est, sospechosa ? "na" : "warn"); m.push(`${txtR}${nota || ` (Advertencia arriba de ${lim(lr.w)})`}`); }
+      // velocidad de subida: contra la medición de hace 30 días o más
+      const hace = propias.filter(f => new Date(f.t) <= new Date(u.t) - 30*DIA && vivo(f.bat[i]?.r)).pop();
+      if (hace){ const s = r / hace.bat[i].r - 1; if (s >= L.rMes && dPeor <= lr.w + EPS){ est = peor(est, "warn"); m.push(`La resistencia subió ${pct(s)} desde el ${fdia(hace.t)}`); } }
+    }
+    if (t != null){
+      if (t > L.tBad){ est = peor(est, "bad"); m.push(`Temperatura ${fx(t,1)} °C`); }
+      else if (t > L.tWarn || (tProm && t - tProm > L.tDelta)){ est = peor(est, "warn"); m.push(`Temperatura ${fx(t,1)} °C (promedio del banco ${fx(tProm,1)} °C)`); }
+    }
+    const v0 = vivo(p.bat[i]?.v) ? p.bat[i].v : null, tend = v != null && v0 != null ? v - v0 : null;
+    if (tend != null && tend < -0.05 && est !== "bad"){ m.push(`El voltaje bajó ${fx(-tend,3)} V en el mes`); est = peor(est, "warn"); }
+    const desde = rep ? rep.fecha : inst;
+    const edad = desde ? (new Date(hoy) - new Date(desde)) / (365.25*DIA) : null;
+    // IEEE 1188: planear el reemplazo al acercarse al fin de la vida de diseño
+    if (rep && edad != null && F.vida && edad >= 0.8 * F.vida){ est = peor(est, "warn"); m.push(`Edad ${fx(edad,1)} años: ${edad >= F.vida ? "pasó" : "llega al 80 % de"} su vida de diseño (${F.vida} años); planear el reemplazo`); }
+    const serie = hist.map((f, j) => ({t:f.t, v:vivo(f.bat[i]?.v) ? f.bat[i].v : null, r:vivo(f.bat[i]?.r) ? f.bat[i].r : null, tc:vivo(f.bat[i]?.t) ? f.bat[i].t : null, ref:refDia[j]}));
+    bats.push({n:i, v, r, t, base, dBase, dMed, dRef, dV: v != null && vMed ? v - vMed : null, tend, est, m, serie, rep, edad, esperando,
+      score: NIVEL[est]*1000 + Math.max(dBase ?? 0, dMed ?? 0, dRef ?? 0)*100 + Math.abs(v != null && vMed ? v - vMed : 0)*50});
+  }
+  // conexiones
+  const cons = Object.entries(u.con).filter(([k, x]) => x != null && x > 0), tipos = {};
+  cons.forEach(([k, x]) => (tipos[x > 0.2 ? "nivel" : "puente"] ||= []).push(x));
+  const mC = Object.fromEntries(Object.entries(tipos).map(([g, a]) => [g, med(a)])), conMal = [];
+  cons.forEach(([k, x]) => {
+    const d = x / mC[x > 0.2 ? "nivel" : "puente"] - 1, a = +k.slice(0,2), b = +k.slice(2);
+    if (V[a-1] == null || V[b-1] == null) return;
+    if (d >= L.cWarn) conMal.push({k:`${a}–${b}`, x, d, est: d >= L.cBad ? "bad" : "warn"});
+  });
+  // salud del monitoreo
+  const tot = u.tot, mon = [];
+  const nV = V.filter(x => x != null).length, nT = T.filter(x => x != null).length;
+  if (nV < n) mon.push(`${n - nV} de ${n} sensores de voltaje sin reportar (baterías ${rangos(V.map((x,i) => x==null ? i+1 : 0).filter(Boolean))})`);
+  if (nT < n) mon.push(`${n - nT} de ${n} sensores de temperatura sin reportar`);
+  if (!vivo(tot.v)) mon.push("El banco no reporta voltaje total ni corriente");
+  let ultR = null;
+  for (let j = hist.length-1; j > 0 && !ultR; j--) for (let i = 1; i <= n; i++) if (hist[j].bat[i]?.r0 !== hist[j-1].bat[i]?.r0){ ultR = hist[j].t; break; }
+  const diasR = Math.round((new Date(u.t) - new Date(ultR || hist[0].t)) / DIA);
+  if (diasR > L.rDias) mon.push(ultR ? `La resistencia no se actualiza desde el ${fdia(ultR)} (${diasR} días)` : `La resistencia no ha cambiado desde el ${fdia(hist[0].t)}, inicio de los datos (${diasR} días)`);
+  const sumV = nV === n ? V.reduce((s, x) => s + x, 0) : null;
+  const difSuma = sumV != null && vivo(tot.v) ? (sumV - tot.v) / tot.v * 100 : null;
+  if (difSuma != null && Math.abs(difSuma) > L.sumaPct) mon.push(`La suma de los voltajes (${fx(sumV,1)} V) difiere ${fx(difSuma,1)} % del voltaje del banco (${fx(tot.v,1)} V): posible sensor descalibrado`);
+  const finMes = new Date(Date.UTC(+mes.slice(0,4), +mes.slice(5,7), 0)).toISOString().slice(0,10);
+  const diasMes = new Set(delMes.map(f => dia(f.t))).size, totalDias = +finMes.slice(8,10);
+  if (diasMes < totalDias && mes < new Date().toISOString().slice(0,7)) mon.push(`Faltan ${totalDias - diasMes} día(s) de datos en el mes`);
+  // banco
+  const hb = []; let estB = "ok";
+  if (mon.length){ estB = "na"; mon.forEach(t => hb.push({est:"na", t:`Monitoreo: ${t}.`})); }
+  const iMed = ctx.iMed[mod];
+  if (tot.i != null && iMed && ctx.nMod[mod] >= 3 && tot.i > iMed * L.iFact){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Corriente de flotación ${fx(tot.i,2)} A, ${fx(tot.i/iMed,1)} veces la mediana de los bancos ${mod} (${fx(iMed,2)} A).`}); }
+  if (tot.riz != null && vivo(tot.v) && tot.riz/10/tot.v > L.rizPct){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Rizado ${Math.round(tot.riz)} mV = ${fx(tot.riz/10/tot.v,2)} % del voltaje del banco (límite ${L.rizPct} %).`}); }
+  // vida de diseño del banco (instalación del banco o del modelo); las baterías reemplazadas se evalúan por su fecha
+  const edadB = inst ? (new Date(hoy) - new Date(inst)) / (365.25*DIA) : null;
+  if (edadB != null && F.vida && edadB >= 0.8 * F.vida){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Banco con ${fx(edadB,1)} años: ${edadB >= F.vida ? "pasó" : "llega al 80 % de"} la vida de diseño de ${mod} (${F.vida} años); planear el reemplazo${bats.some(b => b.rep) ? " (sin contar las baterías reemplazadas)" : ""}.`}); }
+  const vCelda = vivo(tot.v) ? tot.v / (n * celdas) : null;
+  // rango de flotación de la ficha (a 25 °C), corrido por la compensación del fabricante a la temperatura promedio del banco
+  const dT = F.vTc && tProm != null ? tProm - 25 : 0, cT = dT ? F.vTc/1000 * dT : 0;
+  const vMinT = F.vMin ? F.vMin + cT : null, vMaxT = F.vMax ? F.vMax + cT : null;
+  const rangoTxt = `${fx(vMinT,3)}–${fx(vMaxT,3)}${cT ? ` a ${fx(tProm,1)} °C, con ${F.vTc} mV/°C/celda` : ""}`;
+  if (vCelda != null && ((vMinT && vCelda < vMinT) || (vMaxT && vCelda > vMaxT))){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Flotación promedio ${fx(vCelda,3)} V/celda, fuera del rango de ${mod} (${rangoTxt}).`}); }
+  conMal.forEach(c => { estB = peor(estB, c.est); hb.push({est:c.est, t:`Conexión ${c.k}: ${fx(c.x,3)} mΩ (${pct(c.d)} vs las de su tipo). Limpiar y reapretar${F.torque ? " a " + F.torque : ""}.`}); });
+  bats.filter(b => b.est === "bad" || b.est === "warn").sort((a, b) => NIVEL[b.est]-NIVEL[a.est] || a.n-b.n)
+    .forEach(b => { estB = peor(estB, b.est); hb.push({est:b.est, t:`Batería ${b.n}: ${b.m.join("; ")}.`}); });
+  const cuenta = {ok:0, warn:0, bad:0, na:0}; bats.forEach(b => cuenta[b.est]++);
+  return {B, clave, mod, F, inst, rRef, RB, refNom, hist, delMes, u, p, bats, vMed, rMed, tProm, conMal, hb, estB, cuenta, mon, nV, nT, n, ultR, diasR, difSuma, vCelda};
+}
+/* Meses evaluables: los que tienen al menos 5 días de datos. Gexia incluye en cada exportación el último día del mes
+   anterior (la de agosto empieza el 31 de julio); ese día suelto queda en el historial pero no forma un mes propio. */
+function mesesLocales(){
+  const s = new Map(); bancos.forEach(B => B.filas.forEach(f => { const m = dia(f.t).slice(0,7); (s.get(m) || s.set(m, new Set()).get(m)).add(dia(f.t)); }));
+  return [...s].filter(([m, d]) => d.size >= 5).map(([m]) => m).sort();
+}
+const mesesTodos = () => [...new Set([...mesesLocales(), ...resumenes.map(s => s.mes)])].sort();
+/* Analiza todos los bancos con datos en un mes. La corriente de flotación solo se compara entre bancos del mismo modelo. */
+const cacheMes = new Map();
+function analizarMes(mes){
+  if (cacheMes.has(mes)) return cacheMes.get(mes);
+  const porMod = {};
+  bancos.forEach((B, k) => { const i = [...B.filas.values()].filter(f => dia(f.t).startsWith(mes)).sort((a,b)=>a.t.localeCompare(b.t)).pop()?.tot.i; if (i > 0.05) (porMod[modeloDe(k)] ||= []).push(i); });
+  const ctx = {iMed:Object.fromEntries(Object.entries(porMod).map(([m, a]) => [m, med(a)])), nMod:Object.fromEntries(Object.entries(porMod).map(([m, a]) => [m, a.length]))};
+  const A = new Map(); bancos.forEach((B, k) => { const a = analizar(B, ctx, mes); if (a) A.set(k, a); });
+  cacheMes.set(mes, A); return A;
+}
+const invalidar = () => cacheMes.clear();
+
+/* ================= resúmenes mensuales (lo que se comparte) =================
+   Uno por banco y mes, con id fijo: si dos teléfonos cargan el mismo CSV, actualizan el mismo renglón de la hoja. */
+const idRes = (clave, mes) => `s${clave.replace(/\|/g, "-")}-${mes}`;
+const resDe = (clave, mes) => resumenes.find(s => s.clave === clave && s.mes === mes) || null;
+function resumenDe(a, mes){
+  const tot = a.u.tot, [l, u, b] = a.clave.split("|");
+  return {id:idRes(a.clave, mes), tag:`${l}-UPS${u}-B${+b} ${mes}`, clave:a.clave, mes, mod:a.mod, est:a.estB, cuenta:a.cuenta, n:a.n,
+    rMed:a.rMed == null ? null : +a.rMed.toFixed(3), vCelda:a.vCelda == null ? null : +a.vCelda.toFixed(3), tProm:a.tProm == null ? null : +a.tProm.toFixed(1),
+    iFlot:tot.i ?? null, riz:tot.riz ?? null, vBanco:vivo(tot.v) ? +tot.v.toFixed(1) : null, dias:new Set(a.delMes.map(f => dia(f.t))).size, hasta:dia(a.u.t),
+    mon:a.mon.length, hall:a.hb.filter(h => h.est !== "ok").slice(0, 8).map(h => ({est:h.est, t:h.t})),
+    bats:a.bats.filter(x => x.est === "bad" || x.est === "warn").sort((x, y) => y.score - x.score).slice(0, 20).map(x => ({n:x.n, est:x.est, m:x.m.find(t => !/^Reemplazada/.test(t)) || x.m[0] || "", r:x.r, v:x.v}))};
+}
+/* Comparación por contenido (sin importar el orden de los campos) y sin las marcas de sincronización. */
+const canon = v => Array.isArray(v) ? `[${v.map(canon)}]` : v && typeof v === "object" ? `{${Object.keys(v).sort().map(k => JSON.stringify(k) + ":" + canon(v[k]))}}` : JSON.stringify(v ?? null);
+const sinMeta = s => { const {upd, srvUpd, autor, in:_in, ...r} = s; return canon(r); };
+/* todos=false (al abrir): solo los 2 meses más recientes; lo demás no cambia si no se cargan CSV ni se tocan los ajustes. */
+function actualizarResumenes(todos = true){
+  let cambio = false;
+  for (const mes of todos ? mesesLocales() : mesesLocales().slice(-2)){
+    analizarMes(mes).forEach(a => {
+      const nuevo = resumenDe(a, mes), viejo = resDe(a.clave, mes);
+      if (viejo && sinMeta(viejo) === sinMeta(nuevo)) return;
+      if (viejo) Object.assign(viejo, nuevo, {upd:Date.now()}); else resumenes.push({...nuevo, upd:Date.now()});
+      cambio = true;
+    });
+  }
+  P.ultimoDia = (() => { let m = ""; bancos.forEach(B => B.filas.forEach(f => { if (f.t > m) m = f.t; })); return m ? dia(m) : P.ultimoDia; })();
+  P.nBancos = bancos.size;
+  persist(); if (cambio) sync.sincronizar();
+}
+
+/* ================= pestañas ================= */
+let sel = null, selBat = null, mes = null, prioTodas = false, tabs = null;
+tabs = Comun.pestanas({est:renderEstado, ban:renderBanco, ten:renderTen, rem:renderRem, inf:prepInforme, cfg:renderUsage});
+
+/* ================= Estado ================= */
+function renderEstado(){
+  const ms = mesesTodos();
+  $("#vacio").classList.toggle("hidden", ms.length > 0); $("#res").classList.toggle("hidden", !ms.length);
+  if (!ms.length) return;
+  if (!mes || !ms.includes(mes)) mes = ms[ms.length-1];
+  $("#mes").innerHTML = ms.map(m => `<option value="${m}">${mesTxt(m)}</option>`).reverse().join(""); $("#mes").value = mes;
+  const A = analizarMes(mes);
+  const c = {ok:0, warn:0, bad:0, na:0}; let nb = 0, nEq = 0;
+  CLAVES.forEach(k => { const a = A.get(k), s = a ? null : resDe(k, mes); const cu = a?.cuenta || s?.cuenta; if (!cu) return; nb++; if (s) nEq++; for (const x in c) c[x] += cu[x] || 0; });
+  const nRep = reemplazos.filter(r => r.fecha.startsWith(mes)).length;
+  $("#kGlobal").innerHTML = `<div class="kpi"><div class="l">Bancos con datos en ${mesTxt(mes)}</div><div class="v">${nb} <span class="muted" style="font-size:14px">de 32</span></div>${nEq ? `<div class="muted" style="font-size:12px">☁ ${nEq} del equipo</div>` : ""}</div>
+    <div class="kpi bad"><div class="l">✕ Reemplazar / crítico</div><div class="v">${c.bad}</div></div>
+    <div class="kpi warn"><div class="l">! Vigilar</div><div class="v">${c.warn}</div></div>
+    <div class="kpi"><div class="l">? Sin lectura</div><div class="v">${c.na}</div></div>
+    <div class="kpi"><div class="l">✓ OK</div><div class="v">${c.ok}</div></div>
+    <div class="kpi"><div class="l">↻ Reemplazos del mes</div><div class="v">${nRep}</div></div>`;
+  $("#lados").innerHTML = ["A","B"].map(l => `<div class="card"><h3>Rama ${l}</h3>${[1,2,3,4].map(u => `<div class="muted" style="margin:8px 0 4px;font-size:13px">UPS ${u}</div><div class="upsg">${["01","02","03","04"].map(b => {
+      const k = `${l}|${u}|${b}`, a = A.get(k), s = a ? null : resDe(k, mes), e = a?.estB || s?.est, cu = a?.cuenta || s?.cuenta;
+      if (!e) return `<div class="bank vacio"><b>Banco ${+b} <span class="mtag">${modeloDe(k)}</span></b><span class="muted" style="font-size:13px">sin datos</span></div>`;
+      return `<button class="bank" data-k="${k}" aria-pressed="${k===sel}"><b>Banco ${+b} <span class="mtag">${a?.mod || s.mod}${s ? " ☁" : ""}</span></b><span class="tag t-${e}">${ICON[e]} ${CORTO[e]}</span>
+        <span class="row" style="font-size:13px">${cu.bad?`<span class="tag t-bad">✕ ${cu.bad}</span>`:""}${cu.warn?`<span class="tag t-warn">! ${cu.warn}</span>`:""}${cu.na?`<span class="tag t-na">? ${cu.na}</span>`:""}<span class="tag t-ok">✓ ${cu.ok}</span></span></button>`;
+    }).join("")}</div>`).join("")}</div>`).join("");
+  prioridades(A); monitoreo(A);
+  const ord = CLAVES.map(k => A.get(k) ? {k, hb:A.get(k).hb, e:A.get(k).estB} : resDe(k, mes) ? {k, hb:resDe(k, mes).hall, e:resDe(k, mes).est, eq:true} : null).filter(Boolean).sort((x, y) => NIVEL[y.e]-NIVEL[x.e]);
+  $("#hallTodos").innerHTML = ord.map(x => x.hb.length ? `<h3 style="margin-top:8px">${nombreK(x.k)}${x.eq ? " ☁" : ""}</h3><ul class="f">${x.hb.map(h => `<li><span class="tag t-${h.est}">${ICON[h.est]}</span> ${esc(h.t)}</li>`).join("")}</ul>` : "").join("") || "<p>Sin hallazgos.</p>";
+}
+function prioridades(A){
+  const todas = [];
+  A.forEach(a => a.bats.forEach(b => { if (b.est === "bad" || b.est === "warn") todas.push({a, b}); }));
+  todas.sort((x, y) => y.b.score - x.b.score);
+  const lista = prioTodas ? todas : todas.slice(0, 15);
+  $("#prio").innerHTML = todas.length ? `<thead><tr><th>#</th><th>Banco</th><th>Bat.</th><th>Estado</th><th>Motivo principal</th><th>R (mΩ)</th><th>vs base</th><th>vs banco</th><th>V</th><th>Edad</th></tr></thead><tbody>` +
+    lista.map(({a, b}, i) => `<tr class="clic" data-k="${a.clave}" data-n="${b.n}"><td>${i+1}</td><td>${cortoK(a.clave)} <span class="mtag">${a.mod}</span></td><td><b>${b.n}</b></td><td><span class="tag t-${b.est}">${ICON[b.est]} ${CORTO[b.est]}</span></td><td class="wrapc">${esc(b.m.find(x => !/^Reemplazada/.test(x)) || b.m[0] || "")}</td><td>${fx(b.r,3)}</td><td>${pct(b.dBase)}</td><td>${pct(b.dMed)}</td><td>${fx(b.v,3)}</td><td>${b.edad==null ? "—" : fx(b.edad,1)+" años"}</td></tr>`).join("") + `</tbody>`
+    : `<tbody><tr><td>${A.size ? "Ninguna batería requiere atención este mes." : "Carga los CSV de este mes para ver las baterías una por una."}</td></tr></tbody>`;
+  $("#prioMas").classList.toggle("hidden", todas.length <= 15);
+  $("#prioMas").textContent = prioTodas ? "Mostrar solo las 15 primeras" : `Mostrar todas (${todas.length})`;
+}
+$("#prioMas").onclick = () => { prioTodas = !prioTodas; prioridades(analizarMes(mes)); };
+function monitoreo(A){
+  const ord = [...A.values()].sort((x, y) => x.clave.localeCompare(y.clave));
+  $("#mon").innerHTML = ord.length ? `<thead><tr><th>Banco</th><th>Estado</th><th>Sensores V</th><th>Sensores T</th><th>Resistencia actualizada</th><th>Suma V vs banco</th><th>Detalle</th></tr></thead><tbody>` +
+    ord.map(a => { const e = a.mon.length ? "na" : "ok"; return `<tr class="clic" data-k="${a.clave}"><td>${cortoK(a.clave)} <span class="mtag">${a.mod}</span></td><td><span class="tag t-${e}">${e==="ok" ? "✓ OK" : "? Falla"}</span></td>
+      <td>${a.nV}/${a.n}</td><td>${a.nT}/${a.n}</td><td>${a.ultR ? fdia(a.ultR) : "sin cambios"} (${a.diasR} d)</td><td>${a.difSuma==null ? "—" : fx(a.difSuma,1)+" %"}</td><td class="wrapc">${a.mon.map(esc).join("<br>") || "—"}</td></tr>`; }).join("") + `</tbody>`
+    : `<tbody><tr><td class="muted">Sin CSV cargados de este mes en este teléfono.</td></tr></tbody>`;
+}
+const abrirBanco = (k, n = null) => { sel = k; selBat = n; tabs.ir("ban"); window.scrollTo({top:0}); };
+$("#prio").addEventListener("click", e => { const tr = e.target.closest("tr[data-k]"); if (tr) abrirBanco(tr.dataset.k, +tr.dataset.n); });
+$("#mon").addEventListener("click", e => { const tr = e.target.closest("tr[data-k]"); if (tr) abrirBanco(tr.dataset.k); });
+$("#lados").addEventListener("click", e => { const b = e.target.closest("[data-k]"); if (b) abrirBanco(b.dataset.k); });
+$("#mes").onchange = () => { mes = $("#mes").value; renderEstado(); };
+
+async function cargarArchivos(files){
+  const out = [], nuevas = [];
+  for (const f of files){
+    try{ const r = leer(f.name, await f.text()); out.push(`✓ ${esc(f.name)} → ${nombreK(r.clave)} (${r.nuevas.length} días)`); sel = r.clave; nuevas.push(...r.nuevas.map(x => [r.clave, x])); }
+    catch(e){ out.push(`✕ ${esc(f.name)}: ${esc(e.message)}`); }
+  }
+  if (db && nuevas.length){
+    try{ await tx("readwrite", s => { nuevas.forEach(([clave, f]) => s.put({clave, f}, `${clave}|${f.t}`)); }); }
+    catch{ out.push("✕ No se pudo guardar en el teléfono (¿almacenamiento lleno?)."); }
+  } else if (!db && nuevas.length) out.push("⚠ Este navegador no permite guardar la telemetría: se perderá al cerrar.");
+  $("#cargados").innerHTML = out.join("<br>");
+  invalidar(); mes = null; actualizarResumenes(); renderAll();
+}
+$("#files").onchange = e => { cargarArchivos([...e.target.files]); e.target.value = ""; };
+const drop = $("#drop");
+["dragenter","dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("on"); }));
+["dragleave","drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("on"); }));
+drop.addEventListener("drop", e => cargarArchivos([...e.dataTransfer.files].filter(f => /\.csv$/i.test(f.name))));
+
+/* ================= Banco ================= */
+function renderBanco(){
+  const ms = mesesTodos();
+  if (!mes || !ms.includes(mes)) mes = ms[ms.length-1] || null;
+  $("#banMes").innerHTML = ms.map(m => `<option value="${m}">${mesTxt(m)}</option>`).reverse().join(""); if (mes) $("#banMes").value = mes;
+  if (!sel) sel = CLAVES.find(k => bancos.has(k)) || CLAVES[0];
+  $("#banSel").innerHTML = CLAVES.map(k => `<option value="${k}">${nombreK(k)} · ${modeloDe(k)}${bancos.has(k) ? "" : resumenes.some(s => s.clave === k) ? " ☁" : " (sin datos)"}</option>`).join(""); $("#banSel").value = sel;
+  const a = mes ? analizarMes(mes).get(sel) : null;
+  $("#det").classList.toggle("hidden", !a); $("#banVacio").classList.toggle("hidden", !!a);
+  if (!a){
+    const s = mes ? resDe(sel, mes) : null;
+    $("#banVacio").innerHTML = s
+      ? `<b>${nombreK(sel)} · ${mesTxt(mes)} ☁</b><br>Resumen compartido por el equipo: <span class="tag t-${s.est}">${ICON[s.est]} ${CORTO[s.est]}</span> · ✕ ${s.cuenta.bad} · ! ${s.cuenta.warn} · ? ${s.cuenta.na} · R mediana ${fx(s.rMed,3)} mΩ · ${fx(s.vCelda,3)} V/celda${s.hall.length ? `<ul class="f">${s.hall.map(h => `<li>${esc(h.t)}</li>`).join("")}</ul>` : ""}<p class="muted">Para ver el mapa y las baterías una por una, carga el CSV de este banco.</p>`
+      : `Sin datos de ${nombreK(sel)}${mes ? " en " + mesTxt(mes) : ""}. Carga su CSV de Gexia en la pestaña Estado.`;
+    return;
+  }
+  const tot = a.u.tot;
+  $("#detT").textContent = nombreK(a.clave);
+  $("#detSub").textContent = `Modelo ${a.mod}: ${a.F.nombre || "—"} · ${mesTxt(mes)} · ${a.delMes.length} lecturas diarias · valores del ${fdia(a.u.t)} · historial desde el ${fdia(a.hist[0].t)}${a.inst ? ` · instalado el ${fdia(a.inst)}` : ""}`;
+  const k = (l, v, cls="") => `<div class="kpi ${cls}"><div class="l">${l}</div><div class="v">${v}</div></div>`;
+  const rizMal = tot.riz != null && vivo(tot.v) && tot.riz/10/tot.v > L.rizPct;
+  $("#kBanco").innerHTML = k("Estado", `<span class="tag t-${a.estB}" style="font-size:15px">${ICON[a.estB]} ${CORTO[a.estB]}</span>`)
+    + k("Voltaje del banco", vivo(tot.v) ? fx(tot.v,1)+" V" : "Sin lectura", vivo(tot.v) ? "" : "warn")
+    + k("Corriente", vivo(tot.v) ? fx(tot.i,2)+" A" : "—", a.hb.some(h => /Corriente/.test(h.t)) ? "warn" : "")
+    + k("Temperatura", fx(tot.t,1)+" °C") + k("Rizado", tot.riz ? Math.round(tot.riz)+" mV" : "—", rizMal ? "warn" : "")
+    + k("Flotación promedio", a.vCelda ? fx(a.vCelda,3)+" V/celda" : "—", a.hb.some(h => /Flotación/.test(h.t)) ? "warn" : "") + k("R mediana", fx(a.rMed,3)+" mΩ");
+  $("#map").innerHTML = a.bats.map(b => `<button class="cell ${b.est}" data-n="${b.n}" aria-pressed="${b.n===selBat}" aria-label="Batería ${b.n}: ${TXT[b.est]}${b.rep?", reemplazada":""}">${b.rep?'<span class="nu" title="Reemplazada">↻</span>':""}${b.n}<i>${ICON[b.est]}</i></button>`).join("");
+  refBanco(a);
+  $("#hall").innerHTML = a.hb.length ? `<ul class="f">${a.hb.map(h => `<li><span class="tag t-${h.est}">${ICON[h.est]}</span> ${esc(h.t)}</li>`).join("")}</ul>` : "<p>Sin hallazgos.</p>";
+  $("#tabla").innerHTML = `<thead><tr><th>Bat.</th><th>Estado</th><th>V</th><th>Δ V mediana</th><th>Tendencia V</th><th>R (mΩ)</th><th>R base</th><th>vs base</th><th>vs banco</th>${a.rRef?`<th>vs ${a.RB?.r ? "ref. real" : "fabricante"}</th>`:""}<th>T (°C)</th><th>Edad</th></tr></thead><tbody>` +
+    a.bats.map(b => `<tr class="clic" data-n="${b.n}"><td>${b.n}${b.rep?" ↻":""}</td><td><span class="tag t-${b.est}">${ICON[b.est]} ${TXT[b.est]}</span></td><td>${fx(b.v,3)}</td><td>${b.dV==null?"—":(b.dV>0?"+":"")+fx(b.dV,3)}</td><td>${b.tend==null?"—":(b.tend>0?"+":"")+fx(b.tend,3)}</td><td>${fx(b.r,3)}</td><td>${fx(b.base,3)}</td><td>${pct(b.dBase)}</td><td>${pct(b.dMed)}</td>${a.rRef?`<td>${pct(b.dRef)}</td>`:""}<td>${fx(b.t,1)}</td><td>${b.edad==null?"—":fx(b.edad,1)}</td></tr>`).join("") + `</tbody>`;
+  // formulario de reemplazo
+  $("#rN").innerHTML = a.bats.map(b => `<option value="${b.n}">${b.n}</option>`).join(""); if (selBat) $("#rN").value = selBat;
+  $("#rModelo").innerHTML = Object.entries(P.modelos).map(([m, x]) => `<option value="${m}"${m===a.mod?" selected":""}>${m} · ${esc(x.nombre||"")}</option>`).join("");
+  if (!$("#rFecha").value) $("#rFecha").value = isoLocal().slice(0,10);
+  $("#repBat").textContent = `· ${nombreK(a.clave)}`;
+  bateria(a);
+}
+$("#banSel").onchange = () => { sel = $("#banSel").value; selBat = null; renderBanco(); };
+$("#banMes").onchange = () => { mes = $("#banMes").value; renderBanco(); };
+$("#map").addEventListener("click", e => { const c = e.target.closest("[data-n]"); if (!c) return; selBat = +c.dataset.n; renderBanco(); $("#bat").scrollIntoView({behavior:"smooth", block:"nearest"}); });
+$("#tabla").addEventListener("click", e => { const tr = e.target.closest("tr[data-n]"); if (!tr) return; selBat = +tr.dataset.n; renderBanco(); $("#bat").scrollIntoView({behavior:"smooth"}); });
+
+/* gráfica chica de una variable contra la referencia del banco, con límite y marcas de reemplazo */
+function mini({pts, k, titulo, unidad, dec, col, refTxt, lim, marcas=[]}){
+  const p = pts.filter(x => x[k] != null);
+  if (p.length < 2) return `<div><h4>${titulo}</h4><p class="muted" style="font-size:13px">Sin lecturas en el periodo.</p></div>`;
+  const W = 360, H = 140, Lm = 44, R = 6, T = 10, Bm = 20;
+  const ts = p.map(x => +new Date(x.t)), vs = p.map(x => x[k]), rf = p.map(x => x.ref?.[k]).filter(x => x != null);
+  const lims = [].concat(lim || []).filter(l => l.v != null && isFinite(l.v));
+  let v0 = Math.min(...vs, ...rf), v1 = Math.max(...vs, ...rf);
+  for (const l of lims){ v0 = Math.min(v0, l.v); v1 = Math.max(v1, l.v); }
+  const pad = (v1 - v0) * 0.12 || Math.abs(v1) * 0.02 || 0.05; v0 -= pad; v1 += pad;
+  const X = t => Lm + (t - ts[0]) / ((ts[ts.length-1] - ts[0]) || 1) * (W - Lm - R), Y = v => T + (1 - (v - v0)/(v1 - v0)) * (H - T - Bm);
+  const pl = (arr, f) => arr.map(x => X(+new Date(x.t)) + "," + Y(f(x))).join(" ");
+  const mk = marcas.map(m => +new Date(m+"T12:00:00Z")).filter(t => t >= ts[0] && t <= ts[ts.length-1]);
+  return `<div><h4>${titulo} <span class="muted" style="font-weight:400">· ${vs[vs.length-1].toFixed(dec)} ${unidad}</span></h4>
+    <svg class="sp" viewBox="0 0 ${W} ${H}" role="img" aria-label="${titulo} de la batería en el periodo">
+      ${[v0+pad, (v0+v1)/2, v1-pad].map(v => `<line x1="${Lm}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${Lm-4}" y="${Y(v)+4}" text-anchor="end" font-size="11" fill="var(--muted)">${v.toFixed(dec)}</text>`).join("")}
+      ${mk.map(t => `<line x1="${X(t)}" x2="${X(t)}" y1="${T}" y2="${H-Bm}" stroke="var(--accent)" stroke-dasharray="2 3"/><text x="${X(t)+3}" y="${T+10}" font-size="11" fill="var(--accent)">↻</text>`).join("")}
+      ${lims.map(l => `<line x1="${Lm}" x2="${W-R}" y1="${Y(l.v)}" y2="${Y(l.v)}" stroke="${l.col||"var(--bad)"}" stroke-dasharray="3 3"/><text x="${W-R}" y="${Y(l.v)-3}" text-anchor="end" font-size="11" fill="${l.col||"var(--bad)"}">${l.txt}</text>`).join("")}
+      ${rf.length > 1 ? `<polyline fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4" points="${pl(p.filter(x => x.ref?.[k] != null), x => x.ref[k])}"/>` : ""}
+      <polyline fill="none" stroke="${col}" stroke-width="2" points="${pl(p, x => x[k])}"/>
+      <text x="${Lm}" y="${H-4}" font-size="11" fill="var(--muted)">${fdia(p[0].t)}</text><text x="${W-R}" y="${H-4}" text-anchor="end" font-size="11" fill="var(--muted)">${fdia(p[p.length-1].t)}</text>
+    </svg>
+    <div class="ley"><span><i style="border-color:${col}"></i>Batería</span><span><i style="border-color:var(--muted);border-top-style:dashed"></i>${refTxt}</span>${lims.map(l => `<span><i style="border-color:${l.col||"var(--bad)"};border-top-style:dotted"></i>${l.ley}</span>`).join("")}${mk.length ? `<span style="color:var(--accent)">↻ reemplazo</span>` : ""}</div></div>`;
+}
+/* Línea base real: promedio de los monoblocs sanos en una medición de Gexia (lo ideal, 72 h después de instalar,
+   con el banco estable en flotación). Sanos = con voltaje y dentro de +Advertencia de la mediana. */
+function medicionesR(a){
+  const h = a.hist, out = [];
+  h.forEach((f, j) => { if (j === 0 || Object.keys(f.bat).some(i => vivo(f.bat[i]?.r0) && f.bat[i].r0 !== h[j-1].bat[i]?.r0)) out.push(f); });
+  return out;
+}
+function promSanos(a, f){
+  const lr = limR(a.F), rs = [];
+  for (const [, x] of Object.entries(f.bat)) if (vivo(x.v) && vivo(x.r)) rs.push(x.r);
+  const md = med(rs), ok = rs.filter(r => r <= md*(1 + lr.w));
+  return {r:avg(ok), n:ok.length, fuera:rs.length - ok.length};
+}
+function refBanco(a){
+  const box = $("#refB"), ms = medicionesR(a), inst = a.inst;
+  // propuesta: la primera medición 3 días (72 h) o más después de la instalación; sin fecha, la primera cargada
+  const prop = (inst && ms.find(f => new Date(f.t) - new Date(inst+"T00:00:00Z") >= 3*DIA)) || ms[0];
+  const RB = a.RB, fab = a.F.rRef;
+  box.innerHTML = `<p style="margin:0 0 6px;font-size:14px">${RB?.r
+      ? `Usando la <b>referencia real del banco: ${fx(RB.r,3)} mΩ</b> (promedio de ${RB.n} baterías sanas, medición del ${fdia(RB.fecha)})${fab ? `, ${pct(RB.r/fab - 1)} contra la ficha (${fx(fab,2)} mΩ)` : ""}.`
+      : fab ? `Usando la <b>referencia de la ficha: ${fx(fab,2)} mΩ</b>.` : `Sin referencia: solo se compara contra la línea base y la mediana.`}
+    ${RB?.r && (RB.rTc || 0) !== (L.rTc || 0) ? `<b style="color:var(--warn)">Se fijó con otra compensación por temperatura; vuelve a fijarla.</b> ` : ""}Advertencia arriba de ${a.rRef ? fx(a.rRef*(1+limR(a.F).w),2)+" mΩ" : "—"}, Falla arriba de ${a.rRef ? fx(a.rRef*(1+limR(a.F).b),2)+" mΩ" : "—"}.</p>
+    <div class="row" style="font-size:14px"><label>Medición <select id="refFecha" style="max-width:220px">${ms.map(f => `<option value="${f.t}"${f===prop?" selected":""}>${fdia(f.t)}</option>`).join("")}</select></label>
+      <button class="btn sec" id="refUsar">Usar promedio de sanas</button>${RB?.r ? `<button class="linkbtn" id="refQuitar">Volver a la ficha</button>` : ""}</div>
+    <div class="muted" id="refProp" style="font-size:13px"></div>`;
+  const prev = () => {
+    const f = ms.find(x => x.t === $("#refFecha").value); if (!f) return null;
+    const pr = promSanos(a, f), d = fab && pr.r ? pr.r/fab - 1 : null;
+    $("#refProp").innerHTML = pr.r ? `Promedio de ${pr.n} baterías sanas: <b>${fx(pr.r,3)} mΩ</b>${pr.fuera ? ` (sin ${pr.fuera} arriba de +${Math.round(limR(a.F).w*100)} % de la mediana)` : ""}${d != null ? `, ${pct(d)} contra la ficha.` : "."}`
+      + (d != null && Math.abs(d) > 0.10 ? ` <b style="color:var(--warn)">Difiere más de 10 % de la ficha.</b> Si el banco no es nuevo, una referencia alta esconde el envejecimiento; úsala solo con una medición de puesta en servicio.` : "")
+      + (inst ? "" : " Sin fecha de instalación del banco: no se puede saber si esta medición es de las primeras 72 h.") : "Sin resistencias en esa medición.";
+    return {f, pr};
+  };
+  prev(); $("#refFecha").onchange = prev;
+  $("#refUsar").onclick = () => { const x = prev(); if (!x?.pr.r) return; P.refBanco[a.clave] = {r:+x.pr.r.toFixed(3), n:x.pr.n, fecha:dia(x.f.t), rTc:L.rTc}; cambioCfg(); };
+  if ($("#refQuitar")) $("#refQuitar").onclick = () => { delete P.refBanco[a.clave]; cambioCfg(); };
+}
+function bateria(a){
+  const box = $("#bat"), b = a.bats.find(x => x.n === selBat);
+  if (!b){ box.innerHTML = `<span class="muted">Toca una batería del mapa para ver su detalle y sus gráficas.</span>`; return; }
+  const col = {ok:"var(--ok)", warn:"var(--warn)", bad:"var(--bad)", na:"var(--na)"}[b.est];
+  const s = b.serie, refR = b.base || s[s.length-1]?.ref?.r, lr = limR(a.F), rf = a.rRef;
+  // con referencia (real del banco o de fábrica): las dos líneas de la matriz en mΩ; sin ella, Advertencia sobre la línea base o la mediana
+  const limRes = rf ? [{v:rf*(1+lr.w), txt:fx(rf*(1+lr.w),2), ley:`Advertencia (${fx(rf*(1+lr.w),2)} mΩ)`, col:"var(--warn)"},
+                       {v:rf*(1+lr.b), txt:fx(rf*(1+lr.b),2), ley:`Falla (${fx(rf*(1+lr.b),2)} mΩ)`}]
+    : refR ? {v:refR*(1+lr.w), txt:"+"+Math.round(lr.w*100)+" %", ley:`Advertencia (+${Math.round(lr.w*100)} % de ${b.base ? "su línea base" : "la mediana"})`, col:"var(--warn)"} : null;
+  const tMax = Math.max(...s.map(x => x.tc ?? -Infinity));
+  const reps = reemplazos.filter(r => r.clave === a.clave && r.n === b.n).sort((x, y) => y.fecha.localeCompare(x.fecha));
+  box.innerHTML = `<h3 style="margin-top:0">Batería ${b.n} <span class="tag t-${b.est}">${ICON[b.est]} ${TXT[b.est]}</span></h3>
+    <div style="font-size:14px">Voltaje ${fx(b.v,3)} V · Resistencia ${fx(b.r,3)} mΩ (línea base ${fx(b.base,3)}) · Temperatura ${fx(b.t,1)} °C${b.edad!=null ? ` · Edad ${fx(b.edad,1)} años` : ""}</div>
+    ${b.m.length ? `<ul class="f" style="font-size:14px">${b.m.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="muted">Dentro de los límites.</p>`}
+    <div class="graf">
+      ${mini({pts:s, k:"v", titulo:"Voltaje", unidad:"V", dec:3, col, refTxt:"Mediana del banco", marcas:reps.map(r => r.fecha)})}
+      ${mini({pts:s, k:"r", titulo:L.rTc ? "Resistencia interna a 25 °C" : "Resistencia interna", unidad:"mΩ", dec:3, col, refTxt:"Mediana del banco", marcas:reps.map(r => r.fecha), lim:limRes})}
+      ${mini({pts:s, k:"tc", titulo:"Temperatura", unidad:"°C", dec:1, col, refTxt:"Promedio del banco", marcas:reps.map(r => r.fecha),
+        lim: tMax > L.tWarn - 5 ? {v:L.tWarn, txt:L.tWarn+" °C", ley:`Vigilar (${L.tWarn} °C)`} : null})}
+    </div>
+    <p class="muted" style="margin:6px 0 0;font-size:13px">Gráficas con todo el historial cargado hasta ${mesTxt(mes)}. Gexia mide la resistencia de vez en cuando, por eso su línea va en escalones.</p>
+    <h3>Reemplazos de esta batería</h3>
+    ${reps.length ? `<ul class="f" style="font-size:14px">${reps.map(r => `<li>↻ ${fdia(r.fecha)}${r.modelo ? ` · ${r.modelo}` : ""}${r.serie ? ` · serie ${esc(r.serie)}` : ""}${r.nota ? ` · ${esc(r.nota)}` : ""}${r.autor ? ` · ${esc(r.autor)}` : ""} ${r.foto ? `<button class="linkbtn" data-foto="${esc(r.id)}">Ver foto</button>` : ""}<button class="linkbtn" data-borrarrep="${esc(r.id)}">Quitar</button></li>`).join("")}</ul>` : `<p class="muted" style="margin:0">Sin reemplazos registrados. Usa «Registrar reemplazo» abajo del mapa.</p>`}`;
+}
+async function borrarReemplazo(id){
+  const r = reemplazos.find(x => x.id === id); if (!r || !confirm("¿Quitar este reemplazo? No se puede deshacer.")) return;
+  sync.borrada(r); reemplazos = reemplazos.filter(x => x.id !== id); persist(); if (r.foto) await fotos.del(id);
+  invalidar(); actualizarResumenes(); renderAll(); sync.sincronizar();
+}
+$("#bat").addEventListener("click", e => { const x = e.target.closest("[data-borrarrep]"); if (x) borrarReemplazo(x.dataset.borrarrep); });
+Comun.visorFotos(fotos, $("#bat"));
+const foto = Comun.capturaFoto({fotos, maxLado:1600, calidad:0.75, onChange:() => {}, heic:"Formato HEIC no compatible. Cambia la cámara a JPG o elige otra foto."});
+$("#rN").onchange = () => { selBat = +$("#rN").value; renderBanco(); };
+$("#saveBtn").onclick = async () => {
+  const st = $("#rStatus"); estado(st, "");
+  if (foto.pending){ st.textContent = "Esperando a que termine la foto…"; await foto.pending; }
+  const fecha = $("#rFecha").value, n = +$("#rN").value, modelo = $("#rModelo").value, mod = modeloDe(sel);
+  if (!fecha || !n){ estado(st, "Elige la batería y la fecha.", true); return; }
+  if (fecha > isoLocal().slice(0,10) && !confirm("La fecha está en el futuro. ¿Registrar así?")) return;
+  if (modelo !== mod && !confirm(`El banco es ${mod} y elegiste ${modelo}. No se recomienda mezclar modelos en un banco. ¿Registrar de todos modos?`)) return;
+  const id = Comun.nuevoId("r");
+  const r = {id, ts:new Date(fecha + "T12:00").toISOString(), fecha, guardado:new Date().toISOString(), clave:sel, n, modelo, serie:$("#rSerie").value.trim(), nota:$("#rNota").value.trim(), foto:false, autor:sync.autor()};
+  const gf = await foto.guardar(id); r.foto = gf.ok;
+  reemplazos.push(r);
+  if (!persist()){ reemplazos = reemplazos.filter(x => x.id !== id); if (r.foto) fotos.del(id); estado(st, "No se pudo guardar: almacenamiento lleno o bloqueado.", true); return; }
+  estado(st, `Reemplazo de la batería ${n} registrado${gf.msg}.`, gf.msg.startsWith("."));
+  $("#rSerie").value = ""; $("#rNota").value = ""; foto.clear(); selBat = n;
+  invalidar(); actualizarResumenes(); renderAll(); sync.sincronizar();
+};
+
+/* ================= Mes a mes ================= */
+const COLORS = ["#3a56d4", "#c2410c", "#237a47", "#8b5cf6", "#0891b2"];
+const METRICS = [["rMed","Resistencia mediana (mΩ)"],["aten","Baterías en Vigilar o Reemplazar"],["vCelda","Flotación promedio (V/celda)"],["tProm","Temperatura promedio (°C)"],["iFlot","Corriente de flotación (A)"],["na","Baterías sin lectura del monitoreo"]];
+$("#metric").innerHTML = METRICS.map(([k, l]) => `<option value="${k}">${l}</option>`).join("");
+const valM = (s, m) => m === "aten" ? (s.cuenta.bad || 0) + (s.cuenta.warn || 0) : m === "na" ? s.cuenta.na || 0 : s[m];
+function renderTen(){
+  const conRes = CLAVES.filter(k => resumenes.some(s => s.clave === k));
+  const sl = $("#tenBan"), cur = sl.value || sel;
+  sl.innerHTML = CLAVES.map(k => `<option value="${k}">${nombreK(k)}${conRes.includes(k) ? "" : " (sin datos)"}</option>`).join("");
+  sl.value = CLAVES.includes(cur) && conRes.includes(cur) ? cur : (conRes[0] || CLAVES[0]);
+  const m = $("#metric").value, base = sl.value, [l, u] = base.split("|");
+  const ks = $("#tenUps").checked ? CLAVES.filter(k => k.startsWith(`${l}|${u}|`)) : [base];
+  const series = ks.map((k, i) => ({name:nombreK(k), color:COLORS[i % COLORS.length],
+    pts:resumenes.filter(s => s.clave === k).sort((a, b) => a.mes.localeCompare(b.mes)).map(s => ({t:+new Date(s.mes + "-15T12:00"), v:valM(s, m)})).filter(p => p.v != null && isFinite(p.v))})).filter(s => s.pts.length);
+  const F = fichaDe(base), lr = limR(F), ref = P.refBanco[base]?.r || F.rRef;
+  let opts = {fmt:v => fx(v, m === "vCelda" ? 3 : m === "rMed" ? 3 : m === "aten" || m === "na" ? 0 : 1), min0:m === "aten" || m === "na" || m === "iFlot"};
+  if (m === "rMed" && ref) opts.lim = ref*(1+lr.w);
+  if (m === "vCelda" && F.vMin && F.vMax) opts.banda = [F.vMin, F.vMax];
+  if (m === "tProm") opts.lim = L.tWarn;
+  $("#tenNota").textContent = m === "rMed" && ref ? `Límite: Advertencia del modelo (${fx(ref*(1+lr.w),2)} mΩ). Un punto por mes.` : m === "vCelda" ? `Banda: flotación de la ficha a 25 °C (${F.vMin}–${F.vMax} V/celda). Un punto por mes.` : "Un punto por mes.";
+  if (!series.length){ $("#chartBox").innerHTML = `<p class="muted">Sin resúmenes mensuales de este banco. Se crean al cargar sus CSV (o llegan del equipo).</p>`; $("#legend").innerHTML = ""; }
+  else Comun.grafica(series, {...opts, label:METRICS.find(q => q[0] === m)[1]});
+  renderCmp();
+}
+$("#metric").onchange = renderTen;
+$("#tenBan").onchange = () => { sel = $("#tenBan").value; renderTen(); };
+$("#tenUps").onchange = renderTen;
+/* Tabla de todos los bancos: el mes elegido contra el anterior que tenga resumen. */
+function renderCmp(){
+  const ms = [...new Set(resumenes.map(s => s.mes))].sort();
+  const cm = $("#cmpMes"), cur = cm.value;
+  cm.innerHTML = ms.map(m => `<option value="${m}">${mesTxt(m)}</option>`).reverse().join(""); cm.value = ms.includes(cur) ? cur : ms[ms.length-1] || "";
+  const m = cm.value;
+  if (!m){ $("#cmp").innerHTML = `<tbody><tr><td class="muted">Sin resúmenes mensuales todavía.</td></tr></tbody>`; return; }
+  const filas = CLAVES.map(k => {
+    const s = resDe(k, m); if (!s) return "";
+    const ant = resumenes.filter(x => x.clave === k && x.mes < m).sort((a, b) => b.mes.localeCompare(a.mes))[0];
+    const aten = valM(s, "aten"), atA = ant ? valM(ant, "aten") : null, dR = ant?.rMed && s.rMed ? s.rMed/ant.rMed - 1 : null;
+    const cls = (malo, bueno) => malo ? ' class="peor"' : bueno ? ' class="mejor"' : "";
+    return `<tr><td>${cortoK(k)} <span class="mtag">${s.mod}</span></td><td>${ant ? mesTxt(ant.mes) : "—"}</td>
+      <td${cls(ant && NIVEL[s.est] > NIVEL[ant.est], ant && NIVEL[s.est] < NIVEL[ant.est])}>${ant ? `${CORTO[ant.est]} → ` : ""}${CORTO[s.est]}</td>
+      <td${cls(atA != null && aten > atA, atA != null && aten < atA)}>${atA != null ? `${atA} → ` : ""}${aten}</td>
+      <td${cls(dR != null && dR >= 0.05, dR != null && dR <= -0.05)}>${fx(s.rMed,3)}${dR != null ? ` (${pct(dR)})` : ""}</td>
+      <td>${ant?.vCelda ? `${fx(ant.vCelda,3)} → ` : ""}${fx(s.vCelda,3)}</td><td>${ant?.tProm != null ? `${fx(ant.tProm,1)} → ` : ""}${fx(s.tProm,1)}</td></tr>`;
+  }).join("");
+  $("#cmp").innerHTML = `<thead><tr><th>Banco</th><th>Contra</th><th>Estado</th><th>Vigilar + Reemplazar</th><th>R mediana (mΩ)</th><th>V/celda</th><th>T (°C)</th></tr></thead><tbody>${filas}</tbody>`;
+}
+$("#cmpMes").onchange = renderCmp;
+
+/* ================= Reemplazos ================= */
+function renderRem(){
+  const sb = $("#remBan"), cur = sb.value || "all";
+  sb.innerHTML = `<option value="all">Todos los bancos</option>` + CLAVES.filter(k => reemplazos.some(r => r.clave === k)).map(k => `<option value="${k}">${nombreK(k)}</option>`).join("");
+  sb.value = [...sb.options].some(o => o.value === cur) ? cur : "all";
+  const rows = reemplazos.filter(r => sb.value === "all" || r.clave === sb.value).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  $("#remTbl").innerHTML = rows.length ? `<thead><tr><th>Fecha</th><th>Banco</th><th>Bat.</th><th>Modelo</th><th>Serie</th><th>Nota</th><th>Capturó</th><th>Foto</th><th></th></tr></thead><tbody>` +
+    rows.map(r => `<tr><td>${fdia(r.fecha)}</td><td>${cortoK(r.clave)}</td><td><b>${r.n}</b></td><td>${esc(r.modelo || "")}${r.modelo && r.modelo !== modeloDe(r.clave) ? " ⚠" : ""}</td><td>${esc(r.serie || "")}</td><td class="wrapc">${esc(r.nota || "")}</td><td>${esc(r.autor || "—")}</td>
+      <td>${r.foto ? `<button class="linkbtn" data-foto="${esc(r.id)}">Ver</button>` : ""}</td><td><button class="btn danger" data-del="${esc(r.id)}">Borrar</button></td></tr>`).join("") + `</tbody>`
+    : `<tbody><tr><td class="muted">Sin reemplazos registrados.</td></tr></tbody>`;
+}
+$("#remBan").onchange = renderRem;
+$("#remTbl").addEventListener("click", e => { const b = e.target.closest("[data-del]"); if (b) borrarReemplazo(b.dataset.del); });
+Comun.visorFotos(fotos, $("#remTbl"));
+$("#csvBtn").onclick = () => descargarCSV(`reemplazos_baterias_${stamp()}.csv`, ["fecha","rama","ups","banco","bateria","modelo","modelo_del_banco","serie","nota","capturo","foto","guardado"],
+  [...reemplazos].sort((a, b) => a.fecha.localeCompare(b.fecha)).map(r => { const [l, u, b] = r.clave.split("|"); return [r.fecha, l, u, +b, r.n, r.modelo, modeloDe(r.clave), r.serie, r.nota, r.autor, r.foto ? "sí" : "", r.guardado ? isoLocal(new Date(r.guardado)).replace("T", " ") : ""]; }));
+
+/* ================= Informe mensual ================= */
+const REP_CSS = `
+.rep{background:#fff;color:#16202a;font:13px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;border:1px solid #c9d2db;border-radius:8px;padding:18px}
+.rep h1{font:700 22px/1.15 "Roboto Condensed","Arial Narrow",sans-serif;margin:0}
+.rep h2{font:700 16px/1.2 system-ui,sans-serif;margin:18px 0 6px;padding-bottom:3px;border-bottom:2px solid #23484b;color:#23484b;break-after:avoid}
+.rep .hd{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-bottom:3px solid #16202a;padding-bottom:8px}
+.rep .hd .m{text-align:right;color:#4a5866;font-size:12px}
+.rep .est{display:inline-block;padding:3px 10px;border-radius:4px;font-weight:700;margin-top:6px}
+.rep .ok{background:#dcf1e3;color:#1b6b3d}.rep .bad{background:#fbe3d8;color:#a3330b}.rep .warn{background:#fff2c2;color:#6b5200}.rep .na{background:#e3e7ec;color:#4a5866}
+.rep .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.rep .kpi{border:1px solid #d7dee5;border-radius:6px;padding:8px}
+.rep .kpi .l{font-size:11px;color:#4a5866;text-transform:uppercase;letter-spacing:.3px}
+.rep .kpi .v{font:700 24px/1.1 "Roboto Condensed","Arial Narrow",sans-serif}
+.rep table{border-collapse:collapse;width:100%;font-size:11px;font-variant-numeric:tabular-nums}
+.rep th,.rep td{border-bottom:1px solid #e1e6eb;padding:4px;text-align:left;vertical-align:top}
+.rep th{background:#eef1f5;font-weight:600}
+.rep .tw{overflow-x:auto}
+.rep ul{margin:4px 0;padding-left:18px}
+.rep td.txt{white-space:normal;min-width:280px}
+@media print{.rep td.txt{min-width:0}}
+.rep .chip{display:inline-block;padding:0 5px;border-radius:3px;font-weight:600;font-size:10.5px}
+.rep .fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.rep figure{margin:0;border:1px solid #d7dee5;border-radius:6px;padding:4px;break-inside:avoid}
+.rep figure img{width:100%;display:block;border-radius:4px}
+.rep figcaption{font-size:11px;color:#4a5866;margin-top:3px}
+.rep .firma{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:36px}
+.rep .firma div{border-top:1px solid #16202a;padding-top:4px;text-align:center;font-size:12px}
+.rep .pie{margin-top:14px;font-size:11px;color:#6a7784}
+.rep tr{break-inside:avoid}
+`;
+Comun.cssInforme(REP_CSS);
+function prepInforme(){
+  const ms = mesesTodos(), cur = $("#repMes").value;
+  $("#repMes").innerHTML = ms.map(m => `<option value="${m}">${mesTxt(m)}</option>`).reverse().join("");
+  $("#repMes").value = ms.includes(cur) ? cur : ms[ms.length-1] || "";
+}
+async function generarInforme(){
+  const m = $("#repMes").value; if (!m) return null;
+  const sitio = $("#repSitio").value.trim(), elab = $("#repElab").value.trim(), revi = $("#repRevi").value.trim();
+  const A = analizarMes(m), ahora = new Date();
+  // por banco: el análisis local o, si no hay CSV aquí, el resumen del equipo
+  const B = CLAVES.map(k => { const a = A.get(k); return a ? {k, s:resumenDe(a, m), a} : resDe(k, m) ? {k, s:resDe(k, m), eq:true} : {k}; });
+  const con = B.filter(x => x.s);
+  if (!con.length) return null;
+  const c = {ok:0, warn:0, bad:0, na:0}; con.forEach(x => { for (const e in c) c[e] += x.s.cuenta[e] || 0; });
+  const nBad = con.filter(x => x.s.est === "bad").length, nWarn = con.filter(x => x.s.est === "warn").length;
+  const estadoG = c.bad || nBad ? {t:`${c.bad} batería(s) para reemplazar o críticas`, c:"bad"} : c.warn || nWarn ? {t:`${c.warn} batería(s) para vigilar`, c:"warn"} : {t:"Sin baterías fuera de límite", c:"ok"};
+  const chip = e => `<span class="chip ${e}">${CORTO[e]}</span>`;
+  // prioridades: del análisis local (todas) o de los resúmenes del equipo (sus 20 primeras)
+  let prio = [];
+  con.forEach(x => { if (x.a) x.a.bats.forEach(b => { if (b.est === "bad" || b.est === "warn") prio.push({k:x.k, n:b.n, est:b.est, m:b.m.find(t => !/^Reemplazada/.test(t)) || b.m[0] || "", r:b.r, v:b.v, score:b.score}); });
+    else (x.s.bats || []).forEach(b => prio.push({...b, k:x.k, score:NIVEL[b.est]*1000})); });
+  prio.sort((a, b) => b.score - a.score);
+  const nPrio = prio.length; if (!$("#repTodas").checked) prio = prio.slice(0, 20);
+  const ant = k => resumenes.filter(s => s.clave === k && s.mes < m).sort((a, b) => b.mes.localeCompare(a.mes))[0];
+  const filas = B.map(x => {
+    if (!x.s) return `<tr><td><b>${cortoK(x.k)}</b> <span style="color:#6a7784">${modeloDe(x.k)}</span></td><td colspan="8" style="color:#6a7784">Sin datos del mes</td></tr>`;
+    const s = x.s, p = ant(x.k), dR = p?.rMed && s.rMed ? s.rMed/p.rMed - 1 : null;
+    return `<tr><td><b>${cortoK(x.k)}</b> <span style="color:#6a7784">${s.mod}${x.eq ? " ☁" : ""}</span></td><td>${chip(s.est)}</td><td${s.cuenta.bad ? ' class="mal"' : ""}>${s.cuenta.bad}</td><td>${s.cuenta.warn}</td><td>${s.cuenta.na}</td>
+      <td${dR != null && dR >= 0.05 ? ' class="mal"' : ""}>${fx(s.rMed,3)}${dR != null ? `<br><span style="color:#6a7784">${pct(dR)} vs ${mesTxt(p.mes)}</span>` : ""}</td><td>${fx(s.vCelda,3)}</td><td>${fx(s.tProm,1)}</td>
+      <td class="txt">${(s.hall || []).filter(h => !/^(Batería|Monitoreo)/.test(h.t)).slice(0, 2).map(h => esc(h.t)).join("<br>") || "—"}</td></tr>`;
+  }).join("");
+  const monF = con.filter(x => x.a?.mon.length || (x.eq && x.s.mon)).map(x => x.a ? `<li><b>${cortoK(x.k)}</b>: ${x.a.mon.map(esc).join("; ")}</li>` : `<li><b>${cortoK(x.k)}</b>: ${x.s.mon} falla(s) del monitoreo (resumen del equipo)</li>`).join("");
+  const reps = reemplazos.filter(r => r.fecha.startsWith(m)).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const fotosInf = $("#repFotos").checked ? await Comun.figurasInforme(fotos, reps.filter(r => r.foto).map(r => ({id:r.id, alt:`Reemplazo ${cortoK(r.clave)} batería ${r.n}`, pie:`${cortoK(r.clave)}, batería ${r.n}, ${fdia(r.fecha)}`}))) : "";
+  const peores = con.filter(x => { const p = ant(x.k); return p && ((valM(x.s, "aten") > valM(p, "aten")) || (p.rMed && x.s.rMed && x.s.rMed/p.rMed - 1 >= 0.05)); });
+  const html = `<div class="rep">
+  <div class="hd"><div><h1>Informe mensual de baterías UPS</h1><div>${sitio ? esc(sitio) + " · " : ""}${mesTxt(m)} · Monitoreo Gexia</div><div class="est ${estadoG.c}">${estadoG.t}</div></div>
+  <div class="m">Generado: ${fdate(ahora)}${elab ? `<br>Elaboró: ${esc(elab)}` : ""}</div></div>
+  <h2>Resumen</h2>
+  <div class="kpis">
+    <div class="kpi"><div class="l">Bancos con datos</div><div class="v">${con.length} de 32</div></div>
+    <div class="kpi"><div class="l">Reemplazar / crítico</div><div class="v">${c.bad}</div></div>
+    <div class="kpi"><div class="l">Vigilar</div><div class="v">${c.warn}</div></div>
+    <div class="kpi"><div class="l">Sin lectura</div><div class="v">${c.na}</div></div>
+    <div class="kpi"><div class="l">Reemplazos del mes</div><div class="v">${reps.length}</div></div>
+  </div>
+  ${peores.length ? `<p style="color:#a3330b;margin-top:8px"><b>Empeoraron contra el mes anterior:</b> ${peores.map(x => cortoK(x.k)).join(", ")}.</p>` : ""}
+  <h2>Prioridades de reemplazo y revisión</h2>
+  ${prio.length ? `<div class="tw"><table><tr><th>#</th><th>Banco</th><th>Bat.</th><th>Estado</th><th>Motivo principal</th><th>R (mΩ)</th><th>V</th></tr>${prio.map((b, i) => `<tr><td>${i+1}</td><td>${cortoK(b.k)}</td><td><b>${b.n}</b></td><td>${chip(b.est)}</td><td class="txt">${esc(b.m)}</td><td>${fx(b.r,3)}</td><td>${fx(b.v,3)}</td></tr>`).join("")}</table></div>${nPrio > prio.length ? `<div style="font-size:11px;color:#6a7784">Se muestran ${prio.length} de ${nPrio}.</div>` : ""}` : "<p>Ninguna batería requiere atención este mes.</p>"}
+  <div class="bloque"><h2>Estado por banco</h2><div class="tw"><table><tr><th>Banco</th><th>Estado</th><th>Reempl.</th><th>Vigilar</th><th>Sin lect.</th><th>R mediana (mΩ)</th><th>V/celda</th><th>T (°C)</th><th>Hallazgos del banco (sin baterías ni monitoreo)</th></tr>${filas}</table></div>
+  <div style="font-size:11px;color:#6a7784;margin-top:4px">R mediana con su cambio contra el mes anterior (en rojo, +5 % o más). ☁: resumen compartido por el equipo (sin el CSV en este teléfono).</div></div>
+  <h2>Salud del monitoreo Gexia</h2>${monF ? `<ul>${monF}</ul>` : "<p>Sin fallas del monitoreo.</p>"}
+  <h2>Reemplazos del mes</h2>${reps.length ? `<table><tr><th>Fecha</th><th>Banco</th><th>Bat.</th><th>Modelo</th><th>Serie</th><th>Nota</th><th>Capturó</th></tr>${reps.map(r => `<tr><td>${fdia(r.fecha)}</td><td>${cortoK(r.clave)}</td><td>${r.n}</td><td>${esc(r.modelo || "")}</td><td>${esc(r.serie || "")}</td><td style="white-space:normal">${esc(r.nota || "")}</td><td>${esc(r.autor || "")}</td></tr>`).join("")}</table>` : "<p>Sin reemplazos registrados en el mes.</p>"}
+  ${fotosInf ? `<h2>Evidencia fotográfica</h2><div class="fotos">${fotosInf}</div>` : ""}
+  <h2>Criterios</h2>
+  <div style="font-size:12px">Resistencia interna contra la referencia del modelo (EnerSys y CSB 2.60 mΩ, Ritar 4.50 mΩ, o la referencia real del banco), su línea base y la mediana del banco: Advertencia arriba de +30 %, Falla arriba de +40 %; una Falla nueva se confirma con la siguiente medición. Voltaje contra la mediana del banco: ${L.vWarn} V Vigilar, ${L.vBad} V Crítico. Temperatura: ${L.tWarn} °C o +${L.tDelta} °C sobre el promedio Vigilar, ${L.tBad} °C Crítico. Flotación por celda dentro del rango de la ficha, compensado por temperatura. Conexiones +${L.cWarn*100} % Vigilar, +${L.cBad*100} % Crítico. Vida de diseño: Vigilar al 80 %. Basado en IEEE 1188, IEEE 1491 y las fichas de los fabricantes.</div>
+  <div class="firma"><div>Elaboró${elab ? `<br>${esc(elab)}` : ""}</div><div>Revisó${revi ? `<br>${esc(revi)}` : ""}</div></div>
+  <div class="pie">Generado con Bitácora de baterías UPS a partir de la telemetría diaria de Gexia. La inspección es pasiva y no incluye intervención en equipos.</div></div>`;
+  const T = [`*Baterías UPS – ${mesTxt(m)}${sitio ? " – " + sitio : ""}*`, `Bancos con datos ${con.length}/32 | Reemplazar ${c.bad} | Vigilar ${c.warn} | Sin lectura ${c.na} | Reemplazos ${reps.length}`, ""];
+  if (prio.length){ T.push("Prioridades:"); prio.slice(0, 10).forEach((b, i) => T.push(`${i+1}. ${cortoK(b.k)} bat. ${b.n} [${CORTO[b.est]}]: ${b.m}`)); }
+  else T.push("Ninguna batería requiere atención.");
+  if (peores.length){ T.push(""); T.push(`Empeoraron: ${peores.map(x => cortoK(x.k)).join(", ")}`); }
+  if (elab){ T.push(""); T.push(`Elaboró: ${elab}`); }
+  const pie = `Informe de baterías UPS · ${mesTxt(m)}${sitio ? " · " + sitio : ""}`;
+  return {html, pie, texto:T.join("\n"), doc:Comun.docInforme(`Baterías UPS ${mesTxt(m)}`, REP_CSS, html, pie)};
+}
+Comun.accionesInforme({generar:generarInforme, archivo:"informe_baterias", titulo:"Informe de baterías UPS",
+  vacio:"No hay datos de ese mes. Carga los CSV de Gexia o conéctate con el equipo.",
+  guardarDatos(){ P.sitio = $("#repSitio").value.trim(); P.elaboro = $("#repElab").value.trim(); P.reviso = $("#repRevi").value.trim(); persist(); }});
+
+/* ================= Ajustes ================= */
+function renderCfg(){
+  $("#tModelos").innerHTML = `<thead><tr><th>Clave</th>${COLM.map(c => `<th>${c[1]}</th>`).join("")}</tr></thead><tbody>` +
+    Object.entries(P.modelos).map(([k, m]) => `<tr><td>${k}</td>${COLM.map(c => `<td><input class="plain" data-m="${k}" data-k="${c[0]}" type="${c[2]}" ${c[2]==="number"?'step="any" inputmode="decimal"':""} value="${esc(m[c[0]] ?? "")}"></td>`).join("")}</tr>`).join("") + `</tbody>`;
+  $("#tBancos").innerHTML = `<thead><tr><th>Banco</th><th>Modelo</th><th>Instalación</th></tr></thead><tbody>` + CLAVES.map(k => `<tr><td>${nombreK(k)}</td>
+    <td><select data-asg="${k}" aria-label="Modelo ${nombreK(k)}">${Object.keys(P.modelos).map(m => `<option value="${m}"${modeloDe(k)===m?" selected":""}>${m}</option>`).join("")}</select></td>
+    <td><input type="date" data-inst="${k}" value="${esc(P.inst[k] || "")}" aria-label="Instalación ${nombreK(k)}"></td></tr>`).join("") + `</tbody>`;
+  $("#cfgForm").innerHTML = CAMPOS.map(([k, l]) => `<label for="c-${k}">${l}</label><input class="plain" id="c-${k}" data-k="${k}" type="number" step="any" inputmode="decimal" value="${esc(P.L[k] ?? "")}">`).join("");
+  renderCriterios();
+}
+function cambioCfg(){ L = P.L; persist(); invalidar(); actualizarResumenes(); renderAll(); }
+$("#cfgSave").onclick = () => {
+  document.querySelectorAll("#cfgForm input").forEach(inp => { const k = inp.dataset.k; P.L[k] = inp.value === "" ? DEF_L[k] : Number(inp.value); });
+  document.querySelectorAll("#tModelos input").forEach(inp => { const m = inp.dataset.m, k = inp.dataset.k; P.modelos[m][k] = inp.type === "number" ? (inp.value === "" ? null : Number(inp.value)) : inp.value.trim(); });
+  document.querySelectorAll("#tBancos select").forEach(s => P.asign[s.dataset.asg] = s.value);
+  document.querySelectorAll("#tBancos input").forEach(i => { if (i.value) P.inst[i.dataset.inst] = i.value; else delete P.inst[i.dataset.inst]; });
+  cambioCfg(); renderCfg(); estado($("#cfgStatus"), "Guardado.");
+};
+/* Llena el formulario con los valores del levantamiento y las fichas; no se aplican hasta Guardar. Las fechas de instalación no se tocan. */
+$("#cfgDef").onclick = () => {
+  document.querySelectorAll("#cfgForm input").forEach(inp => inp.value = DEF_L[inp.dataset.k]);
+  document.querySelectorAll("#tModelos input").forEach(inp => { const c = inp.dataset.k; if (["ah","potencia","rRef","rAdv","rFalla","vMin","vMax","vTc","torque","vida"].includes(c)) inp.value = MODELOS_DEF[inp.dataset.m]?.[c] ?? ""; });
+  document.querySelectorAll("#tBancos select").forEach(sl => sl.value = ASIGN_DEF[sl.dataset.asg]);
+  estado($("#cfgStatus"), "Valores recomendados cargados en el formulario: toca «Guardar» para aplicarlos.");
+};
+function renderCriterios(){
+  const matriz = Object.values(P.modelos).map(m => { const lr = limR(m), r = m.rRef;
+    return `<tr><td>${esc(m.nombre)}</td>${r ? `<td>${fx(r,2)} mΩ</td><td>≤ ${fx(r*(1+lr.w),2)}</td><td>${fx(r*(1+lr.w),2)}–${fx(r*(1+lr.b),2)}</td><td>&gt; ${fx(r*(1+lr.b),2)} mΩ</td>` : `<td colspan="4">Sin referencia</td>`}</tr>`; }).join("");
+  const rows = [
+    ["Resistencia interna", `Se compara contra la referencia del modelo, la línea base de la propia batería (su primera medición, o la primera después de un reemplazo) y la mediana del banco; manda la peor. Matriz a 25 °C: hasta +30 % Normal, arriba de +30 % Advertencia (Vigilar), arriba de +40 % Falla (Reemplazar y programar prueba de capacidad).
+      <table style="margin:6px 0"><thead><tr><th>Modelo</th><th>Referencia</th><th>Normal</th><th>Advertencia</th><th>Falla</th></tr></thead><tbody>${matriz}</tbody></table>
+      Cada banco puede usar su referencia real (promedio de sus baterías sanas en una medición, lo ideal 72 h después de la puesta en servicio). Confirmación: una Falla nueva queda en Advertencia hasta que la siguiente medición la repita. Histéresis: para salir de una alarma baja ${L.rHist} puntos debajo del umbral. Compensación por temperatura opcional (% por °C). Si sube ${L.rMes*100} % o más en 30 días, Vigilar. IEEE 1188 e IEEE 1491.`],
+    ["Voltaje de flotación", `Por batería contra la mediana del banco: más de ${L.vWarn} V Vigilar, más de ${L.vBad} V Crítico. Por banco, el promedio por celda dentro del rango de la ficha a 25 °C, corrido por la compensación del fabricante a la temperatura promedio (EnerSys y Ritar −3.0, CSB −3.3 mV/°C/celda).`],
+    ["Vida de diseño", "Con la fecha de instalación del banco (o del modelo, o la del reemplazo), al 80 % de la vida de diseño: Vigilar para planear el reemplazo (IEEE 1188). EnerSys 10 años, CSB 10 años, Ritar 15 años."],
+    ["Temperatura", `Más de ${L.tWarn} °C o ${L.tDelta} °C arriba del promedio del banco: Vigilar; más de ${L.tBad} °C: Crítico. La vida de una VRLA se reduce a la mitad por cada ~8–10 °C arriba de 25 °C.`],
+    ["Conexiones", `Contra la mediana de las conexiones del mismo tipo: +${L.cWarn*100} % Vigilar (limpiar y reapretar al torque del modelo), +${L.cBad*100} % Crítico.`],
+    ["Corriente y rizado", `Corriente de flotación más de ${L.iFact} veces la mediana de los bancos del mismo modelo: Vigilar. Rizado arriba de ${L.rizPct} % del voltaje del banco: Vigilar.`],
+    ["Monitoreo", `Sensores que no reportan, resistencia sin actualizar más de ${L.rDias} días, suma de voltajes distinta del voltaje del banco más de ${L.sumaPct} %, días faltantes. Se reportan como fallas del monitoreo, no de las baterías.`],
+    ["Reemplazos", "La batería empieza una línea base nueva; mientras Gexia no mida su resistencia otra vez, esa resistencia no se evalúa. Un modelo distinto al del banco se marca Vigilar."],
+    ["Compartir", "Al equipo se sube el resumen mensual de cada banco (estado, conteos, resistencia mediana, flotación, temperatura, hallazgos y las 20 baterías más urgentes) y el registro de reemplazos. La telemetría diaria se queda en cada teléfono."],
+    ["Marco en México", "NOM-001-SEDE-2012 (artículo 480) regula la instalación; los límites de mantenimiento salen de IEEE 1188 / IEEE 1491 y de las fichas de los fabricantes (programas de mantenimiento de centros de datos con ICREA-Std-131 o TIA-942)."]];
+  $("#criterios").innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join("");
+}
+const bak = Comun.respaldo({lecturas:() => reemplazos, cfg:() => P, persist});
+const sync = Comun.compartir({bitacora:"baterias", fotos,
+  lecturas:() => reemplazos, setLecturas:a => { reemplazos = a; },
+  equipos:() => resumenes, setEquipos:a => { resumenes = a; },
+  fila: r => ({Fecha:r.ts, Banco:nombreK(r.clave), "Batería":r.n, Modelo:r.modelo || "", Serie:r.serie || "", Nota:r.nota || ""}),
+  filaEquipo: s => ({Identificador:s.tag, Mes:s.mes, Banco:nombreK(s.clave), Modelo:s.mod, Estado:CORTO[s.est], Reemplazar:s.cuenta.bad, Vigilar:s.cuenta.warn, "Sin lectura":s.cuenta.na,
+    "R mediana (mΩ)":s.rMed ?? "", "V/celda":s.vCelda ?? "", Hallazgos:(s.hall || []).map(h => h.t).join(" ")}),
+  migrar: r => ({...r, fecha:r.fecha || isoLocal(new Date(r.ts)).slice(0,10)}),
+  alCambiar(){ persist(); invalidar(); renderAll(); }});
+$("#bakBtn").onclick = async () => {
+  const o = {app:"bitacora-baterias", version:1, exportado:new Date().toISOString(), cfg:P, lecturas:reemplazos, equipos:resumenes};
+  if ($("#bakDias").checked) o.dias = await todosDias();
+  download(`respaldo_baterias_${stamp()}.json`, JSON.stringify(o), "application/json");
+  $("#bakStatus").textContent = `Respaldo descargado${o.dias ? ` con ${o.dias.length} días de Gexia` : ""}. Guárdalo en Drive o en tu PC.`; bak.marcar();
+};
+$("#restore").onchange = async ev => {
+  const f = ev.target.files[0]; if (!f) return; const st = $("#bakStatus"); estado(st, "Restaurando…");
+  try{
+    const o = JSON.parse(await f.text()); if (o.app !== "bitacora-baterias" || !Array.isArray(o.lecturas)) throw 0;
+    const idl = new Set(reemplazos.map(r => r.id)); let nl = 0, ne = 0, nd = 0;
+    const nuevas = o.lecturas.filter(r => r && r.id && r.clave && r.fecha && !idl.has(r.id));
+    const conFoto = await Promise.all(nuevas.map(r => r.foto ? fotos.has(r.id) : false));
+    nuevas.forEach((r, i) => { const x = {...r, foto:conFoto[i]}; delete x.srv; delete x.fotoSrv; reemplazos.push(x); nl++; });
+    for (const s of o.equipos || []){ if (!s?.id || !s.clave || !s.mes) continue; const v = resumenes.find(x => x.id === s.id); if (!v){ const x = {...s}; delete x.srvUpd; resumenes.push(x); ne++; } else if ((s.upd || 0) > (v.upd || 0)){ Object.assign(v, s); ne++; } }
+    if (Array.isArray(o.dias) && o.dias.length){
+      o.dias.forEach(x => { if (x?.clave && x.f?.t) agregarFila(x.clave, x.f); });
+      if (db) await tx("readwrite", s => { o.dias.forEach(x => { if (x?.clave && x.f?.t) s.put(x, `${x.clave}|${x.f.t}`); }); });
+      nd = o.dias.length;
+    }
+    if (o.cfg && confirm("¿Usar también los modelos, bancos, límites y referencias del respaldo?")) P = armarCfg({...o.cfg, lastBackup:P.lastBackup});
+    L = P.L; persist(); invalidar(); actualizarResumenes(); renderCfg(); renderAll(); sync.sincronizar();
+    st.textContent = `Respaldo restaurado: ${nl} reemplazo(s), ${ne} resumen(es) mensual(es)${nd ? ` y ${nd} días de Gexia` : ""}.`;
+  }catch{ estado(st, "Ese archivo no es un respaldo válido de la bitácora de baterías.", true); }
+  ev.target.value = "";
+};
+function renderUsage(){
+  let dias = 0; bancos.forEach(B => dias += B.filas.size);
+  const ms = mesesLocales();
+  $("#guardado").textContent = bancos.size ? `${bancos.size} banco(s), ${dias} lecturas diarias${ms.length ? `, de ${mesTxt(ms[0])} a ${mesTxt(ms[ms.length-1])}` : ""}.${db ? "" : " Este navegador no permite guardarlas: se pierden al cerrar."}` : "Sin datos de Gexia en este teléfono.";
+  Comun.renderUso(`${reemplazos.length} reemplazo(s), ${resumenes.length} resumen(es) mensual(es), ${dias} día(s) de Gexia.`);
+}
+$("#borrar").onclick = async () => {
+  if (!confirm("¿Borrar la telemetría de Gexia de este teléfono? Los reemplazos, resúmenes mensuales y ajustes se conservan.")) return;
+  bancos.clear(); if (db) await tx("readwrite", s => s.clear()).catch(() => {});
+  invalidar(); renderAll();
+};
+
+/* Dibuja lo que siempre está a la vista y la pestaña abierta; las demás se dibujan al abrirlas. */
+function renderAll(){ bak.aviso(); tabs.renderVisible(); }
+
+/* ================= arranque ================= */
+(async () => {
+  load(); L = P.L;
+  await Comun.revisarEntorno({lsOk, persist, fotos, sinFotos:"Este navegador no permite guardar fotos al abrir el archivo así. Los reemplazos sí se guardan."});
+  db = await abrirDB(); await cargarDB();
+  if (!db) { const n = $("#storeNote"); n.innerHTML += (n.innerHTML ? "<br>" : "") + "Este navegador no permite guardar la telemetría de Gexia: se perderá al cerrar."; n.classList.remove("hidden"); }
+  $("#repSitio").value = P.sitio || ""; $("#repElab").value = P.elaboro || ""; $("#repRevi").value = P.reviso || "";
+  renderCfg(); actualizarResumenes(false); renderAll();
+  sync.sincronizar();
+})();
+})();
+</script>
+</body>
+</html>
