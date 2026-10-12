@@ -26,6 +26,7 @@
 <div class="apps">
   <a class="app" href="ups.html"><span class="ic">🔋</span><div><h3>UPS</h3><div class="muted" id="sUps">—</div></div></a>
   <a class="app" href="interruptores.html"><span class="ic">⚡</span><div><h3>Interruptores ETU45B</h3><div class="muted" id="sEtu">—</div></div></a>
+  <a class="app" href="calidad.html"><span class="ic">📈</span><div><h3>Calidad de energía</h3><div class="muted" id="sCal">—</div></div></a>
 </div>
 <h2>Estado del teléfono</h2>
 <div class="card"><div class="stt" id="stt"><span></span><span class="muted">Revisando…</span></div></div>
@@ -49,6 +50,7 @@ function info(key, arr){
 }
 $("#sUps").textContent = info("bitacora-ups-standalone-v1", "lecturas");
 $("#sEtu").textContent = info("bitacora-interruptores-v1", "lecturas");
+$("#sCal").textContent = info("bitacora-calidad-v1", "lecturas");
 const rows = [];
 const add = (ok, t) => rows.push(`<span class="dot" style="background:${ok===null?"var(--muted)":ok?"var(--ok)":"var(--bad)"}"></span><span>${t}</span>`);
 const render = () => { $("#stt").innerHTML = rows.join(""); };
@@ -90,7 +92,7 @@ $("#reparar").onclick = async () => {
   try{ for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); }catch{}
   try{ for (const k of await caches.keys()) if (k.startsWith("bitacoras-")) await caches.delete(k); }catch{}
   // también se refresca la caché del navegador, para no volver a tomar archivos viejos
-  await Promise.all(["./", "index.html", "ups.html", "interruptores.html", "diagnostico.html", "comun.css", "comun.js", "sw.js"]
+  await Promise.all(["./", "index.html", "ups.html", "interruptores.html", "calidad.html", "diagnostico.html", "comun.css", "comun.js", "sw.js"]
     .map(u => fetch(u, {cache:"reload"}).catch(() => null)));
   location.replace("reparar.html?fase=2&t=" + Date.now());
 };

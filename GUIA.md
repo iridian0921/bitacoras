@@ -15,7 +15,7 @@ Lo que se publica es solo el programa. Tus lecturas se guardan en el teléfono y
 
 1. Descomprime el ZIP en tu PC.
 2. En el repositorio: **Add file → Upload files**.
-3. Arrastra **todo el contenido** de la carpeta `bitacoras` (index.html, ups.html, interruptores.html, diagnostico.html, comun.css, comun.js, sw.js, manifest.webmanifest y la carpeta icons). Deben quedar en la raíz del repositorio, no dentro de otra carpeta.
+3. Arrastra **todo el contenido** de la carpeta `bitacoras` (index.html, ups.html, interruptores.html, calidad.html, diagnostico.html, comun.css, comun.js, sw.js, manifest.webmanifest y la carpeta icons). Deben quedar en la raíz del repositorio, no dentro de otra carpeta.
 4. Abajo presiona **Commit changes**.
 
 ## 3. Activar GitHub Pages
@@ -50,7 +50,7 @@ Si solo tienes CSV exportados de la bitácora de UPS: **Ajustes → Importar CSV
 ## 7. Publicar una actualización
 
 1. Sube los archivos nuevos al repositorio (Add file → Upload files, reemplazan a los anteriores).
-2. En `sw.js` cambia el número de `const VERSION = "bitacoras-v20";` por el siguiente (`"bitacoras-v21"`, y así sucesivamente). Sin este cambio, los teléfonos seguirán usando la copia guardada.
+2. En `sw.js` cambia el número de `const VERSION = "bitacoras-v21";` por el siguiente (`"bitacoras-v22"`, y así sucesivamente). Sin este cambio, los teléfonos seguirán usando la copia guardada.
 3. En el teléfono, abre la app con internet. Cuando termine de descargar la versión nueva aparece abajo el aviso **"Hay una versión nueva de la app"**: toca **Actualizar**. Tus datos no se tocan. La pantalla de inicio muestra la versión instalada.
 4. Si el teléfono se queda con una versión vieja, abre en Chrome `https://tuusuario.github.io/bitacoras/reparar.html` y toca **Reparar ahora** (también está el botón **Reparar actualización** en la pantalla de inicio). Vuelve a descargar el programa sin borrar lecturas, fotos ni ajustes. Esa página siempre se baja del servidor, aunque la copia del teléfono esté atorada, y muestra un diagnóstico que puedes copiar.
 
@@ -72,11 +72,11 @@ Cada persona captura en su teléfono como siempre. Cuando hay señal, la app sub
 7. Presiona **Implementar**, luego **Autorizar acceso** y elige tu cuenta. Si aparece "Google no verificó esta app", toca **Configuración avanzada → Ir a Bitácoras (no seguro)**: es tu propio script.
 8. Copia la **URL de la aplicación web** (termina en `/exec`). Si la abres en el navegador debe decir "El servidor de las bitácoras está activo".
 
-Las pestañas **UPS**, **Interruptores** y **Equipos interruptores** se crean solas con la primera lectura. Las fotos se guardan en la carpeta de Drive **"Bitácoras - fotos"**.
+Las pestañas **UPS**, **Interruptores**, **Equipos interruptores**, **Calidad de energía** y **Medidores calidad** se crean solas con la primera lectura. Las fotos se guardan en la carpeta de Drive **"Bitácoras - fotos"**.
 
 ### Conectar cada teléfono
 
-En cualquiera de las dos bitácoras: **Ajustes → Compartir con el equipo**. Pega la dirección del script, escribe la clave y tu nombre, y toca **Conectar y sincronizar**. Basta hacerlo en una bitácora: la configuración aplica a las dos.
+En cualquiera de las bitácoras: **Ajustes → Compartir con el equipo**. Pega la dirección del script, escribe la clave y tu nombre, y toca **Conectar y sincronizar**. Basta hacerlo en una bitácora: la configuración aplica a todas.
 
 La primera vez se suben todas las lecturas que ya tenías en el teléfono. Arriba de cada bitácora aparece la barra ☁ con el estado. Tócala para sincronizar en ese momento.
 
@@ -84,10 +84,14 @@ La primera vez se suben todas las lecturas que ya tenías en el teléfono. Arrib
 
 - **Lecturas:** cada una es un renglón con la persona que la capturó. Las de los demás aparecen en tu Historial (columna **Capturó**), Resumen, Tendencias e Informe.
 - **Fotos:** se bajan de Drive la primera vez que las abres o generas un informe.
-- **Interruptores:** el catálogo y las líneas base también se comparten. Si dos personas dan de alta el mismo identificador, se queda el primero y las lecturas del segundo se pasan a ese.
+- **Interruptores y medidores de calidad:** el catálogo (y en interruptores, las líneas base) también se comparte. Si dos personas dan de alta el mismo identificador, se queda el primero y las lecturas del segundo se pasan a ese.
 - **Borrados:** borra siempre desde la app (Historial → Borrar), no en la hoja; así el borrado llega a todos los teléfonos. En la hoja la lectura queda marcada con la fecha en la columna "Borrado".
 - **Columnas de la derecha:** `rev`, `id` y `datos` las usa la app. No las edites.
-- **Parámetros:** los de UPS y los límites de interruptores siguen siendo de cada teléfono.
+- **Parámetros:** los de UPS y los límites de interruptores y de calidad de energía siguen siendo de cada teléfono.
+
+### Si la bitácora de calidad de energía dice que el script es de una versión anterior
+
+La hoja necesita el `Codigo.gs` actualizado (agrega las pestañas de calidad de energía). Copia el archivo nuevo completo, conserva tu línea `const CLAVE = ...` y publícalo como se explica abajo. Las lecturas que ya están en la hoja no se tocan.
 
 ### Si cambias el script
 
