@@ -154,6 +154,7 @@ svg.sp{width:100%;height:auto;display:block}
       <tr><td>THD de tensión</td><td>El mayor de L-N y L-L. IEEE 519-2014 de 1 a 69 kV: <b>5 % total</b>. <b>Arriba de 4 %: Vigilar</b>; <b>arriba de 5 %: Crítico</b>.</td></tr>
       <tr><td>THD de corriente</td><td>IEEE 519-2014 (tabla 2, 120 V a 69 kV) según Isc/IL: menos de 20 → 5 %; 20–50 → 8 %; 50–100 → 12 %; 100–1000 → 15 %; más de 1000 → 20 %. La Icc sale de la etiqueta de arco eléctrico (TGMT-2: 3533 A trifásica). <b>Arriba del 80 % del límite: Vigilar</b>; <b>arriba del límite: Crítico</b>. IEEE 519 evalúa TDD contra la demanda máxima; el medidor muestra THD a la carga del momento, así que compararlo directo es conservador.</td></tr>
       <tr><td>Factor K</td><td>Calentamiento adicional por armónicos en transformadores (la carátula lo muestra con «%», pero es un factor). <b>Más de 4: Vigilar</b> (un transformador estándar es K-1; los K-4 aguantan hasta 4).</td></tr>
+      <tr><td>Energía</td><td>Pantalla 3Φ ENERGIA TOTAL (contadores acumulados; en esta pantalla el medidor usa punto decimal: 203.604 MWh). Entre dos capturas da el consumo en MWh/día y la potencia promedio; el cociente MWh ÷ MVAh es el FP promedio de toda la vida del contador. Si el contador baja, se avisa como reinicio o error de captura.</td></tr>
       <tr><td>Revisión de captura</td><td>Se cruzan las pantallas: voltaje y corriente del Resumen contra los promedios por fase, kW del Resumen contra 3Φ Potencia, kVA contra √(kW² + kVAR²) y contra √3·V·I, y FP contra kW ÷ kVA. Si no cuadran, puede ser un error de dedo o pantallas leídas en momentos distintos con la carga cambiando. No cambia el estado, solo avisa.</td></tr>
       <tr><td>Marco en México</td><td>Código de Red (CRE), requerimientos para centros de carga: tensión, frecuencia, factor de potencia y armónicos (retoma IEEE 519). ANSI C84.1 para rangos de tensión. NOM-001-SEDE-2012 regula la instalación, no la calidad de energía.</td></tr>
     </tbody></table>
@@ -188,12 +189,13 @@ const PANT = [
   {t:"THD EN TENSION L-N", c:[["thvR","R","%"],["thvS","S","%"],["thvT","T","%"]]},
   {t:"THD EN TENSION L-L", c:[["thvRS","R-S","%"],["thvST","S-T","%"],["thvTR","T-R","%"]]},
   {t:"THD AMPS", c:[["thiR","R","%"],["thiS","S","%"],["thiT","T","%"]]},
-  {t:"FACTOR K", s:"la carátula muestra «%»", c:[["kR","R",""],["kS","S",""],["kT","T",""]]}
+  {t:"FACTOR K", s:"la carátula muestra «%»", c:[["kR","R",""],["kS","S",""],["kT","T",""]]},
+  {t:"3Φ ENERGIA TOTAL", s:"contadores", c:[["eP","Real","MWH"],["eQ","Reac","MVARH"],["eS","Apar","MVAH"]]}
 ];
 const CAMPOS = PANT.flatMap(p => p.c.map(c => c[0])).concat(["fpRt","fpDt"]);
 const EJEMPLO = {res_v:"13670", res_i:"86", res_kw:"2012", iR:"84", iS:"88", iT:"88", iN:"0", vRS:"13658", vST:"13731", vTR:"13646", vR:"8248", vS:"7597", vT:"7869",
   kw:"2019", kvar:"304", kva:"2041", fpR:"0,989", fpRt:"Ret", fpD:"0,990", fpDt:"Ret", hz:"60,03", thvR:"1,4", thvS:"1,5", thvT:"1,5", thvRS:"0,9", thvST:"0,8", thvTR:"0,9",
-  thiR:"4,3", thiS:"3,9", thiT:"3,7", kR:"1,1", kS:"1,1", kT:"1,0"};
+  thiR:"4,3", thiS:"3,9", thiT:"3,7", kR:"1,1", kS:"1,1", kT:"1,0", eP:"203.604", eQ:"35.202", eS:"207.095"};
 
 /* ===== configuración ===== */
 const KEY = "calidad-electrica-muestra";
@@ -202,7 +204,7 @@ const DEF_L = {aMin:-2.5, aMax:5, bMin:-5, bMax:5.8, desV:2, desVBad:3, despN:3,
 /* Tablero de acometida emergente (diagrama unifilar): barra 8BK20 13.2 kV 1250 A 3F 3H 60 Hz, TC 300:5 A, relevador 7SJ6225,
    medidor PowerLogic CM 3350. I nominal = primario de los TC (300 A): el medidor no ve más allá de su escala. */
 /* Etiquetas de arco eléctrico del TGMT-2 (NFPA 70E 2015, SINAPEL, 19/10/2018): Icc 3F 3533 A, falla a tierra 1739 A. */
-const MED_DEF = [{id:"m1", nombre:"Alimentador 2 Emergente", vn:13200, in:300, icc:3533, il:null, hilos:3,
+const MED_DEF = [{id:"m1", nombre:"TGMT-2 (K1) · Alimentador 2 Emergente", vn:13200, in:300, icc:3533, il:null, hilos:3,
   seguridad:"TGMT-2 · 13,200 VAC · riesgo de arco, no quitar tapas · EPP categoría 3, mínimo 25 cal/cm² (17 cal/cm² a 91 cm) · límite de arco 344 cm · guantes clase 2 · límite permitido 150 cm, restringido 70 cm · falla a tierra 1739 A · estudio NFPA 70E del 19/10/2018",
   equipo:"Circuit Monitor CM 3350 · TC 300:5 A · relevador Siemens 7SJ6225 · interruptor 3AH3165-2 (2004, serie BI/0351): 15 kV, 1250 A, 31.5 kA 3 s, BIL 95 kV · barra 8BK20 13.2 kV 1250 A 3F 3H"}];
 const leer = () => { try{ return JSON.parse(localStorage.getItem(KEY) || "null") || {}; }catch{ return {}; } };
@@ -230,13 +232,15 @@ function razonIsc(m, iAhora){
 }
 
 /* ===== evaluación de una lectura ===== */
-function evaluar(r, m){
+/* lectura anterior del mismo medidor con contador de energía, para la energía consumida entre capturas */
+const prevDe = (m, t) => D.lect.filter(x => x.med === m.id && x.t < t && num(x.v.eP) != null).pop() || null;
+function evaluar(r, m, prev, t){
   const g = k => num(r[k]);
   const it = [], rev = []; let est = "na";
   const add = (e, t) => { it.push({e, t}); est = peor(est, e); };
   const vLLs = [g("vRS"), g("vST"), g("vTR")], vLNs = [g("vR"), g("vS"), g("vT")], is = [g("iR"), g("iS"), g("iT")];
   const vLL = avg(vLLs) ?? g("res_v"), iProm = avg(is) ?? g("res_i");
-  const c = {vLL, iProm, desV:desb(vLLs), desI:null, despN:null, carga:null, thdV:null, thdI:null, k:null, kw:g("kw") ?? g("res_kw"), fp:g("fpR"), hz:g("hz")};
+  const c = {vLL, iProm, desV:desb(vLLs), desI:null, despN:null, carga:null, thdV:null, thdI:null, k:null, kw:g("kw") ?? g("res_kw"), fp:g("fpR"), hz:g("hz"), mwhDia:null, kwProm:null};
   // tensión
   if (vLL != null && m.vn){
     const pares = [["R-S", vLLs[0]], ["S-T", vLLs[1]], ["T-R", vLLs[2]]].filter(p => p[1] != null);
@@ -305,6 +309,21 @@ function evaluar(r, m){
   // factor K
   const ks = [g("kR"), g("kS"), g("kT")].filter(x => x != null);
   if (ks.length){ c.k = Math.max(...ks); add(c.k > L.kWarn ? "warn" : "ok", `Factor K máximo ${fx(c.k,1)}${c.k > L.kWarn ? `: arriba de ${L.kWarn}, revisar el factor K del transformador que alimenta` : " (carga prácticamente lineal)"}.`); }
+  // energía: FP promedio acumulado y consumo desde la captura anterior
+  if (g("eP") != null && g("eS")){
+    const fpE = g("eP") / g("eS");
+    if (fpE > 1.001) rev.push(`Energía real ${fx(g("eP"),3)} MWh mayor que la aparente ${fx(g("eS"),3)} MVAh: no es posible, revisa la captura de 3Φ ENERGIA TOTAL.`);
+    else add(fpE < L.fp ? "warn" : "ok", `Energía acumulada ${fx(g("eP"),3)} MWh, ${fx(g("eQ"),3)} MVARh, ${fx(g("eS"),3)} MVAh: FP promedio de toda la vida del contador ${fx(fpE,3)}.`);
+  }
+  if (g("eP") != null && prev && t){
+    const dE = g("eP") - num(prev.v.eP), h = (new Date(t) - new Date(prev.t)) / 3600000;
+    if (dE < 0) rev.push(`La energía real bajó de ${fx(num(prev.v.eP),3)} a ${fx(g("eP"),3)} MWh: contador reiniciado o error de captura.`);
+    else if (h >= 1){
+      c.kwProm = dE * 1000 / h; c.mwhDia = dE / h * 24;
+      add("ok", `Consumo desde el ${fecha(prev.t)}: ${fx(dE,3)} MWh en ${fx(h,1)} h = ${fx(c.mwhDia,2)} MWh/día, ${fx(c.kwProm,0)} kW promedio${c.kw != null ? ` (ahora ${fx(c.kw,0)} kW)` : ""}.`);
+      if (c.kw != null && c.kwProm > 0 && Math.abs(c.kw / c.kwProm - 1) > 0.5) rev.push(`La potencia de ahora (${fx(c.kw,0)} kW) difiere más de 50 % del promedio desde la captura anterior (${fx(c.kwProm,0)} kW): revisa el contador de energía o la carga cambió mucho.`);
+    }
+  }
   // revisión cruzada de la captura
   const chk = (a, b, tol, txt) => { if (a != null && b != null && b !== 0 && Math.abs(a/b - 1)*100 > tol) rev.push(txt(a/b - 1)); };
   if (avg(vLLs) != null) chk(g("res_v"), avg(vLLs), L.tolV, d => `Voltaje del Resumen ${fx(g("res_v"),0)} V contra promedio L-L ${fx(avg(vLLs),0)} V (${pct(d)}).`);
@@ -333,7 +352,8 @@ const lista = (ev, vacio) => {
 function vivo(){
   const m = medDe($("#cMed").value); if (!m) return;
   $("#cSeg").classList.toggle("hidden", !m.seguridad); $("#cSeg").innerHTML = m.seguridad ? `<b>⚠ Seguridad:</b> ${esc(m.seguridad)}` : "";
-  const ev = evaluar(leerCap(), m);
+  const ahora = $("#cHora").value ? new Date($("#cHora").value).toISOString() : new Date().toISOString();
+  const ev = evaluar(leerCap(), m, prevDe(m, ahora), ahora);
   $("#cEst").innerHTML = ev.it.length ? `<span class="tag t-${ev.est}">${ICON[ev.est]} ${TXT[ev.est]}</span>` : "";
   $("#cEval").innerHTML = lista(ev, "Captura valores para ver la evaluación.");
 }
@@ -381,7 +401,7 @@ function todo(){
   $("#cMed").innerHTML = D.med.map(m => `<option value="${m.id}"${m.id === ($("#cMed").value || sel) ? " selected" : ""}>${esc(m.nombre)}</option>`).join("");
   if (!medDe(sel)) sel = D.med[0]?.id;
   $("#meds").innerHTML = D.med.map(m => {
-    const ls = lectDe(m.id), u = ls[ls.length-1], ev = u ? evaluar(u.v, m) : null;
+    const ls = lectDe(m.id), u = ls[ls.length-1], ev = u ? evaluar(u.v, m, prevDe(m, u.t), u.t) : null;
     return `<button class="med" data-m="${m.id}" aria-pressed="${m.id === sel}"><b>${esc(m.nombre)}</b>
       ${ev ? `<span class="tag t-${ev.est}">${ICON[ev.est]} ${TXT[ev.est]}</span><span class="small muted">${fecha(u.t)} · ${ls.length} lectura${ls.length === 1 ? "" : "s"}</span>` : `<span class="tag t-na">Sin lecturas</span>`}</button>`;
   }).join("");
@@ -394,7 +414,7 @@ function detalle(){
   $("#detT").textContent = m.nombre;
   $("#detSub").textContent = `${fx(m.vn,0)} V nominal · ${m.hilos} hilos${m.in ? ` · ${fx(m.in,0)} A nominales` : ""}${m.equipo ? ` · ${m.equipo}` : ""}${u ? ` · última lectura ${fecha(u.t)}${u.manual ? " ✎" : ""}` : ""}`;
   if (!u){ $("#kpis").innerHTML = ""; $("#detEval").innerHTML = `<p class="muted">Sin lecturas de este medidor.</p>`; return; }
-  const ev = evaluar(u.v, m), c = ev.c, g = k => num(u.v[k]);
+  const ev = evaluar(u.v, m, prevDe(m, u.t), u.t), c = ev.c, g = k => num(u.v[k]);
   const k = (l, v, s="", cls="") => `<div class="kpi ${cls}"><div class="l">${l}</div><div class="v">${v}</div>${s ? `<div class="s">${s}</div>` : ""}</div>`;
   const cls = txt => ev.it.find(x => x.t.startsWith(txt) && x.e !== "ok")?.e || "";
   $("#kpis").innerHTML = k("Tensión L-L", c.vLL ? fx(c.vLL,0)+" V" : "—", c.vLL ? pct(c.vLL/m.vn - 1)+" del nominal" : "", cls("Tensión"))
@@ -409,7 +429,7 @@ function detalle(){
 }
 function tendencia(){
   const m = medDe(sel); if (!m){ $("#graf").innerHTML = ""; return; }
-  const ls = lectDe(m.id).map(x => ({t:x.t, c:evaluar(x.v, m).c}));
+  const ls = lectDe(m.id).map(x => ({t:x.t, c:evaluar(x.v, m, prevDe(m, x.t), x.t).c}));
   const s = f => ls.map(x => ({t:x.t, v:f(x.c)}));
   const W = "var(--warn)", B = "var(--bad)";
   const limTHI = limTHDI(razonIsc(m)?.r), rg = rango(m.vn);
@@ -421,6 +441,7 @@ function tendencia(){
     graf({pts:s(c => c.desV != null ? c.desV*100 : null), titulo:"Desbalance de tensión L-L", unidad:"%", dec:2, lims:[{v:L.desV, txt:`${L.desV} %`, col:W, ley:`Vigilar (${L.desV} %)`, siempre:true}]}),
     graf({pts:s(c => c.iProm), titulo:"Corriente promedio", unidad:"A", dec:1, lims:m.in ? [{v:m.in*L.carga/100, txt:`${L.carga} %`, col:W, ley:`${L.carga} % de ${fx(m.in,0)} A`}] : []}),
     graf({pts:s(c => c.kw), titulo:"Potencia activa", unidad:"kW", dec:0}),
+    graf({pts:s(c => c.mwhDia), titulo:"Energía consumida entre capturas", unidad:"MWh/día", dec:2}),
     graf({pts:s(c => c.fp), titulo:"Factor de potencia real", unidad:"", dec:3, lims:[{v:L.fp, txt:fx(L.fp,2), col:W, ley:`Mínimo ${fx(L.fp,2)} (Código de Red)`, siempre:true}]}),
     graf({pts:s(c => c.thdV), titulo:"THD de tensión (máximo)", unidad:"%", dec:1, lims:[{v:L.thdV, txt:`${L.thdV} %`, col:B, ley:`Límite IEEE 519 (${L.thdV} %)`, siempre:true}]}),
     graf({pts:s(c => c.thdI), titulo:"THD de corriente (máximo)", unidad:"%", dec:1, lims:[{v:limTHI, txt:`${limTHI} %`, col:B, ley:`Límite IEEE 519 (${limTHI} %)`, siempre:true}]}),
@@ -429,9 +450,9 @@ function tendencia(){
 }
 function historial(){
   const m = medDe(sel), ls = m ? lectDe(m.id).slice().reverse() : [];
-  $("#hist").innerHTML = ls.length ? `<thead><tr><th>Fecha</th><th>Estado</th><th>V L-L</th><th>Desb. V</th><th>Despl. N</th><th>I prom.</th><th>kW</th><th>FP</th><th>Hz</th><th>THD V</th><th>THD I</th><th>Captura</th><th></th></tr></thead><tbody>` +
-    ls.map(x => { const ev = evaluar(x.v, m), c = ev.c;
-      return `<tr><td>${fecha(x.t)}${x.manual ? ` <span title="Hora corregida a mano">✎</span>` : ""}</td><td><span class="tag t-${ev.est}">${ICON[ev.est]} ${TXT[ev.est]}</span></td><td>${fx(c.vLL,0)}</td><td>${c.desV != null ? fx(c.desV*100,2)+" %" : "—"}</td><td>${c.despN != null ? fx(c.despN*100,1)+" %" : "—"}</td><td>${fx(c.iProm,1)}</td><td>${fx(c.kw,0)}</td><td>${fx(c.fp,3)}</td><td>${fx(c.hz,2)}</td><td>${fx(c.thdV,1)}</td><td>${fx(c.thdI,1)}</td><td>${ev.rev.length ? `<span class="tag t-warn" title="${esc(ev.rev.join(" "))}">Revisar</span>` : "OK"}</td><td><button class="linkbtn" data-borrar="${x.id}">Borrar</button></td></tr>`; }).join("") + `</tbody>`
+  $("#hist").innerHTML = ls.length ? `<thead><tr><th>Fecha</th><th>Estado</th><th>V L-L</th><th>Desb. V</th><th>Despl. N</th><th>I prom.</th><th>kW</th><th>MWh/día</th><th>FP</th><th>Hz</th><th>THD V</th><th>THD I</th><th>Captura</th><th></th></tr></thead><tbody>` +
+    ls.map(x => { const ev = evaluar(x.v, m, prevDe(m, x.t), x.t), c = ev.c;
+      return `<tr><td>${fecha(x.t)}${x.manual ? ` <span title="Hora corregida a mano">✎</span>` : ""}</td><td><span class="tag t-${ev.est}">${ICON[ev.est]} ${TXT[ev.est]}</span></td><td>${fx(c.vLL,0)}</td><td>${c.desV != null ? fx(c.desV*100,2)+" %" : "—"}</td><td>${c.despN != null ? fx(c.despN*100,1)+" %" : "—"}</td><td>${fx(c.iProm,1)}</td><td>${fx(c.kw,0)}</td><td>${fx(c.mwhDia,2)}</td><td>${fx(c.fp,3)}</td><td>${fx(c.hz,2)}</td><td>${fx(c.thdV,1)}</td><td>${fx(c.thdI,1)}</td><td>${ev.rev.length ? `<span class="tag t-warn" title="${esc(ev.rev.join(" "))}">Revisar</span>` : "OK"}</td><td><button class="linkbtn" data-borrar="${x.id}">Borrar</button></td></tr>`; }).join("") + `</tbody>`
     : `<tbody><tr><td class="muted">Sin lecturas de este medidor.</td></tr></tbody>`;
   document.querySelectorAll("[data-borrar]").forEach(b => b.onclick = () => { if (!confirm("¿Borrar esta lectura?")) return; D.lect = D.lect.filter(x => x.id !== b.dataset.borrar); guardar(); todo(); });
 }
