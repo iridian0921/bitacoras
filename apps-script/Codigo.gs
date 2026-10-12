@@ -10,10 +10,14 @@ const CLAVE = "CAMBIA_ESTA_CLAVE";   // la clave del equipo: escribe la misma en
 const HOJAS = {
   ups: {nombre:"UPS", vista:["Fecha","Rama","Equipo","kW","kVA","Estado","Nota"]},
   interruptores: {nombre:"Interruptores", vista:["Fecha","Interruptor","Tablero","I1 (A)","I2 (A)","I3 (A)","IN (A)","Estado","Nota"]},
-  equipos: {nombre:"Equipos interruptores", vista:["Identificador","Tablero","Rama","In (A)","Descripción","Línea base"]}
+  equipos: {nombre:"Equipos interruptores", vista:["Identificador","Tablero","Rama","In (A)","Descripción","Línea base"]},
+  calidad: {nombre:"Calidad de energía", vista:["Fecha","Medidor","V L-L (V)","I prom (A)","kW","FP","THD V (%)","THD I (%)","Estado","Nota"]},
+  medidores: {nombre:"Medidores calidad", vista:["Identificador","Ubicación","Descripción","V nominal","I nominal (A)","Icc 3F (A)"]}
 };
 const TECNICAS = ["Capturó","Guardado","Foto","Borrado","rev","id","datos"];
-const POR_BITACORA = {ups:"ups", interruptores:"interruptores"};
+const POR_BITACORA = {ups:"ups", interruptores:"interruptores", calidad:"calidad"};
+/* Bitácoras que comparten su catálogo de equipos, y la pestaña donde va. */
+const EQUIPOS_DE = {interruptores:"equipos", calidad:"medidores"};
 
 function doGet(){
   return json({ok:true, mensaje:"El servidor de las bitácoras está activo. Copia esta dirección en la app (Ajustes → Compartir con el equipo)."});
@@ -105,8 +109,9 @@ function sync(p){
   const desde = Number(p.desde || 0);
   let E = null;
 
-  if (p.bitacora === "interruptores"){
-    E = abrir("equipos");
+  const hojaEq = EQUIPOS_DE[p.bitacora];
+  if (hojaEq){
+    E = abrir(hojaEq);
     const porTag = new Map();
     E.filas.forEach((f, i) => { if (!f[E.col.Borrado]) porTag.set(String(f[E.col.Identificador]).trim().toLowerCase(), i); });
     const nuevos = [];
@@ -153,7 +158,7 @@ function sync(p){
 
   const res = {ok:true, cursor:rev, remap, lecturas:cambios(abrir(POR_BITACORA[p.bitacora]), desde)};
   if (E){
-    const E2 = abrir("equipos"), destinos = new Set(Object.keys(remap).map(k => remap[k]));
+    const E2 = abrir(hojaEq), destinos = new Set(Object.keys(remap).map(k => remap[k]));
     res.equipos = cambios(E2, desde);
     // los equipos a los que se reasignó algo van siempre, aunque el teléfono ya los hubiera visto
     E2.filas.forEach(f => {

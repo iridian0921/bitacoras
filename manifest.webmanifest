@@ -1,7 +1,7 @@
 {
   "name": "Bitácoras de inspección",
   "short_name": "Bitácoras",
-  "description": "Bitácoras offline de UPS e interruptores con informes rápidos.",
+  "description": "Bitácoras offline de UPS, interruptores y calidad de energía con informes rápidos.",
   "lang": "es",
   "start_url": "./index.html",
   "scope": "./",

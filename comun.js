@@ -442,7 +442,8 @@ async function llamarScript(cfg, cuerpo){
   catch{ throw new Error(navigator.onLine === false ? "Sin conexión: se subirán al volver la señal." : "No se pudo contactar el script. Revisa la dirección o la señal."); }
   finally{ clearTimeout(t); }
   let o; try{ o = await r.json(); }catch{ throw new Error("La dirección no responde como el script de las bitácoras. Revisa que el acceso sea \"Cualquier persona\"."); }
-  if (!o.ok) throw new Error(o.error || "Error del script.");
+  // un script anterior a esta bitácora no la conoce: hay que pegar el Codigo.gs nuevo en la hoja
+  if (!o.ok) throw new Error(o.error === "Bitácora desconocida." ? "El script de la hoja es de una versión anterior: pega el apps-script/Codigo.gs nuevo y publica una nueva versión (GUIA.md, «Si cambias el script»)." : o.error || "Error del script.");
   return o;
 }
 
@@ -607,7 +608,7 @@ function compartir(o){
   const card = $("#syncCard");
   if (card){
     const c = syncConfig();
-    card.innerHTML = `<p class="muted" style="margin-top:0">Sube tus lecturas a la hoja de Google Sheets del equipo y recibe las de los demás. Sin señal se guardan aquí y se suben cuando vuelve. La configuración aplica a las dos bitácoras.</p>
+    card.innerHTML = `<p class="muted" style="margin-top:0">Sube tus lecturas a la hoja de Google Sheets del equipo y recibe las de los demás. Sin señal se guardan aquí y se suben cuando vuelve. La configuración aplica a todas las bitácoras.</p>
       <div class="campos">
         <label for="syUrl">Dirección del script (termina en /exec)</label><input class="plain" id="syUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(c.url)}">
         <label for="syClave">Clave del equipo</label><input class="plain" id="syClave" type="password" autocomplete="off" value="${esc(c.clave)}">
