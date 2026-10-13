@@ -112,6 +112,7 @@
 
 <section id="res">
   <h2>Resumen</h2>
+  <div id="resBarra"></div>
   <p class="muted">Última lectura de cada medidor.</p>
   <div class="units eqlist" id="resList"></div>
 </section>
@@ -123,6 +124,7 @@
     <div class="formg">
       <label for="fTag">Identificador</label><input class="plain" id="fTag" placeholder="Ej. TGMT-2 (K1)">
       <label for="fUbic">Ubicación</label><input class="plain" id="fUbic" placeholder="Ej. Tablero de acometida emergente">
+      <label for="fBarra">Barra</label><input class="plain" id="fBarra" list="barras" placeholder="Mismo nombre en los medidores de la misma barra">
       <label for="fDesc">Descripción</label><input class="plain" id="fDesc" placeholder="Ej. Alimentador 2 Emergente">
       <label for="fVn">V nominal L-L (V)</label><input class="plain" id="fVn" type="number" inputmode="numeric" value="13200">
       <label for="fIn">I nominal (A)</label><input class="plain" id="fIn" type="number" inputmode="decimal" placeholder="Menor entre TC, cable, transformador e interruptor">
@@ -140,6 +142,7 @@
     <div class="status" id="eqStatus"></div>
     <p class="muted" style="margin-bottom:0">I nominal: usa la menor entre el primario de los TC, el cable, el transformador y el interruptor. La Icc trifásica entre la demanda IL fija el límite de THD de corriente de IEEE 519; sin IL se usa la mayor corriente registrada.</p>
   </div>
+  <datalist id="barras"></datalist>
   <div class="units eqlist" id="eqList"></div>
 </section>
 
@@ -250,7 +253,7 @@ const numc = s => { if (s === null || s === undefined) return null; const t = St
 
 /* ================= límites ================= */
 const DEFAULTS = {aMin:-2.5, aMax:5, bMin:-5, bMax:5.8, desV:2, desVBad:3, despN:3, despNBad:10, desI:10, desIBad:20, iMin:10, carga:80, cargaBad:100,
-  hzMin:59.8, hzMax:60.2, hzMinBad:59.5, hzMaxBad:60.5, fp:0.95, fpBad:0.90, thdVWarn:4, thdV:5, thdIWarnPct:80, kWarn:4, tolV:1, tolI:3, tolP:3, tolFP:0.02};
+  hzMin:59.8, hzMax:60.2, hzMinBad:59.5, hzMaxBad:60.5, fp:0.95, fpBad:0.90, thdVWarn:4, thdV:5, thdIWarnPct:80, kWarn:4, tolV:1, tolI:3, tolP:3, tolFP:0.02, tolCmp:1.5, cmpMin:30};
 const CFG_FIELDS = [
   ["aMin","Tensión rango A, mínimo (%)",0.1],["aMax","Tensión rango A, máximo (%)",0.1],["bMin","Tensión rango B, mínimo (%)",0.1],["bMax","Tensión rango B, máximo (%)",0.1],
   ["desV","Desbalance de tensión: Vigilar (%)",0.1],["desVBad","Desbalance de tensión: Crítico (%)",0.1],
@@ -261,14 +264,15 @@ const CFG_FIELDS = [
   ["fp","FP: Vigilar abajo de",0.01],["fpBad","FP: Crítico abajo de",0.01],
   ["thdVWarn","THD de tensión: Vigilar arriba de (%)",0.5],["thdV","THD de tensión: Crítico arriba de (%)",0.5],["thdIWarnPct","THD de corriente: Vigilar desde (% del límite)",5],
   ["kWarn","Factor K: Vigilar arriba de",0.5],
-  ["tolV","Revisión de captura: tolerancia de voltaje (%)",0.5],["tolI","Revisión de captura: tolerancia de corriente (%)",0.5],["tolP","Revisión de captura: tolerancia de potencia (%)",0.5],["tolFP","Revisión de captura: tolerancia de FP",0.01]];
+  ["tolV","Revisión de captura: tolerancia de voltaje (%)",0.5],["tolI","Revisión de captura: tolerancia de corriente (%)",0.5],["tolP","Revisión de captura: tolerancia de potencia (%)",0.5],["tolFP","Revisión de captura: tolerancia de FP",0.01],
+  ["tolCmp","Comparación de barra: diferencia máxima entre medidores (%)",0.5],["cmpMin","Comparación de barra: lecturas con diferencia de hasta (minutos)",5]];
 /* ANSI C84.1, tabla 1 (tensión de servicio): rangos A y B en volts de los nominales de media tensión comunes en México */
 const ANSI = {13200:{a0:12870, a1:13860, b0:12540, b1:13970}, 13800:{a0:13460, a1:14490, b0:13110, b1:14520}};
 const rango = vn => ANSI[vn] || {a0:vn*(1+P.aMin/100), a1:vn*(1+P.aMax/100), b0:vn*(1+P.bMin/100), b1:vn*(1+P.bMax/100)};
 /* límite de THD de corriente según Isc/IL (IEEE 519-2014, tabla 2, 120 V – 69 kV) */
 const limTHDI = r => !r ? 5 : r < 20 ? 5 : r < 50 ? 8 : r < 100 ? 12 : r < 1000 ? 15 : 20;
 /* Datos del levantamiento del tablero de acometida emergente (unifilar, placa del interruptor y etiquetas de arco del 19/10/2018). */
-const TGMT2 = {tag:"TGMT-2 (K1)", ubic:"Tablero de acometida emergente", desc:"Alimentador 2 Emergente", vn:13200, in:300, icc:3533, il:null, hilos:3,
+const TGMT2 = {tag:"TGMT-2 (K1)", ubic:"Tablero de acometida emergente", barra:"Barra 13.8 kV emergente", desc:"Alimentador 2 Emergente", vn:13200, in:300, icc:3533, il:null, hilos:3,
   equipo:"Circuit Monitor CM 3350 · TC 300:5 A · relevador Siemens 7SJ6225 · interruptor 3AH3165-2 (2004): 15 kV, 1250 A, 31.5 kA 3 s, BIL 95 kV · barra 8BK20 13.2 kV 3F 3H",
   seg:"13,200 VAC · riesgo de arco, no quitar tapas · EPP categoría 3, mínimo 25 cal/cm² (17 cal/cm² a 91 cm) · límite de arco 344 cm · guantes clase 2 · límite permitido 150 cm, restringido 70 cm · falla a tierra 1739 A · estudio NFPA 70E del 19/10/2018"};
 
@@ -308,6 +312,51 @@ function razonIsc(e, iAhora){
   const il = e.il || Math.max(iAhora ?? 0, ...hist, 0);
   return il > 0 ? {r:e.icc / il, il, est:!e.il} : null;
 }
+/* Tensión residual V0 (secuencia cero) con las seis tensiones: ubica el punto de referencia de los TP (tierra) dentro del
+   triángulo de tensiones L-L y lo compara con el centro del triángulo. Con L-L parejas, V0 es lo que separa las tres L-N. */
+function v0De(LL, LN){
+  if ([...LL, ...LN].some(x => x === null || !(x > 0))) return null;
+  const [RS, ST, TR] = LL, [VR, VS, VT] = LN;
+  const x = (RS*RS + TR*TR - ST*ST) / (2*RS), y2 = TR*TR - x*x; if (y2 <= 0) return null;
+  const Rp = [0, 0], Sp = [RS, 0], Tp = [x, Math.sqrt(y2)], G = [(RS + x)/3, Tp[1]/3];
+  const dist = (p, q) => Math.hypot(p[0]-q[0], p[1]-q[1]);
+  const a = (VR*VR - VS*VS + RS*RS) / (2*RS), h = Math.sqrt(Math.max(VR*VR - a*a, 0));
+  const Pt = [[a, h], [a, -h]].reduce((m, q) => Math.abs(dist(q, Tp) - VT) < Math.abs(dist(m, Tp) - VT) ? q : m);
+  const err = Math.abs(dist(Pt, Tp) - VT), D = [Pt[0]-G[0], Pt[1]-G[1]], v0 = Math.hypot(D[0], D[1]), vf = (dist(G, Rp) + dist(G, Sp) + dist(G, Tp))/3;
+  const ang = q => { const u = [q[0]-G[0], q[1]-G[1]]; return Math.acos(Math.max(-1, Math.min(1, (u[0]*D[0] + u[1]*D[1]) / (Math.hypot(u[0], u[1]) * (v0 || 1))))); };
+  const angs = [Rp, Sp, Tp].map(ang), hacia = v0 ? ["R","S","T"][angs.indexOf(Math.min(...angs))] : null;
+  return {v0, pct:v0/vf, vf, err, errPct:err/vf, hacia};
+}
+/* Comparación de barra: los medidores de la misma barra están en el mismo punto eléctrico, así que sus tensiones contra
+   tierra deben coincidir. Se usa la lectura de cada uno más cercana en el tiempo (dentro de cmpMin minutos). */
+const mismaBarra = (a, b) => a?.barra && b?.barra && a.barra.trim().toLowerCase() === b.barra.trim().toLowerCase();
+const lnDe = v => ["vR","vS","vT"].map(k => numc(v?.[k])), llDe = v => ["vRS","vST","vTR"].map(k => numc(v?.[k]));
+function compararBarra(m, ts, LN, LL){
+  if (!m?.barra || LN.some(x => x === null)) return null;
+  const otros = equipos.filter(o => o.id !== m.id && mismaBarra(o, m)); if (!otros.length) return null;
+  const t = +new Date(ts), ven = P.cmpMin*60000, lst = [];
+  for (const o of otros){
+    const r = lecturas.filter(q => q.eq === o.id && Math.abs(+new Date(q.ts) - t) <= ven && lnDe(q.v).every(x => x !== null))
+      .sort((a, b) => Math.abs(+new Date(a.ts) - t) - Math.abs(+new Date(b.ts) - t))[0];
+    if (r) lst.push({e:o, ln:lnDe(r.v), ll:llDe(r.v), ts:r.ts});
+  }
+  const nombres = l => l.map(x => x.e.tag).join(", ");
+  if (!lst.length) return {e:"na", g:"Comparación de barra", v:"sin lecturas cercanas", t:`Sin lecturas de ${otros.map(o => o.tag).join(", ")} (misma barra) en ±${P.cmpMin} min: captúralos en la misma ronda para comparar.`};
+  const mi = [{e:m, ln:LN, ll:LL, yo:true}, ...lst], tol = P.tolCmp/100;
+  const medF = (k, j) => { const v = mi.map(x => x[k][j]).filter(x => x !== null).sort((a, b) => a - b); const n = v.length; return n ? (n % 2 ? v[n>>1] : (v[n/2-1] + v[n/2])/2) : null; };
+  const mLN = [0,1,2].map(j => medF("ln", j)), mLL = [0,1,2].map(j => medF("ll", j));
+  const dev = (x, k, md) => Math.max(...x[k].map((v, j) => v !== null && md[j] ? Math.abs(v/md[j] - 1) : 0));
+  mi.forEach(x => { x.d = dev(x, "ln", mLN); x.dll = dev(x, "ll", mLL); });
+  const yo = mi[0], dMax = Math.max(...mi.map(x => x.d)), causas = x => `terminal VN suelta, aterrizamiento del neutro o fusibles de sus TP${x.dll > tol ? "; también difiere en L-L: revisar la relación de TP y la configuración del medidor" : ""}`;
+  if (mi.length === 2){
+    if (dMax <= tol) return {e:"ok", g:"Comparación de barra", v:`coincide con ${nombres(lst)}`, t:`Las tensiones L-N coinciden con ${nombres(lst)} (diferencia máxima ${fx(dMax*100,1)} %). Si hay desplazamiento de neutro, es real: viene de la barra o de la red, no de la medición. Un tercer medidor de la barra lo confirma.`};
+    return {e:"warn", g:"Comparación de barra", v:`no coincide con ${nombres(lst)}`, t:`Las tensiones L-N no coinciden con ${nombres(lst)} (diferencia de hasta ${fx(dMax*100,1)} %), y en la misma barra deben ser iguales: uno de los dos tiene un problema de medición. Captura un tercer medidor de la barra para saber cuál.`};
+  }
+  const raros = mi.filter(x => x.d > tol);
+  if (!raros.length) return {e:"ok", g:"Comparación de barra", v:`coincide con ${lst.length} medidores`, t:`Las tensiones L-N coinciden con ${nombres(lst)} (diferencia máxima ${fx(dMax*100,1)} %). Cualquier desplazamiento de neutro es real: aparece igual en los ${mi.length} medidores de la barra, así que viene de la barra o de la red (CFE), no de la medición.`};
+  if (raros.includes(yo)) return {e:"warn", g:"Comparación de barra", v:`no coincide (${fx(yo.d*100,1)} %)`, t:`${m.tag} no coincide con ${nombres(lst)}: sus tensiones L-N difieren hasta ${fx(yo.d*100,1)} % de las de la barra. Como están en el mismo punto eléctrico, es un problema de la medición de ${m.tag} (${causas(yo)}); su desplazamiento de neutro no es real.`};
+  return {e:"ok", g:"Comparación de barra", v:`coincide; ${nombres(raros)} no`, t:`${m.tag} coincide con la mayoría de la barra. ${nombres(raros)} no coincide (hasta ${fx(Math.max(...raros.map(x => x.d))*100,1)} %): revisar su medición.`};
+}
 let calcCache = new WeakMap();
 function calc(r){
   let x = calcCache.get(r);
@@ -342,18 +391,21 @@ function evaluar(V, m, prev, ts){
   }
   // desplazamiento de neutro: cada L-N contra promedio L-L ÷ √3
   if (vLNs.every(x => x !== null) && vLL){
-    const ref = vLL / R3, ds = vLNs.map(v => v/ref - 1);
-    c.despN = Math.max(...ds.map(Math.abs));
+    const ref = vLL / R3, ds = vLNs.map(v => v/ref - 1), z = v0De(vLLs, vLNs);
+    // con las seis tensiones, V0 (exacto); si falta alguna L-L, la mayor desviación de una fase
+    c.despN = z ? z.pct : Math.max(...ds.map(Math.abs)); c.v0 = z?.v0 ?? null; c.hacia = z?.hacia ?? null;
+    if (z && z.errPct > 0.03) rev.push(`Las tensiones L-L y L-N no forman un sistema consistente (no cierran por ${fx(z.err,0)} V): alguna lectura está mal o las L-N no se miden contra el mismo punto.`);
     const e = c.despN*100 > P.despNBad ? "bad" : c.despN*100 > P.despN ? "warn" : "ok";
     const det = ["R","S","T"].map((f, j) => `${f} ${fx(vLNs[j],0)} V (${pctS(ds[j])})`).join(", ");
     let t = `Tensión L-N pareja: ${det}, contra ${fx(ref,0)} V esperados.`;
     if (e !== "ok"){
       const llOk = c.desV === null || c.desV*100 <= P.desV;
       const thLN = avg([g("thvR"), g("thvS"), g("thvT")]), thLL = avg([g("thvRS"), g("thvST"), g("thvTR")]);
-      t = `Desplazamiento de neutro ${fx(c.despN*100,1)} %: ${det}, contra ${fx(ref,0)} V esperados${llOk ? ", con la tensión L-L balanceada" : ""}. Comparar con otro alimentador de la misma barra: si solo aparece en este, revisar TP, fusibles y conexiones de su medición; si aparece en todos, revisar aislamiento y fugas a tierra (cables, terminales, apartarrayos) y la tensión residual (3V0) del relevador.`
+      t = `Desplazamiento de neutro ${fx(c.despN*100,1)} %${z ? ` (tensión residual V0 ${fx(z.v0,0)} V, 3V0 ${fx(3*z.v0,0)} V; el neutro se corre hacia ${z.hacia})` : ""}: ${det}, contra ${fx(ref,0)} V esperados${llOk ? ", con la tensión L-L balanceada" : ""}. Comparar con otro alimentador de la misma barra: si solo aparece en este, revisar TP, fusibles y conexiones de su medición; si aparece en todos, revisar aislamiento y fugas a tierra (cables, terminales, apartarrayos) y la tensión residual (3V0) del relevador.`
         + (thLN !== null && thLL !== null && thLN > thLL * 1.3 ? ` El THD L-N (${fx(thLN,1)} %) es mayor que el L-L (${fx(thLL,1)} %): hay componente de secuencia cero.` : "");
     }
-    add(e, "Desplazamiento de neutro", `${fx(c.despN*100,1)} %`, t);
+    add(e, "Desplazamiento de neutro", `${fx(c.despN*100,1)} %${z?.hacia && e !== "ok" ? ` hacia ${z.hacia}` : ""}`, t);
+    const cmp = compararBarra(m, ts, vLNs, vLLs); if (cmp){ it.push(cmp); est = peor(est, cmp.e === "na" ? "na" : cmp.e); }
   }
   // corriente
   if (is.every(x => x !== null) && iProm > P.iMin){
@@ -445,7 +497,7 @@ function renderEqSel(){
   $("#eqSel").innerHTML = list.map(e => `<option value="${esc(e.id)}">${esc(eqName(e))}</option>`).join("");
   if (selEq) $("#eqSel").value = selEq;
   const e = eqById(selEq);
-  $("#eqInfo").textContent = e ? [e.ubic, `${fx(e.vn,0)} V nominal`, `${e.hilos} hilos`, e.in ? `${fx(e.in,0)} A nominales` : "", e.icc ? `Icc ${fx(e.icc,0)} A` : ""].filter(Boolean).join(" · ") : "";
+  $("#eqInfo").textContent = e ? [e.ubic, e.barra, `${fx(e.vn,0)} V nominal`, `${e.hilos} hilos`, e.in ? `${fx(e.in,0)} A nominales` : "", e.icc ? `Icc ${fx(e.icc,0)} A` : ""].filter(Boolean).join(" · ") : "";
   $("#segNote").classList.toggle("hidden", !e?.seg);
   $("#segNote").innerHTML = e?.seg ? `<b>⚠ Seguridad:</b> ${esc(e.seg)}` : "";
 }
@@ -529,13 +581,14 @@ $("#saveBtn").onclick = async () => {
 
 /* ================= medidores ================= */
 let editId = null;
-const F_EQ = [["fTag","tag","t"],["fUbic","ubic","t"],["fDesc","desc","t"],["fVn","vn","n"],["fIn","in","n"],["fIcc","icc","n"],["fIl","il","n"],["fHilos","hilos","n"],["fEquipo","equipo","t"],["fSeg","seg","t"]];
+const F_EQ = [["fTag","tag","t"],["fUbic","ubic","t"],["fBarra","barra","t"],["fDesc","desc","t"],["fVn","vn","n"],["fIn","in","n"],["fIcc","icc","n"],["fIl","il","n"],["fHilos","hilos","n"],["fEquipo","equipo","t"],["fSeg","seg","t"]];
 function renderEquipos(){
   const L = sortedEq();
+  $("#barras").innerHTML = [...new Set(equipos.map(e => e.barra).filter(Boolean))].map(b => `<option value="${esc(b)}">`).join("");
   if (!L.length){ $("#eqList").innerHTML = `<p class="muted">Aún no hay medidores registrados. Puedes empezar con «Llenar con los datos del TGMT-2 (K1)».</p>`; return; }
   const ult = ultimas();
   $("#eqList").innerHTML = L.map(e => `<div class="unit"><span class="n">${esc(e.tag)}</span>
-      <div class="muted">${esc([e.ubic, e.desc].filter(Boolean).join(" · "))}</div>
+      <div class="muted">${esc([e.ubic, e.barra, e.desc].filter(Boolean).join(" · "))}</div>
       <div>${fx(e.vn,0)} V · ${e.hilos} hilos${e.in ? ` · ${fx(e.in,0)} A` : ""}${e.icc ? ` · Icc ${fx(e.icc,0)} A` : ""}${e.il ? ` · IL ${fx(e.il,0)} A` : ""}</div>
       ${e.equipo ? `<div class="muted">${esc(e.equipo)}</div>` : ""}
       ${e.seg ? `<div class="muted">⚠ ${esc(e.seg)}</div>` : ""}
@@ -573,7 +626,22 @@ $("#eqSave").onclick = () => {
 };
 
 /* ================= resumen ================= */
+/* Tabla de la comparación por barra con la última lectura de cada medidor (u, mapa medidor → lectura). */
+function tablaBarras(u, rep){
+  const grupos = new Map();
+  sortedEq().filter(e => e.barra && u.get(e.id)).forEach(e => { const k = e.barra.trim().toLowerCase(); (grupos.get(k) || grupos.set(k, []).get(k)).push(e); });
+  return [...grupos.values()].filter(g => g.length > 1).map(g => {
+    const ts = g.map(e => +new Date(u.get(e.id).ts)), sep = (Math.max(...ts) - Math.min(...ts)) / 60000;
+    const filas = g.map(e => { const r = u.get(e.id), x = calc(r), c = x.c, cmp = x.it.find(i => i.g === "Comparación de barra");
+      const mal = cmp?.e === "warn", cel = v => `<td${mal ? (rep ? ' class="mal"' : ' style="color:var(--bad);font-weight:600"') : ""}>${v}</td>`;
+      return `<tr><td><b>${esc(e.tag)}</b></td><td>${fdate(r.ts)}</td>${lnDe(r.v).map(v => cel(fx(v,0))).join("")}<td>${c.despN !== null ? fx(c.despN*100,1) + " %" + (c.hacia ? " → " + c.hacia : "") : "—"}</td><td style="white-space:normal">${cmp ? esc(cmp.v) : "—"}</td></tr>`; }).join("");
+    return `<div class="${rep ? "bloque" : "card tbl-wrap"}"><${rep ? "h2" : "h3"} style="margin-top:0">Comparación por barra: ${esc(g[0].barra)}</${rep ? "h2" : "h3"}>
+      <table><tr><th>Medidor</th><th>Lectura</th><th>R-N</th><th>S-N</th><th>T-N</th><th>Despl. N (V0)</th><th>Comparación</th></tr>${filas}</table>
+      <div style="font-size:12px;${rep ? "color:#6a7784" : ""}" class="${rep ? "" : "muted"}">En la misma barra, las tensiones contra tierra deben coincidir (±${P.tolCmp} %). Si el desplazamiento aparece igual en todos, es real (viene de la barra o de la red); si solo en uno, es de su medición.${sep > P.cmpMin ? ` <b>Ojo:</b> las últimas lecturas tienen ${fx(sep,0)} min de diferencia; captura los medidores en la misma ronda.` : ""}</div></div>`;
+  }).join("");
+}
 function renderResumen(){
+  $("#resBarra").innerHTML = tablaBarras(ultimas(), false);
   const L = sortedEq();
   if (!L.length){ $("#resList").innerHTML = `<p class="muted">Sin medidores registrados.</p>`; return; }
   const ult = ultimas();
@@ -787,6 +855,7 @@ async function generarInforme(){
   ${revs.length ? `<p style="color:#6b5200"><b>Revisión de captura</b> (diferencias entre pantallas, no cambian el estado): ${revs.map(x => `${esc(x.eq)}: ${esc(x.t)}`).join(" ")}</p>` : ""}
   <div class="bloque"><h2>Detalle por medidor</h2><div class="tw"><table><tr><th>Medidor</th><th>Lectura</th><th>Tensión L-L</th><th>Despl. N</th><th>Corriente</th><th>Potencia</th><th>FP</th><th>Hz</th><th>THD</th><th>Estado</th></tr>${filas}</table></div>
   <div style="font-size:11px;color:#6a7784;margin-top:4px">Tensión: promedio L-L y diferencia contra el nominal. Despl. N: mayor diferencia de las tensiones L-N contra L-L ÷ √3. THD: máximos por fase. En rojo, los valores fuera de límite.${con.some(u => u.r.tsManual) ? " ✎: hora de la lectura corregida a mano." : ""}</div></div>
+  ${tablaBarras(ult, true)}
   ${comp ? comp.html : ""}
   ${notas ? `<h2>Notas de campo</h2><ul>${notas}</ul>` : ""}
   ${fotosInf ? `<h2>Evidencia fotográfica</h2><div class="fotos">${fotosInf}</div>` : ""}
@@ -819,6 +888,7 @@ function renderCriterios(){
     ["Tensión", "Contra la nominal del medidor, por cada par de fases, con los rangos de tensión de servicio de ANSI C84.1. 13.2 kV: fuera del rango A (12,870–13,860 V) Vigilar; fuera del rango B (12,540–13,970 V) Crítico. 13.8 kV: A 13,460–14,490 V, B 13,110–14,520 V."],
     ["Desbalance de tensión", `Máxima desviación de las tensiones L-L contra su promedio (NEMA). Más de ${P.desV} %: Vigilar; más de ${P.desVBad} %: Crítico.`],
     ["Desplazamiento de neutro", `Cada tensión L-N contra la que le toca (promedio L-L ÷ √3). Con L-L balanceada indica que el neutro se movió respecto a tierra: un TP, su fusible o su conexión; o aislamiento degradado o fuga a tierra. Más de ${P.despN} %: Vigilar; más de ${P.despNBad} %: Crítico.`],
+    ["Comparación de barra", `Los medidores con el mismo nombre de barra están en el mismo punto eléctrico: sus tensiones contra tierra deben coincidir (±${P.tolCmp} %, con lecturas de hasta ${P.cmpMin} min de diferencia). Si el desplazamiento de neutro aparece igual en todos, es real (viene de la barra o de la red de CFE); si solo en uno, es un problema de su medición (VN, aterrizamiento o fusibles de los TP). Con dos medidores solo se sabe que no coinciden; con tres se identifica cuál. El desplazamiento se calcula como tensión residual V0 con las seis tensiones (L-L y L-N).`],
     ["Corriente", `Desbalance de más de ${P.desI} %: Vigilar; más de ${P.desIBad} %: Crítico (solo con más de ${P.iMin} A). Carga contra la I nominal (la menor entre TC, cable, transformador e interruptor): ${P.carga} % Vigilar, ${P.cargaBad} % Crítico. En 3 hilos, la corriente de neutro no aplica.`],
     ["Frecuencia", `Fuera de ${P.hzMin}–${P.hzMax} Hz: Vigilar (rango normal del Código de Red); fuera de ${P.hzMinBad}–${P.hzMaxBad} Hz: Crítico.`],
     ["Factor de potencia", `FP real menor de ${P.fp}: Vigilar (Código de Red); menor de ${P.fpBad}: Crítico. Adelantado: revisar capacitores o filtros. El cociente MWh ÷ MVAh de los contadores da el FP promedio acumulado.`],
