@@ -264,8 +264,9 @@ let db = null;
 function abrirDB(){
   return new Promise(res => {
     try{
-      const rq = indexedDB.open("bitacora-baterias", 1);
-      rq.onupgradeneeded = () => rq.result.createObjectStore("dias");
+      // sin versión: abre la que dejó la bitácora (v2 agrega los cargadores)
+      const rq = indexedDB.open("bitacora-baterias");
+      rq.onupgradeneeded = () => { if (!rq.result.objectStoreNames.contains("dias")) rq.result.createObjectStore("dias"); };
       rq.onsuccess = () => res(rq.result); rq.onerror = () => res(null);
       setTimeout(() => res(null), 5000);
     }catch{ res(null); }
