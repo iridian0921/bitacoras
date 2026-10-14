@@ -1,10 +1,10 @@
 /* Service worker: guarda la app en el teléfono para que abra sin señal.
    Al publicar una versión nueva, cambia VERSION para que los teléfonos la descarguen. */
-const VERSION = "bitacoras-v27";
+const VERSION = "bitacoras-v28";
 /* Sin estos la app no abre: si alguno no se puede bajar, la versión nueva no se instala y se queda la anterior. */
 const INDISPENSABLES = ["./", "index.html", "ups.html", "interruptores.html", "calidad.html", "baterias.html", "comun.css", "comun.js"];
 /* Estos se intentan, pero si fallan la versión se instala igual y se completan después al usarlos. */
-const OPCIONALES = ["diagnostico.html", "manifest.webmanifest",
+const OPCIONALES = ["diagnostico.html", "sincronizacion.html", "transferencia-ctos1.html", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png", "icons/apple-touch-icon.png"];
 const espera = ms => new Promise(r => setTimeout(r, ms));
 

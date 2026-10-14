@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<!--
+  Tablero de transferencia CTOS I — vista de operación en una sola pantalla
+  Secuencia conforme a la placa de operación del tablero
+  Autor: Iridian Jiménez Jiménez · Técnico Electromecánico
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="author" content="Iridian Jiménez Jiménez">
+<title>Vista de operación · Tablero de transferencia CTOS I</title>
+<style>
+:root{
+  --u:1;
+  --panel:#39423f;--panel-2:#2c3431;--bezel:#171c1a;--dial:#e9e3d3;--ink:#20241f;
+  --red-c:#2f7fbf;--gen-c:#e0922b;--both:#7dbb6a;
+  --ok:#4e9c53;--warn:#d6a028;--bad:#b8332a;--engrave:#cfd6cf;
+  --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --cond:"Roboto Condensed","Arial Narrow",Inter,system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{background:radial-gradient(120% 80% at 50% 0%,#414a47 0%,#232a27 70%,#191e1c 100%);
+  color:var(--engrave);font-family:var(--cond);font-size:calc(15px*var(--u));line-height:1.35;
+  padding:calc(8px*var(--u));-webkit-text-size-adjust:100%}
+body.fit{overflow:hidden}
+
+.shell{height:100%;display:grid;gap:calc(7px*var(--u));
+  grid-template-rows:auto auto minmax(0,1fr) auto}
+body.scroll .shell{height:auto;grid-template-rows:none}
+.stripA{display:grid;gap:calc(7px*var(--u));
+  grid-template-columns:1.18fr 1.18fr .96fr .84fr .84fr .74fr .86fr}
+.midrow{display:grid;gap:calc(7px*var(--u));
+  grid-template-columns:minmax(0,1fr) calc(206px*var(--u)) calc(248px*var(--u));min-height:0}
+body.scroll .stripA{grid-template-columns:repeat(2,minmax(0,1fr))}
+body.scroll .midrow{grid-template-columns:minmax(0,1fr)}
+.col{display:flex;flex-direction:column;gap:calc(7px*var(--u));min-height:0}
+
+.card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid #11150f;border-radius:5px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 3px 10px rgba(0,0,0,.4);padding:calc(6px*var(--u));
+  display:flex;flex-direction:column;min-height:0}
+.card.grow{flex:1}
+.ttl{font-size:calc(8.8px*var(--u));letter-spacing:.1em;text-transform:uppercase;color:#9aa49b;
+  margin:0 0 calc(4px*var(--u));display:flex;justify-content:space-between;align-items:center;gap:4px;
+  white-space:nowrap;overflow:hidden}
+.ttl b{font-family:var(--mono);font-size:calc(9.5px*var(--u));letter-spacing:0}
+.tag{background:#11150f;border-radius:2px;padding:1px 4px;color:#d7dcd4;font-size:calc(8.4px*var(--u));
+  letter-spacing:.04em;flex:0 0 auto}
+.tag.gd{background:#1f3a22;color:#8fd894}.tag.am{background:#3a2f12;color:#e9c877}
+.tag.hi{background:#3a1a16;color:#ef9d93}
+
+/* --- lecturas --- */
+.rd{display:grid;grid-template-columns:1fr 1fr;gap:calc(2px*var(--u)) calc(6px*var(--u))}
+.rd.one{grid-template-columns:1fr}
+.rd div{display:flex;justify-content:space-between;align-items:baseline;gap:4px;
+  border-bottom:1px solid rgba(255,255,255,.055);padding-bottom:1px}
+.rd span{font-size:calc(9.4px*var(--u));color:#9fa9a2;white-space:nowrap}
+.rd b{font-family:var(--mono);font-size:calc(10.6px*var(--u));color:#f0f2ec;font-weight:600;white-space:nowrap}
+.rd b.gd{color:#8fd894}.rd b.hi{color:#ef9d93}.rd b.am{color:#e9c877}
+
+.sl{margin-top:calc(3px*var(--u))}
+.sl label{display:flex;justify-content:space-between;font-size:calc(9px*var(--u));color:#b7c0b6;margin-bottom:0}
+.sl label b{font-family:var(--mono);color:#fff}
+.sl input{width:100%;accent-color:#d9a441;height:calc(14px*var(--u));margin:0}
+.sl input:disabled{opacity:.4}
+
+/* --- unifilar --- */
+.sld{flex:1;min-height:0;background:#0e1411;border:1px solid #000;border-radius:5px;padding:calc(4px*var(--u));
+  display:flex}
+.sld svg{width:100%;height:100%;display:block}
+.strip{display:grid;grid-template-columns:repeat(4,1fr);gap:calc(7px*var(--u))}
+body.scroll .strip{grid-template-columns:repeat(2,minmax(0,1fr))}
+
+.bar{height:calc(13px*var(--u));background:#151b18;border:1px solid #000;border-radius:2px;overflow:hidden;display:flex;margin-top:3px}
+.bar i{display:block;height:100%}
+.b-g1{background:linear-gradient(180deg,#efab48,#e0922b)}
+.b-g2{background:linear-gradient(180deg,#d98b57,#c4713a)}
+
+/* --- sincronoscopio --- */
+#syn{display:block;margin:0 auto;width:calc(126px*var(--u));height:calc(126px*var(--u))}
+.perm{display:flex;align-items:center;gap:5px;justify-content:center;margin-top:3px;font-size:calc(9.4px*var(--u));text-align:center}
+.dot{width:calc(9px*var(--u));height:calc(9px*var(--u));border-radius:50%;background:#5a635d;flex:0 0 auto}
+.dot.ok{background:var(--ok);box-shadow:0 0 7px var(--ok)}
+.dot.bad{background:var(--bad);box-shadow:0 0 7px var(--bad)}
+
+/* --- secuencia --- */
+ol.seq{list-style:none;margin:0;padding:0;counter-reset:s;overflow-y:auto;flex:1;min-height:0}
+ol.seq li{display:flex;gap:5px;align-items:flex-start;padding:calc(2px*var(--u)) 0;
+  font-size:calc(9.6px*var(--u));color:#7e8880;line-height:1.22}
+ol.seq li::before{counter-increment:s;content:counter(s);flex:0 0 calc(14px*var(--u));height:calc(14px*var(--u));
+  border-radius:50%;background:#4b544f;color:#1b201d;font-size:calc(8px*var(--u));font-weight:700;
+  display:flex;align-items:center;justify-content:center}
+ol.seq li.done{color:#b9c3b8}ol.seq li.done::before{background:var(--ok);color:#0f1a10}
+ol.seq li.now{color:#fff;font-weight:700}ol.seq li.now::before{background:#d9a441;color:#1b1f1c}
+
+/* --- encabezado --- */
+.head{display:flex;align-items:center;gap:calc(9px*var(--u));flex-wrap:wrap;
+  background:linear-gradient(180deg,#3d4643,#2f3734);border:1px solid #11150f;border-radius:5px;
+  padding:calc(5px*var(--u)) calc(9px*var(--u))}
+.head h1{font-size:calc(14px*var(--u));margin:0;color:#f0f2ec;font-weight:700;white-space:nowrap}
+.head .aut{font-size:calc(9.5px*var(--u));color:#d9a441;white-space:nowrap}
+.flow{display:flex;gap:3px;flex:1;min-width:calc(240px*var(--u))}
+.flow i{flex:1;text-align:center;font-style:normal;font-size:calc(9.5px*var(--u));letter-spacing:.08em;
+  padding:calc(3px*var(--u)) 2px;border-radius:3px;background:#242b28;color:#79837b;border:1px solid #1a201d}
+.flow i.on{background:#d9a441;color:#1b1f1c;font-weight:700;border-color:#8a6620}
+.flow i.al{background:#7e241c;color:#ffd9d4;border-color:#5a1811}
+.zoom{display:flex;gap:3px}
+.zoom button{background:#222825;color:#c6cec5;border:1px solid #0d100e;border-radius:3px;
+  padding:calc(4px*var(--u)) calc(7px*var(--u));font-family:var(--cond);font-size:calc(10px*var(--u));cursor:pointer}
+
+.msg{font-size:calc(10.5px*var(--u));padding:calc(4px*var(--u)) calc(8px*var(--u));border-radius:3px;
+  border-left:4px solid;background:#1e2320;flex:1;min-width:calc(220px*var(--u))}
+.msg.ok{border-color:var(--ok);color:#a9dcac}.msg.bad{border-color:var(--bad);color:#efa79f}
+.msg.warn{border-color:var(--warn);color:#e6cd93}.msg.inf{border-color:#2f7fbf;color:#a8cbe8}
+
+/* --- barra inferior --- */
+.foot{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) minmax(0,1fr);gap:calc(8px*var(--u));min-height:0}
+.foot>.card{min-height:calc(120px*var(--u));overflow:hidden}
+.foot>.card:nth-child(2){overflow-y:auto}
+body.scroll .foot{grid-template-columns:minmax(0,1fr)}
+.btns{display:grid;grid-template-columns:repeat(4,1fr);gap:calc(4px*var(--u))}
+.btns button{background:#232a26;color:#c6cec5;border:1px solid #0d100e;border-radius:3px;
+  padding:calc(7px*var(--u)) calc(3px*var(--u));font-family:var(--cond);font-size:calc(10.5px*var(--u));
+  cursor:pointer;line-height:1.15}
+.btns button:disabled{opacity:.3;cursor:not-allowed}
+.btns button.fail{background:#7e241c;color:#ffe6e2;border-color:#4d120c}
+.btns button.rest{background:#47582f;color:#eef5e2;border-color:#2c3a1b}
+.btns button.ret{background:#2a5f88;color:#e9f4ff;border-color:#183a53}
+.btns button:not(:disabled):active{transform:translateY(1px)}
+.seg{display:grid;grid-template-columns:repeat(2,1fr);gap:calc(4px*var(--u));margin-top:calc(4px*var(--u))}
+.seg button{background:#232a26;color:#c6cec5;border:1px solid #0d100e;border-radius:3px;
+  padding:calc(6px*var(--u)) 3px;font-family:var(--cond);font-size:calc(10px*var(--u));cursor:pointer}
+.seg button[aria-pressed=true]{background:#d9a441;color:#1b1f1c;border-color:#8a6620;font-weight:700}
+.seg.c4{grid-template-columns:repeat(4,1fr)}
+.seg.c3{grid-template-columns:repeat(3,1fr)}
+.seg button.cl{background:#27442b;border-color:#14401a;color:#b6e6b9}
+.seg button:disabled{opacity:.32;cursor:not-allowed}
+button:focus-visible,input:focus-visible{outline:2px solid #7fc1ff;outline-offset:1px}
+
+#log{font-family:var(--mono);font-size:calc(9.5px*var(--u));line-height:1.4;background:#12100c;
+  border:1px solid #000;border-radius:3px;padding:calc(5px*var(--u));
+  flex:1 1 0;height:0;min-height:0;overflow-y:auto;overflow-x:hidden;
+  overscroll-behavior:contain;color:#b7c2b6}
+body.scroll #log{height:calc(130px*var(--u));flex:none}
+#log p{margin:0 0 2px;word-break:break-word}#log .t{color:#6f7a6e}
+.e-ok{color:#79c97f}.e-bad{color:#e06a5f}.e-warn{color:#e0b24c}.e-inf{color:#8fb6d9}
+
+/* --- enlaces visuales --- */
+@keyframes flash{0%{box-shadow:0 0 0 0 rgba(217,164,65,0)}
+  25%{box-shadow:0 0 0 3px rgba(217,164,65,.85)}100%{box-shadow:0 0 0 0 rgba(217,164,65,0)}}
+.card.flash{animation:flash 1.2s ease-out}
+@keyframes gflash{0%{filter:none}25%{filter:drop-shadow(0 0 8px rgba(255,205,90,1))}100%{filter:none}}
+.gflash{animation:gflash 1.2s ease-out}
+.card.live{border-color:#7a6326}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+/* en pantalla angosta el encabezado se acomoda en renglones en lugar de salirse de la pantalla */
+.shell{grid-template-columns:minmax(0,1fr)}
+body.scroll .flow{flex-basis:100%;min-width:0}
+body.scroll .msg{min-width:0;flex-basis:100%}
+body.scroll .ttl{white-space:normal;flex-wrap:wrap}
+.hintbar{display:none;font-size:calc(10px*var(--u));color:#9aa49b;padding:4px 2px}
+body.scroll .hintbar{display:block}
+</style>
+</head>
+<body class="fit">
+<div class="shell">
+
+<!-- ================= ENCABEZADO ================= -->
+<div class="head">
+  <a href="index.html" style="color:#d9a441;font-size:calc(11px*var(--u));text-decoration:none;white-space:nowrap">← Bitácoras</a>
+  <h1>Tablero de transferencia · CTOS I</h1>
+  <div class="flow" id="flow">
+    <i data-s="normal">NORMAL</i><i data-s="falla">FALLA CFE</i><i data-s="planta">EN PLANTA</i>
+    <i data-s="paralelo">PARALELO</i><i data-s="regreso">REGRESO</i>
+  </div>
+  <div class="msg ok" id="banner">Operación normal: TR-1 alimenta el bus de carga 01 y TR-2 el bus de carga 02.</div>
+  <div class="zoom">
+    <button id="zOut">A−</button><button id="zIn">A+</button>
+  </div>
+  <span class="aut">Iridian Jiménez Jiménez</span>
+</div>
+
+<div class="hintbar">La pantalla es angosta para la vista completa; se muestra en columna. Gira el equipo o ábrelo en una pantalla más grande.</div>
+
+<!-- ================= CUERPO ================= -->
+<!-- ================= BANDA DE INSTRUMENTOS ================= -->
+<div class="stripA">
+    <div class="card" id="cG1">
+      <p class="ttl">Generador GE-01 · 2000 kW <span class="tag" id="e1">Paro</span></p>
+      <div class="rd">
+        <div><span>V</span><b id="v1">0</b></div><div><span>Hz</span><b id="f1">0.00</b></div>
+        <div><span>rpm</span><b id="n1">0</b></div><div><span>A</span><b id="i1">0</b></div>
+        <div><span>kW</span><b id="p1">0</b></div><div><span>kVAr</span><b id="q1">0</b></div>
+        <div><span>FP</span><b id="fp1">—</b></div><div><span>carga</span><b id="pc1">0 %</b></div>
+      </div>
+      <div class="sl">
+        <label for="g1gov"><span id="l1gov">Gobernador</span><b id="v1gov">60.00 Hz</b></label>
+        <input type="range" id="g1gov" min="-1" max="1" step="0.01" value="0">
+        <label for="g1exc"><span id="l1exc">Excitación</span><b id="v1exc">480 V</b></label>
+        <input type="range" id="g1exc" min="440" max="520" step="1" value="480">
+      </div>
+    </div>
+
+    <div class="card" id="cG2">
+      <p class="ttl">Generador GE-02 · 2000 kW <span class="tag" id="e2">Paro</span></p>
+      <div class="rd">
+        <div><span>V</span><b id="v2">0</b></div><div><span>Hz</span><b id="f2">0.00</b></div>
+        <div><span>rpm</span><b id="n2">0</b></div><div><span>A</span><b id="i2">0</b></div>
+        <div><span>kW</span><b id="p2">0</b></div><div><span>kVAr</span><b id="q2">0</b></div>
+        <div><span>FP</span><b id="fp2">—</b></div><div><span>carga</span><b id="pc2">0 %</b></div>
+      </div>
+      <div class="sl">
+        <label for="g2gov"><span id="l2gov">Gobernador</span><b id="v2gov">60.00 Hz</b></label>
+        <input type="range" id="g2gov" min="-1" max="1" step="0.01" value="0">
+        <label for="g2exc"><span id="l2exc">Excitación</span><b id="v2exc">480 V</b></label>
+        <input type="range" id="g2exc" min="440" max="520" step="1" value="480">
+      </div>
+    </div>
+
+    <div class="card" id="cBusG">
+      <p class="ttl">Bus de generadores <span class="tag" id="tBusG">Sin tensión</span></p>
+      <div class="rd">
+        <div><span>V</span><b id="vBus">0</b></div><div><span>Hz</span><b id="fBus">—</b></div>
+        <div><span>kW</span><b id="pTot">0</b></div><div><span>kVAr</span><b id="qTot">0</b></div>
+      </div>
+      <div class="bar"><i class="b-g1" id="barG1" style="width:0%"></i><i class="b-g2" id="barG2" style="width:0%"></i></div>
+      <div class="rd one" style="margin-top:3px"><div><span>Reparto</span><b id="rep">0 / 0 kW</b></div></div>
+    </div>
+
+    <div class="card" id="cBusA">
+      <p class="ttl">Bus carga 01 <span class="tag gd" id="srcA">TR-1</span></p>
+      <div class="rd one">
+        <div><span>Tensión</span><b id="vA">480 V</b></div>
+        <div><span>Corte</span><b id="cutA" class="gd">0 ms</b></div>
+      </div>
+    </div>
+
+    <div class="card" id="cBusB">
+      <p class="ttl">Bus carga 02 <span class="tag gd" id="srcB">TR-2</span></p>
+      <div class="rd one">
+        <div><span>Tensión</span><b id="vB">480 V</b></div>
+        <div><span>Corte</span><b id="cutB" class="gd">0 ms</b></div>
+      </div>
+    </div>
+
+    <div class="card" id="cUtil">
+      <p class="ttl">Acometidas CFE</p>
+      <div class="rd one">
+        <div><span>TR-1</span><b id="uA" class="gd">Presente</b></div>
+        <div><span>TR-2</span><b id="uB" class="gd">Presente</b></div>
+      </div>
+    </div>
+
+    <div class="card" id="cMan">
+      <p class="ttl">Maniobra</p>
+      <div class="rd one">
+        <div><span>Estabilidad</span><b id="stabV">—</b></div>
+        <div><span>Transferencia</span><b id="ttype">Rampa suave</b></div>
+      </div>
+    </div>
+</div>
+
+<!-- ================= UNIFILAR Y SINCRONISMO ================= -->
+<div class="midrow">
+    <div class="card grow">
+      <p class="ttl">Unifilar de fuerza <span class="tag" id="tOcup">0 % de capacidad</span></p>
+      <div class="sld">
+        <svg id="sld" viewBox="0 0 820 452" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Unifilar del tablero de transferencia">
+          <path id="wNA"  d="M130 82 L130 252" stroke="#3a443f" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path id="wNA2" d="M130 288 L130 345" stroke="#3a443f" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path id="wNB"  d="M690 82 L690 252" stroke="#3a443f" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path id="wNB2" d="M690 288 L690 345" stroke="#3a443f" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path id="wG1a" d="M350 73 L350 120" stroke="#3a443f" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path id="wG1b" d="M350 156 L350 205" stroke="#3a443f" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path id="wG2a" d="M440 73 L440 120" stroke="#3a443f" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path id="wG2b" d="M440 156 L440 205" stroke="#3a443f" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path id="wEA"  d="M285 214 L285 252" stroke="#3a443f" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path id="wEA2" d="M285 288 L285 345" stroke="#3a443f" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path id="wEB"  d="M530 214 L530 252" stroke="#3a443f" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path id="wEB2" d="M530 288 L530 345" stroke="#3a443f" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path id="wLA"  d="M207 354 L207 392" stroke="#3a443f" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path id="wLB"  d="M613 354 L613 392" stroke="#3a443f" stroke-width="5" fill="none" stroke-linecap="round"/>
+
+          <rect id="busG" x="285" y="205" width="245" height="9" rx="3" fill="#3a443f"/>
+          <text x="407" y="232" fill="#9aa49b" font-size="13" text-anchor="middle" font-family="Roboto Condensed,Arial">BUS DE GENERADOR</text>
+          <rect id="busA" x="90" y="345" width="230" height="9" rx="3" fill="#3a443f"/>
+          <rect id="busB" x="500" y="345" width="230" height="9" rx="3" fill="#3a443f"/>
+          <text x="207" y="337" fill="#9aa49b" font-size="13" text-anchor="middle" font-family="Roboto Condensed,Arial">BUS DE CARGA 01</text>
+          <text x="613" y="337" fill="#9aa49b" font-size="13" text-anchor="middle" font-family="Roboto Condensed,Arial">BUS DE CARGA 02</text>
+
+          <circle cx="130" cy="45" r="18" fill="none" stroke="#2f7fbf" stroke-width="3"/>
+          <circle cx="130" cy="64" r="18" fill="none" stroke="#2f7fbf" stroke-width="3"/>
+          <text x="130" y="18" fill="#9dc7e8" font-size="15" text-anchor="middle" font-family="Roboto Condensed,Arial" font-weight="700">TR-1</text>
+          <circle cx="690" cy="45" r="18" fill="none" stroke="#2f7fbf" stroke-width="3"/>
+          <circle cx="690" cy="64" r="18" fill="none" stroke="#2f7fbf" stroke-width="3"/>
+          <text x="690" y="18" fill="#9dc7e8" font-size="15" text-anchor="middle" font-family="Roboto Condensed,Arial" font-weight="700">TR-2</text>
+
+          <circle cx="350" cy="49" r="24" fill="#16201f" stroke="#e0922b" stroke-width="3"/>
+          <text x="350" y="55" fill="#efb163" font-size="17" text-anchor="middle" font-family="Roboto Condensed,Arial" font-weight="700">G1</text>
+          <text id="g1st" x="350" y="17" fill="#8d968c" font-size="12" text-anchor="middle" font-family="Roboto Condensed,Arial">paro</text>
+          <circle cx="440" cy="49" r="24" fill="#16201f" stroke="#e0922b" stroke-width="3"/>
+          <text x="440" y="55" fill="#efb163" font-size="17" text-anchor="middle" font-family="Roboto Condensed,Arial" font-weight="700">G2</text>
+          <text id="g2st" x="440" y="17" fill="#8d968c" font-size="12" text-anchor="middle" font-family="Roboto Condensed,Arial">paro</text>
+
+          <g id="kG1"><rect x="335" y="120" width="30" height="36" rx="3" fill="#1b2321" stroke="#8d968c" stroke-width="2"/>
+            <line class="ct" x1="350" y1="124" x2="350" y2="152" stroke="#8d968c" stroke-width="5" stroke-linecap="round"/></g>
+          <text x="326" y="133" fill="#c3ccc2" font-size="12.5" text-anchor="end" font-family="Roboto Condensed,Arial">INT. GENERADOR</text>
+          <text x="326" y="147" fill="#e9e3d3" font-size="12.5" text-anchor="end" font-family="Roboto Condensed,Arial" font-weight="700">GE-01</text>
+          <text id="tG1" x="326" y="161" fill="#8d968c" font-size="11.5" text-anchor="end" font-family="Roboto Condensed,Arial">abierto</text>
+
+          <g id="kG2"><rect x="425" y="120" width="30" height="36" rx="3" fill="#1b2321" stroke="#8d968c" stroke-width="2"/>
+            <line class="ct" x1="440" y1="124" x2="440" y2="152" stroke="#8d968c" stroke-width="5" stroke-linecap="round"/></g>
+          <text x="464" y="133" fill="#c3ccc2" font-size="12.5" font-family="Roboto Condensed,Arial">INT. GENERADOR</text>
+          <text x="464" y="147" fill="#e9e3d3" font-size="12.5" font-family="Roboto Condensed,Arial" font-weight="700">GE-02</text>
+          <text id="tG2" x="464" y="161" fill="#8d968c" font-size="11.5" font-family="Roboto Condensed,Arial">abierto</text>
+
+          <g id="kNA"><rect x="115" y="252" width="30" height="36" rx="3" fill="#1b2321" stroke="#8d968c" stroke-width="2"/>
+            <line class="ct" x1="130" y1="256" x2="130" y2="284" stroke="#4e9c53" stroke-width="5" stroke-linecap="round"/></g>
+          <text x="106" y="264" fill="#c3ccc2" font-size="12.5" text-anchor="end" font-family="Roboto Condensed,Arial">INT. ACOMETIDA</text>
+          <text x="106" y="278" fill="#e9e3d3" font-size="12.5" text-anchor="end" font-family="Roboto Condensed,Arial" font-weight="700">TR-01</text>
+          <text id="tNA" x="106" y="292" fill="#79c97f" font-size="11.5" text-anchor="end" font-family="Roboto Condensed,Arial">cerrado</text>
+
+          <g id="kNB"><rect x="675" y="252" width="30" height="36" rx="3" fill="#1b2321" stroke="#8d968c" stroke-width="2"/>
+            <line class="ct" x1="690" y1="256" x2="690" y2="284" stroke="#4e9c53" stroke-width="5" stroke-linecap="round"/></g>
+          <text x="714" y="264" fill="#c3ccc2" font-size="12.5" font-family="Roboto Condensed,Arial">INT. ACOMETIDA</text>
+          <text x="714" y="278" fill="#e9e3d3" font-size="12.5" font-family="Roboto Condensed,Arial" font-weight="700">TR-02</text>
+          <text id="tNB" x="714" y="292" fill="#79c97f" font-size="11.5" font-family="Roboto Condensed,Arial">cerrado</text>
+
+          <g id="kEA"><rect x="270" y="252" width="30" height="36" rx="3" fill="#1b2321" stroke="#8d968c" stroke-width="2"/>
+            <line class="ct" x1="285" y1="256" x2="285" y2="284" stroke="#8d968c" stroke-width="5" stroke-linecap="round"/></g>
+          <text x="309" y="264" fill="#c3ccc2" font-size="12.5" font-family="Roboto Condensed,Arial">INT. TRANSF.</text>
+          <text x="309" y="278" fill="#e9e3d3" font-size="12.5" font-family="Roboto Condensed,Arial" font-weight="700">TR-01</text>
+          <text id="tEA" x="309" y="292" fill="#8d968c" font-size="11.5" font-family="Roboto Condensed,Arial">abierto</text>
+
+          <g id="kEB"><rect x="515" y="252" width="30" height="36" rx="3" fill="#1b2321" stroke="#8d968c" stroke-width="2"/>
+            <line class="ct" x1="530" y1="256" x2="530" y2="284" stroke="#8d968c" stroke-width="5" stroke-linecap="round"/></g>
+          <text x="506" y="264" text-anchor="end" fill="#c3ccc2" font-size="12.5" font-family="Roboto Condensed,Arial">INT. TRANSF.</text>
+          <text x="506" y="278" text-anchor="end" fill="#e9e3d3" font-size="12.5" font-family="Roboto Condensed,Arial" font-weight="700">TR-02</text>
+          <text id="tEB" x="506" y="292" text-anchor="end" fill="#8d968c" font-size="11.5" font-family="Roboto Condensed,Arial">abierto</text>
+
+          <g id="r25A" opacity="0.3">
+            <rect x="150" y="203" width="34" height="26" rx="4" fill="#1b2321" stroke="#d9a441" stroke-width="2"/>
+            <text x="167" y="221" fill="#e9c877" font-size="14" text-anchor="middle" font-family="Roboto Condensed,Arial" font-weight="700">25</text>
+          </g>
+          <text id="r25At" x="167" y="243" fill="#8d968c" font-size="11" text-anchor="middle" font-family="Roboto Condensed,Arial">reposo</text>
+          <g id="r25B" opacity="0.3">
+            <rect x="636" y="203" width="34" height="26" rx="4" fill="#1b2321" stroke="#d9a441" stroke-width="2"/>
+            <text x="653" y="221" fill="#e9c877" font-size="14" text-anchor="middle" font-family="Roboto Condensed,Arial" font-weight="700">25</text>
+          </g>
+          <text id="r25Bt" x="653" y="243" fill="#8d968c" font-size="11" text-anchor="middle" font-family="Roboto Condensed,Arial">reposo</text>
+
+          <rect x="150" y="392" width="114" height="48" rx="4" fill="#16201f" stroke="#6f7a71" stroke-width="2"/>
+          <text x="207" y="411" fill="#c3ccc2" font-size="13" text-anchor="middle" font-family="Roboto Condensed,Arial">TAB. TGS 01</text>
+          <text id="txLA" x="207" y="430" fill="#f0f2ec" font-size="15" text-anchor="middle" font-family="ui-monospace,monospace" font-weight="700">1100 kW</text>
+          <rect x="556" y="392" width="114" height="48" rx="4" fill="#16201f" stroke="#6f7a71" stroke-width="2"/>
+          <text x="613" y="411" fill="#c3ccc2" font-size="13" text-anchor="middle" font-family="Roboto Condensed,Arial">TAB. TGS 02</text>
+          <text id="txLB" x="613" y="430" fill="#f0f2ec" font-size="15" text-anchor="middle" font-family="ui-monospace,monospace" font-weight="700">1100 kW</text>
+        </svg>
+      </div>
+    </div>
+
+    <div class="card" id="cSyn">
+      <p class="ttl">Sincronoscopio <span class="tag" id="tScale">×1</span></p>
+      <canvas id="syn" width="150" height="150"></canvas>
+      <div class="perm"><i class="dot" id="pDot"></i><span id="pTxt">Relé 25 en reposo</span></div>
+      <div class="rd" style="margin-top:5px">
+        <div><span>Máquina</span><b id="sMach">—</b></div><div><span>Ref.</span><b id="sRef">—</b></div>
+        <div><span>ΔV</span><b id="dV">—</b></div><div><span>Δf</span><b id="dF">—</b></div>
+        <div><span>δ</span><b id="dA">—</b></div><div><span>Traslape</span><b id="ovMs">0 ms</b></div>
+      </div>
+      <div class="seg c4" style="margin-top:5px">
+        <button id="rAuto" aria-pressed="true">Auto</button>
+        <button id="rG1" aria-pressed="false">GE-01</button>
+        <button id="rG2" aria-pressed="false">GE-02</button>
+        <button id="rBus" aria-pressed="false">Bus/red</button>
+      </div>
+    </div>
+
+    <div class="card grow" id="cSeq">
+      <p class="ttl">Secuencia <span class="tag" id="curBr">—</span></p>
+      <ol class="seq" id="seqList"></ol>
+    </div>
+</div>
+
+<!-- ================= BARRA INFERIOR ================= -->
+<div class="foot">
+  <div class="card">
+    <p class="ttl">Órdenes</p>
+    <div class="btns">
+      <button class="fail" id="bFail">Falla de red CFE</button>
+      <button class="rest" id="bRest" disabled>Se restablece la red</button>
+      <button id="bSkip" disabled>Acelerar 180 s</button>
+      <button id="bReset">Reiniciar</button>
+      <button class="ret" id="bR1" disabled>HMI · regreso TR-01</button>
+      <button class="ret" id="bR2" disabled>HMI · regreso TR-02</button>
+      <button id="bStop" disabled>Enfriar y parar</button>
+      <button id="bDip">Escalón de carga</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="ttl">Modo e interruptores</p>
+    <div class="seg c4">
+      <button id="mAuto" aria-pressed="true">Automático</button>
+      <button id="mMan" aria-pressed="false">Manual</button>
+      <button id="tSoft" aria-pressed="true">Rampa suave</button>
+      <button id="tFast" aria-pressed="false">Rápida 100 ms</button>
+    </div>
+    <div class="seg c3">
+      <button data-b="NA">ACOM TR-01</button><button data-b="G1">GEN GE-01</button><button data-b="NB">ACOM TR-02</button>
+      <button data-b="EA">TRANSF TR-01</button><button data-b="G2">GEN GE-02</button><button data-b="EB">TRANSF TR-02</button>
+    </div>
+    <div class="seg">
+      <button id="kF1" aria-pressed="false">GE-01 no arranca</button>
+      <button id="kF2" aria-pressed="false">GE-02 no arranca</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="ttl">Bitácora</p>
+    <div id="log"></div>
+  </div>
+</div>
+
+</div>
+
+<script>
+/* Vista de operación CTOS I — autor: Iridian Jiménez Jiménez
+   Secuencia conforme a la placa de operación del tablero. */
+(function(){
+"use strict";
+var $=function(i){return document.getElementById(i);};
+var TAU=Math.PI*2,R2D=180/Math.PI,D2R=Math.PI/180,RT3=Math.sqrt(3);
+var F_U=60,V_N=480,P_A=1100,P_B=1100,P_GEN=2000,TAN_PHI=0.4843;
+var NM={NA:"INT. ACOMETIDA TR-01",NB:"INT. ACOMETIDA TR-02",
+        EA:"INT. TRANSFERENCIA TR-01",EB:"INT. TRANSFERENCIA TR-02",
+        G1:"INT. GENERADOR GE-01",G2:"INT. GENERADOR GE-02"};
+var CARD={NA:"cBusA",EA:"cBusA",NB:"cBusB",EB:"cBusB",G1:"cG1",G2:"cG2"};
+
+var S={
+  uA:true,uB:true,
+  b:{NA:true,NB:true,EA:false,EB:false,G1:false,G2:false},
+  g:[{st:"paro",c:0,f:0,v:0,del:Math.PI*0.65,gov:0,exc:480,P:0,Q:0,fail:false},
+     {st:"paro",c:0,f:0,v:0,del:-Math.PI*0.35,gov:0,exc:480,P:0,Q:0,fail:false}],
+  fBus:0,vBus:0,delBus:Math.PI*0.65,dip:0,
+  shA:0,shB:0,
+  seq:null,step:0,tStep:0,branch:"—",ref:null,refMode:"auto",
+  fast:false,auto:true,slow:1,stab:0,r1done:false,
+  ovMs:0,cutA:0,cutB:0,dA:false,dB:false
+};
+
+function wrapPi(a){while(a>Math.PI)a-=TAU;while(a<-Math.PI)a+=TAU;return a;}
+function clamp(v,a,b){return v<a?a:(v>b?b:v);}
+function log(m,c){
+  var d=new Date(),p=document.createElement("p");
+  p.innerHTML='<span class="t">'+String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0")+
+    '</span> <span class="'+(c||"e-inf")+'">'+m+"</span>";
+  var L=$("log");L.appendChild(p);L.scrollTop=L.scrollHeight;
+  while(L.childNodes.length>60)L.removeChild(L.firstChild);
+}
+function banner(m,c){var b=$("banner");b.textContent=m;b.className="msg "+c;}
+function flash(el){if(!el)return;el.classList.remove("flash","gflash");void el.offsetWidth;
+  el.classList.add(el.tagName==="g"||el.namespaceURI.indexOf("svg")>0?"gflash":"flash");}
+
+function gk(i){return i===0?"G1":"G2";}
+function closedGens(){var a=[];if(S.b.G1&&S.g[0].st==="marcha")a.push(0);if(S.b.G2&&S.g[1].st==="marcha")a.push(1);return a;}
+function genRunning(){return closedGens().length>0;}
+function busGLive(){return genRunning()||(S.b.EA&&S.b.NA&&S.uA)||(S.b.EB&&S.b.NB&&S.uB);}
+function liveA(){return (S.b.NA&&S.uA)||(S.b.EA&&busGLive());}
+function liveB(){return (S.b.NB&&S.uB)||(S.b.EB&&busGLive());}
+function tied(){return (S.b.EA&&S.b.NA&&S.uA)||(S.b.EB&&S.b.NB&&S.uB);}
+
+function cmpGen(i){var g=S.g[i];
+  return {mach:"GE-0"+(i+1),ref:"Bus gen.",dv:g.v-S.vBus,df:g.f-S.fBus,
+    ang:Math.abs(wrapPi(g.del-S.delBus))*R2D,dead:!busGLive(),valid:g.st==="marcha"&&!S.b[gk(i)]};}
+function cmpBus(){var r=S.ref||"TR-1";
+  return {mach:"Bus gen.",ref:r,dv:S.vBus-V_N,df:S.fBus-F_U,ang:Math.abs(wrapPi(S.delBus))*R2D,
+    dead:false,valid:genRunning()&&!tied()};}
+function okOf(c){return c.dead||(Math.abs(c.dv)<=V_N*0.05&&c.df>=-0.05&&c.df<=0.3&&c.ang<=10);}
+function activeCmp(){
+  var m=S.refMode;
+  if(m==="auto"){
+    if(S.ref)m="bus";
+    else if(S.g[0].st==="marcha"&&!S.b.G1)m="g1";
+    else if(S.g[1].st==="marcha"&&!S.b.G2)m="g2";
+    else m="bus";
+  }
+  var c=(m==="g1")?cmpGen(0):((m==="g2")?cmpGen(1):cmpBus());
+  c.ok=c.valid&&okOf(c);return c;
+}
+
+/* ---------- secuencias según la placa ---------- */
+var SQ_F=["Falla de red CFE confirmada por más de 3 s",
+  "Apertura automática de los interruptores de acometida TR-01 y TR-02",
+  "Arranque de las plantas GE-01 y GE-02",
+  "Primer generador sincroniza al bus y cierra",
+  "Segundo generador sincroniza al bus y cierra",
+  "Sincronía a bus muerto y cierre de transferencia TR-01",
+  "Sincronía a bus muerto y cierre de transferencia TR-02",
+  "Carga de ambas ramas en una o ambas plantas"];
+var SQ_R1=["Ventana de regreso de TR-01 activa en el HMI",
+  "Sincronía entre generadores y acometida TR-01",
+  "Cierre del interruptor de acometida TR-01",
+  "Transferencia de carga a TR-01 en rampa suave",
+  "Apertura del interruptor de transferencia TR-01",
+  "Verificación de carga estable entre generadores"];
+var SQ_R2=["Ventana de regreso de TR-02 activa en el HMI",
+  "Sincronía entre generadores y acometida TR-02",
+  "Cierre del interruptor de acometida TR-02",
+  "Transferencia de carga a TR-02 en rampa suave",
+  "Apertura del interruptor de transferencia TR-02",
+  "Apertura de los interruptores de generador GE-01 y GE-02"];
+var SQ_ST=["Verificación de generadores en vacío","Enfriamiento del motor",
+  "Apertura de los interruptores de generador","Paro de G1 y G2"];
+function names(){return S.seq==="falla"?SQ_F:(S.seq==="r1"?SQ_R1:(S.seq==="r2"?SQ_R2:(S.seq==="stop"?SQ_ST:[])));}
+function drawSeq(){
+  var L=$("seqList"),n=names();
+  if(!n.length){L.innerHTML='<li style="color:#7e8880">Sin secuencia en curso. El sistema espera órdenes.</li>';return;}
+  var h="";for(var i=0;i<n.length;i++){h+='<li class="'+(i<S.step?"done":(i===S.step?"now":""))+'">'+n[i]+"</li>";}
+  L.innerHTML=h;
+  var cur=L.querySelector("li.now");if(cur)cur.scrollIntoView({block:"nearest"});
+}
+function startSeq(k){if(S.seq)return;S.seq=k;S.step=0;S.tStep=0;drawSeq();refreshBtns();}
+function endSeq(m,c){S.seq=null;S.step=0;S.branch="—";S.ref=null;drawSeq();banner(m,c);refreshBtns();}
+function refreshBtns(){
+  var busy=!!S.seq;
+  $("bFail").disabled=busy||(!S.uA&&!S.uB);
+  $("bRest").disabled=busy||(S.uA&&S.uB);
+  $("bSkip").disabled=!(S.stab>0);
+  $("bR1").disabled=busy||S.stab>0||!S.uA||!S.b.EA||!genRunning();
+  $("bR2").disabled=busy||S.stab>0||!S.r1done||!S.uB||!S.b.EB||!genRunning();
+  $("bStop").disabled=busy||S.b.EA||S.b.EB||(S.g[0].st==="paro"&&S.g[1].st==="paro");
+  document.querySelectorAll('.seg button[data-b]').forEach(function(x){x.disabled=S.auto||busy;});
+}
+
+function run(dt){
+  S.tStep+=dt;
+  var nx=function(){S.step++;S.tStep=0;drawSeq();};
+
+  if(S.seq==="falla"){
+    switch(S.step){
+      case 0: if(S.tStep>3.0){log("Falla de red CFE confirmada: más de 3 s sin acometida.","e-bad");nx();} break;
+      case 1: setB("NA",false);setB("NB",false);
+        log("Abiertos automáticamente "+NM.NA+" y "+NM.NB+".","e-bad");nx(); break;
+      case 2:
+        if(S.g[0].st==="paro"){S.g[0].st="arrancando";S.g[0].c=0;S.g[0].gov=0;S.g[0].exc=480;}
+        if(S.g[1].st==="paro"){S.g[1].st="arrancando";S.g[1].c=0;S.g[1].gov=0;S.g[1].exc=480;}
+        if(S.g[0].st==="marcha"||S.g[1].st==="marcha"){log("Planta arrancada.","");nx();}
+        else if(S.g[0].st==="falla"&&S.g[1].st==="falla")
+          endSeq("Las dos plantas fallaron al arranque. Los buses de carga quedan sin tensión.","bad");
+        break;
+      case 3:
+        if(S.g[0].st==="marcha"&&!S.b.G1){setB("G1",true);log(NM.G1+" cierra al bus con bus muerto.","e-ok");nx();}
+        else if(S.g[1].st==="marcha"&&!S.b.G2){setB("G2",true);log(NM.G2+" cierra al bus con bus muerto.","e-ok");nx();}
+        break;
+      case 4: {
+        var pi=(!S.b.G1&&S.g[0].st==="marcha")?0:((!S.b.G2&&S.g[1].st==="marcha")?1:-1);
+        if(pi<0){
+          if(S.g[0].st==="arrancando"||S.g[1].st==="arrancando")break;
+          if(S.g[0].st==="falla"||S.g[1].st==="falla")
+            log("Una planta no arrancó. El tablero soporta ambas ramas con un solo generador.","e-warn");
+          nx();break;
+        }
+        S.refMode="auto";S.g[pi].gov=0.15;
+        var c=cmpGen(pi);
+        if(okOf(c)){setB(gk(pi),true);S.g[pi].gov=0;
+          log(NM[gk(pi)]+" sincronizado y cerrado · δ "+c.ang.toFixed(0)+"° · ΔV "+c.dv.toFixed(0)+" V","e-ok");nx();}
+        break;
+      }
+      case 5: if(S.tStep>0.8){setB("EA",true);S.shA=1;S.dip=-1.6;
+        log(NM.EA+" cierra a bus muerto. Bus 01 restablecido tras "+S.cutA.toFixed(0)+" ms.","e-warn");nx();} break;
+      case 6: if(S.tStep>1.6){setB("EB",true);S.shB=1;S.dip=-1.6;
+        log(NM.EB+" cierra a bus muerto. Bus 02 restablecido tras "+S.cutB.toFixed(0)+" ms.","e-warn");nx();} break;
+      case 7: log("Carga de ambas ramas en la planta: "+(P_A+P_B)+" kW.","e-ok");
+        endSeq("Ambas ramas alimentadas por las plantas. El regreso lo ordena el operador desde el HMI.","warn");break;
+    }
+  }
+
+  if(S.seq==="r1"||S.seq==="r2"){
+    var one=(S.seq==="r1");
+    var UK=one?"uA":"uB",NK=one?"NA":"NB",EK=one?"EA":"EB",SH=one?"shA":"shB";
+    var TRn=one?"TR-1":"TR-2",bn=one?"01":"02";
+    switch(S.step){
+      case 0:
+        if(!S[UK]){log("Regreso cancelado: "+TRn+" no está presente.","e-bad");
+          endSeq("La acometida "+TRn+" no está disponible.","bad");break;}
+        if(S.tStep>1.2){log("Ventana de regreso activa en el HMI. El operador la ejecuta.","e-inf");nx();}
+        break;
+      case 1: {
+        S.branch=bn;S.ref=TRn;
+        var cl=closedGens();
+        for(var k=0;k<cl.length;k++)S.g[cl[k]].gov=0.12;
+        var cb=cmpBus();
+        if(okOf(cb)){log("Sincronía lograda con "+TRn+" · δ "+cb.ang.toFixed(0)+"°","e-ok");nx();}
+        break;
+      }
+      case 2: {
+        setB(NK,true);S.ovMs=0;S.slow=S.fast?0.035:1;
+        var c2=closedGens();
+        for(var m=0;m<c2.length;m++)S.g[c2[m]].gov=0;
+        log(NM[NK]+" cerrado. Generadores en paralelo con "+TRn+".","e-ok");nx();break;
+      }
+      case 3:
+        if(S.fast){if(S.ovMs>55)nx();}
+        else{S[SH]=Math.max(0,S[SH]-dt*0.28);
+          if(S[SH]<=0.02){S[SH]=0;log("Carga del bus "+bn+" transferida en rampa suave.","e-ok");nx();}}
+        break;
+      case 4:
+        setB(EK,false);S.slow=1;
+        if(S.fast){S[SH]=0;S.dip=1.5;log(NM[EK]+" abierto tras "+S.ovMs.toFixed(0)+" ms. Rechazo de carga.","e-warn");}
+        else log(NM[EK]+" abierto tras "+(S.ovMs/1000).toFixed(1)+" s, con el bus ya descargado.","e-ok");
+        S.ovMs=0;nx();break;
+      case 5:
+        if(one){ if(S.tStep>2.5){
+            S.r1done=true;
+            log("Carga entre generadores estable (dif. "+Math.abs(S.g[0].P-S.g[1].P).toFixed(0)+" kW). Se autoriza la segunda transferencia.","e-ok");
+            endSeq("Bus 01 de vuelta en TR-1 sin corte. Verifica estabilidad y activa el regreso de TR-02.","ok");}
+        }else{ setB("G1",false);setB("G2",false);
+          log("Al abrir "+NM.EB+" se abren también "+NM.G1+" y "+NM.G2+".","e-ok");
+          endSeq("Regreso completo sin corte de carga. Interruptores de generador abiertos; procede el enfriamiento.","ok");}
+        break;
+    }
+  }
+
+  if(S.seq==="stop"){
+    switch(S.step){
+      case 0: if(S.b.EA||S.b.EB){endSeq("No se puede parar con carga en los generadores.","bad");break;}
+        if(S.tStep>1){log("Generadores en vacío.","");nx();} break;
+      case 1: if(S.tStep>4){log("Enfriamiento terminado (5 min comprimidos).","");nx();} break;
+      case 2: setB("G1",false);setB("G2",false);nx(); break;
+      case 3: S.g[0].st="paro";S.g[1].st="paro";S.g[0].c=0;S.g[1].c=0;
+        log("G1 y G2 parados. Corte total de carga en la maniobra: 0 ms.","e-ok");
+        endSeq("Planta en reposo. Los dos buses alimentados por sus acometidas.","ok");break;
+    }
+  }
+}
+
+function setB(k,v){
+  if(S.b[k]===v)return;
+  S.b[k]=v;flash($("k"+k));flash($(CARD[k]));
+}
+
+/* ---------- física ---------- */
+function phys(dt){
+  var i,g;
+  for(i=0;i<2;i++){
+    g=S.g[i];
+    if(g.st==="arrancando"){
+      g.c+=dt;
+      if(g.fail){g.f=0;g.v=0;
+        if(g.c>8){g.st="falla";log("G"+(i+1)+": falla al arranque tras tres intentos.","e-bad");flash($("cG"+(i+1)));}
+        continue;}
+      var k=clamp(g.c/(i===0?3.0:3.8),0,1);
+      g.f=k*(F_U+g.gov);g.v=clamp((g.c-0.6)/2.4,0,1)*g.exc;
+      if(k>=1){g.st="marcha";log("G"+(i+1)+" en marcha: "+g.v.toFixed(0)+" V · "+g.f.toFixed(2)+" Hz","e-ok");}
+    }else if(g.st==="paro"||g.st==="falla"){g.f=0;g.v=0;g.P=0;g.Q=0;}
+  }
+
+  var cl=closedGens();
+  if(tied()){S.fBus=F_U;S.vBus=V_N;S.delBus+=(0-S.delBus)*Math.min(dt*6,1);}
+  else if(cl.length){
+    var sg=0,sv=0;
+    for(i=0;i<cl.length;i++){sg+=S.g[cl[i]].gov;sv+=S.g[cl[i]].exc;}
+    S.fBus=F_U+sg/cl.length+S.dip;S.vBus=sv/cl.length;
+    S.delBus=wrapPi(S.delBus+TAU*(S.fBus-F_U)*dt);
+  }else{S.fBus=0;S.vBus=0;}
+  S.dip+=(0-S.dip)*Math.min(dt*1.2,1);
+
+  for(i=0;i<2;i++){
+    g=S.g[i];
+    if(g.st!=="marcha")continue;
+    if(S.b[gk(i)]&&cl.indexOf(i)>=0){g.f=S.fBus;g.v=S.vBus;g.del=S.delBus;}
+    else{g.f=F_U+g.gov;g.v=g.exc;g.del=wrapPi(g.del+TAU*(g.f-F_U)*dt);}
+  }
+
+  if(!S.b.EA)S.shA=0;
+  if(!S.b.EB)S.shB=0;
+  if(S.b.EA&&!S.b.NA)S.shA=1;
+  if(S.b.EB&&!S.b.NB)S.shB=1;
+  if(S.b.EA&&S.b.NA&&S.fast&&S.seq==="r1")S.shA=Math.max(S.shA-dt*1.2,0.04);
+  if(S.b.EB&&S.b.NB&&S.fast&&S.seq==="r2")S.shB=Math.max(S.shB-dt*1.2,0.04);
+
+  var Ptot=P_A*S.shA+P_B*S.shB,Qtot=Ptot*TAN_PHI,tP=[0,0],tQ=[0,0];
+  if(cl.length===2){
+    var dP=(S.g[0].gov-S.g[1].gov)/2*900,dQ=(S.g[0].exc-S.g[1].exc)/2*22;
+    tP[0]=clamp(Ptot/2+dP,-P_GEN*0.25,P_GEN);tP[1]=Ptot-tP[0];
+    tQ[0]=Qtot/2+dQ;tQ[1]=Qtot-tQ[0];
+  }else if(cl.length===1){tP[cl[0]]=Ptot;tQ[cl[0]]=Qtot;}
+  for(i=0;i<2;i++){
+    g=S.g[i];
+    var aP=(cl.indexOf(i)>=0)?tP[i]:0,aQ=(cl.indexOf(i)>=0)?tQ[i]:0;
+    g.P+=(aP-g.P)*Math.min(dt*5,1);g.Q+=(aQ-g.Q)*Math.min(dt*5,1);
+  }
+
+  if(!liveA()){S.dA=true;S.cutA+=dt*1000;}
+  else if(S.dA){S.dA=false;log("Bus 01 con tensión. Corte acumulado "+S.cutA.toFixed(0)+" ms.",S.cutA>0?"e-bad":"e-ok");}
+  if(!liveB()){S.dB=true;S.cutB+=dt*1000;}
+  else if(S.dB){S.dB=false;log("Bus 02 con tensión. Corte acumulado "+S.cutB.toFixed(0)+" ms.",S.cutB>0?"e-bad":"e-ok");}
+
+  if((S.b.NA&&S.b.EA&&S.uA)||(S.b.NB&&S.b.EB&&S.uB))S.ovMs+=dt*1000;
+}
+
+/* ---------- sincronoscopio ---------- */
+var sc=$("syn"),sx=sc.getContext("2d");
+function drawSyn(){
+  var c=activeCmp(),W=sc.width,H=sc.height,cx=W/2,cy=H/2,R=W*0.43;
+  sx.clearRect(0,0,W,H);
+  var g=sx.createRadialGradient(cx,cy-R*.3,R*.1,cx,cy,R);
+  g.addColorStop(0,"#f2ecdc");g.addColorStop(1,"#cdc6b1");
+  sx.beginPath();sx.arc(cx,cy,R,0,TAU);sx.fillStyle=g;sx.fill();
+  sx.lineWidth=W*.033;sx.strokeStyle="#171c1a";sx.stroke();
+  sx.beginPath();sx.moveTo(cx,cy);sx.arc(cx,cy,R*.92,-Math.PI/2-10*D2R,-Math.PI/2+10*D2R);sx.closePath();
+  sx.fillStyle="rgba(78,156,83,.35)";sx.fill();
+  for(var i=0;i<12;i++){
+    var a=i*30*D2R-Math.PI/2;
+    sx.beginPath();sx.moveTo(cx+Math.cos(a)*R*.92,cy+Math.sin(a)*R*.92);
+    sx.lineTo(cx+Math.cos(a)*R*.8,cy+Math.sin(a)*R*.8);
+    sx.strokeStyle="#20241f";sx.lineWidth=W*.012;sx.stroke();
+  }
+  sx.textAlign="center";sx.textBaseline="middle";
+  sx.fillStyle="#6b6558";sx.font="600 "+(W*.075)+"px 'Roboto Condensed',Arial";
+  sx.fillText("L",cx-R*.62,cy);sx.fillText("R",cx+R*.62,cy);
+  var ang=0;
+  if(c.valid)ang=(c.mach==="Bus gen.")?wrapPi(S.delBus):wrapPi(S.g[c.mach==="GE-01"?0:1].del-S.delBus);
+  sx.save();sx.translate(cx,cy);sx.rotate(ang-Math.PI/2);
+  sx.beginPath();sx.moveTo(R*.84,0);sx.lineTo(-R*.05,-W*.026);sx.lineTo(-R*.2,0);sx.lineTo(-R*.05,W*.026);
+  sx.closePath();sx.fillStyle=c.valid?(c.ok?"#2c6b31":"#b8332a"):"#8a8477";sx.fill();sx.restore();
+  sx.beginPath();sx.arc(cx,cy,W*.045,0,TAU);sx.fillStyle="#171c1a";sx.fill();
+  sx.fillStyle="#20241f";sx.font="700 "+(W*.12)+"px ui-monospace,monospace";
+  sx.fillText(c.valid?(ang*R2D).toFixed(0)+"°":"—",cx,cy+R*.42);
+}
+
+/* ---------- unifilar ---------- */
+var dash=0;
+var POS={NA:[130,1],NB:[690,-1],EA:[285,1],EB:[530,-1],G1:[350,1],G2:[440,-1]};
+function paintSLD(dt){
+  dash-=dt*46;
+  var gl=busGLive(),la=liveA(),lb=liveB();
+  var cA=(S.b.NA&&S.uA)?(S.b.EA?"#7dbb6a":"#2f7fbf"):"#e0922b";
+  var cB=(S.b.NB&&S.uB)?(S.b.EB?"#7dbb6a":"#2f7fbf"):"#e0922b";
+  function w(id,on,col){
+    var e=$(id);e.setAttribute("stroke",on?col:"#3a443f");e.setAttribute("stroke-width",on?6:5);
+    if(on){e.setAttribute("stroke-dasharray","14 9");e.setAttribute("stroke-dashoffset",dash.toFixed(1));}
+    else e.removeAttribute("stroke-dasharray");
+  }
+  w("wNA",S.uA,"#2f7fbf");w("wNA2",S.b.NA&&S.uA,"#2f7fbf");
+  w("wNB",S.uB,"#2f7fbf");w("wNB2",S.b.NB&&S.uB,"#2f7fbf");
+  w("wG1a",S.g[0].st==="marcha","#e0922b");w("wG1b",S.g[0].st==="marcha"&&S.b.G1,"#e0922b");
+  w("wG2a",S.g[1].st==="marcha","#e0922b");w("wG2b",S.g[1].st==="marcha"&&S.b.G2,"#e0922b");
+  w("wEA",gl&&S.b.EA,"#e0922b");w("wEA2",gl&&S.b.EA,"#e0922b");
+  w("wEB",gl&&S.b.EB,"#e0922b");w("wEB2",gl&&S.b.EB,"#e0922b");
+  w("wLA",la,cA);w("wLB",lb,cB);
+  $("busG").setAttribute("fill",gl?"#e0922b":"#3a443f");
+  $("busA").setAttribute("fill",la?cA:"#3a443f");
+  $("busB").setAttribute("fill",lb?cB:"#3a443f");
+
+  Object.keys(POS).forEach(function(k){
+    var ln=$("k"+k).querySelector(".ct"),cld=S.b[k],x=POS[k][0],d=POS[k][1];
+    ln.setAttribute("x2",cld?x:(x+13*d));
+    ln.setAttribute("stroke",cld?"#4e9c53":"#8d968c");
+    var t=$("t"+k);t.textContent=cld?"cerrado":"abierto";t.setAttribute("fill",cld?"#79c97f":"#8d968c");
+  });
+  $("g1st").textContent=S.g[0].st;$("g2st").textContent=S.g[1].st;
+  $("g1st").setAttribute("fill",S.g[0].st==="marcha"?"#efb163":"#8d968c");
+  $("g2st").setAttribute("fill",S.g[1].st==="marcha"?"#efb163":"#8d968c");
+  $("txLA").textContent=(la?P_A:0)+" kW";$("txLB").textContent=(lb?P_B:0)+" kW";
+
+  var ok=okOf(cmpBus()),a=(S.ref==="TR-1"),b=(S.ref==="TR-2");
+  $("r25A").setAttribute("opacity",a?(ok?"1":"0.6"):"0.3");
+  $("r25B").setAttribute("opacity",b?(ok?"1":"0.6"):"0.3");
+  $("r25At").textContent=a?(ok?"permisivo":"vigilando"):"reposo";
+  $("r25Bt").textContent=b?(ok?"permisivo":"vigilando"):"reposo";
+  $("r25At").setAttribute("fill",a?(ok?"#79c97f":"#e0b24c"):"#8d968c");
+  $("r25Bt").setAttribute("fill",b?(ok?"#79c97f":"#e0b24c"):"#8d968c");
+}
+
+/* ---------- lecturas ---------- */
+function tag(el,txt,cls){el.textContent=txt;el.className="tag"+(cls?" "+cls:"");}
+function paintGen(i){
+  var g=S.g[i],n=i+1,cl=(S.b[gk(i)]&&g.st==="marcha");
+  var est=g.st==="paro"?"Paro":(g.st==="falla"?"Falla arranque":(g.st==="arrancando"?"Arrancando":(cl?"En paralelo":"En vacío")));
+  tag($("e"+n),est,g.st==="falla"?"hi":(g.st==="marcha"?(cl?"gd":"am"):""));
+  $("cG"+n).classList.toggle("live",cl);
+  $("v"+n).textContent=g.v.toFixed(0);
+  $("f"+n).textContent=g.f.toFixed(2);
+  $("n"+n).textContent=(g.f*30).toFixed(0);
+  var s=Math.sqrt(g.P*g.P+g.Q*g.Q);
+  $("i"+n).textContent=(s>5?(s*1000/(RT3*V_N)).toFixed(0):"0");
+  $("p"+n).textContent=g.P.toFixed(0);$("p"+n).className=g.P<-20?"hi":"";
+  $("q"+n).textContent=g.Q.toFixed(0);$("q"+n).className=g.Q<-150?"hi":"";
+  $("fp"+n).textContent=s>5?(Math.abs(g.P)/s).toFixed(2)+(g.Q<0?" c":" i"):"—";
+  $("pc"+n).textContent=(g.P/P_GEN*100).toFixed(0)+" %";
+  var open=(g.st==="marcha"&&!S.b[gk(i)]);
+  $("l"+n+"gov").textContent=cl?"Gobernador · kW":"Gobernador · velocidad";
+  $("l"+n+"exc").textContent=cl?"Excitación · kVAr":"Excitación · tensión";
+  $("v"+n+"gov").textContent=cl?(g.P.toFixed(0)+" kW"):((F_U+g.gov).toFixed(2)+" Hz");
+  $("v"+n+"exc").textContent=cl?(g.Q.toFixed(0)+" kVAr"):(g.exc.toFixed(0)+" V");
+  var en=(!S.auto)&&(open||cl);
+  $("g"+n+"gov").disabled=!en;$("g"+n+"exc").disabled=!en;
+}
+function estado(){
+  if(S.seq==="r1"||S.seq==="r2")return "regreso";
+  if(tied())return "paralelo";
+  if(genRunning()&&(S.b.EA||S.b.EB))return "planta";
+  if(!S.uA&&!S.uB)return "falla";
+  return "normal";
+}
+function paint(){
+  paintGen(0);paintGen(1);
+
+  var e=estado();
+  document.querySelectorAll("#flow i").forEach(function(x){
+    x.className=(x.dataset.s===e)?(e==="falla"?"al":"on"):"";
+  });
+
+  var srcA=!liveA()?"Sin tensión":((S.b.NA&&S.uA)?(S.b.EA?"Paralelo":"TR-1"):"Generadores");
+  var srcB=!liveB()?"Sin tensión":((S.b.NB&&S.uB)?(S.b.EB?"Paralelo":"TR-2"):"Generadores");
+  tag($("srcA"),srcA,srcA==="Sin tensión"?"hi":(srcA==="TR-1"?"gd":"am"));
+  tag($("srcB"),srcB,srcB==="Sin tensión"?"hi":(srcB==="TR-2"?"gd":"am"));
+  $("cBusA").classList.toggle("live",srcA==="Paralelo");
+  $("cBusB").classList.toggle("live",srcB==="Paralelo");
+  $("vA").textContent=(liveA()?(S.b.NA&&S.uA?V_N:S.vBus).toFixed(0):"0")+" V";
+  $("vB").textContent=(liveB()?(S.b.NB&&S.uB?V_N:S.vBus).toFixed(0):"0")+" V";
+  $("cutA").textContent=S.cutA.toFixed(0)+" ms";$("cutA").className=S.cutA>0?"hi":"gd";
+  $("cutB").textContent=S.cutB.toFixed(0)+" ms";$("cutB").className=S.cutB>0?"hi":"gd";
+
+  var Pt=S.g[0].P+S.g[1].P,Qt=S.g[0].Q+S.g[1].Q,cap=closedGens().length*P_GEN;
+  $("vBus").textContent=S.vBus.toFixed(0);
+  $("fBus").textContent=busGLive()?S.fBus.toFixed(2):"—";
+  $("fBus").className=(busGLive()&&Math.abs(S.fBus-60)>0.6)?"hi":"gd";
+  $("pTot").textContent=Pt.toFixed(0);$("qTot").textContent=Qt.toFixed(0);
+  tag($("tBusG"),busGLive()?"Energizado":"Sin tensión",busGLive()?"am":"");
+  $("tOcup").textContent=(cap?(Pt/cap*100).toFixed(0):"0")+" % de capacidad";
+  $("barG1").style.width=clamp(S.g[0].P/(P_GEN*2)*100,0,100)+"%";
+  $("barG2").style.width=clamp(S.g[1].P/(P_GEN*2)*100,0,100)+"%";
+  $("rep").textContent=S.g[0].P.toFixed(0)+" / "+S.g[1].P.toFixed(0)+" kW";
+  $("uA").textContent=S.uA?"Presente":"Ausente";$("uA").className=S.uA?"gd":"hi";
+  $("uB").textContent=S.uB?"Presente":"Ausente";$("uB").className=S.uB?"gd":"hi";
+
+  var c=activeCmp();
+  $("sMach").textContent=c.valid?c.mach:"—";
+  $("sRef").textContent=c.valid?(c.dead?"Bus muerto":c.ref):"—";
+  if(c.valid&&!c.dead){
+    $("dV").textContent=(c.dv>0?"+":"")+c.dv.toFixed(0)+" V";
+    $("dF").textContent=(c.df>0?"+":"")+c.df.toFixed(2);
+    $("dA").textContent=c.ang.toFixed(0)+"°";
+    $("dV").className=Math.abs(c.dv)<=V_N*0.05?"gd":"hi";
+    $("dF").className=(c.df>=-0.05&&c.df<=0.3)?"gd":"hi";
+    $("dA").className=c.ang<=10?"gd":"hi";
+  }else{$("dV").textContent="—";$("dF").textContent="—";$("dA").textContent="—";
+    $("dV").className=$("dF").className=$("dA").className="";}
+  $("pDot").className="dot "+(c.valid?(c.ok?"ok":"bad"):"");
+  $("pTxt").textContent=!c.valid?"Relé 25 en reposo":(c.dead?"Bus muerto: cierre directo":
+    (c.ok?"Relé 25: permisivo":"Relé 25: sin permisivo"));
+  $("cSyn").classList.toggle("live",c.valid&&c.ok);
+
+  var par=(S.b.NA&&S.b.EA&&S.uA)||(S.b.NB&&S.b.EB&&S.uB);
+  $("ovMs").textContent=par?(S.ovMs<1000?S.ovMs.toFixed(0)+" ms":(S.ovMs/1000).toFixed(1)+" s"):"0 ms";
+  $("ovMs").className=(par&&S.fast&&S.ovMs>100)?"hi":(par?"am":"");
+
+  $("ttype").textContent=S.fast?"Rápida 100 ms":"Rampa suave";
+  var st=$("stabV");
+  if(S.uA&&S.uB&&S.stab>0){st.textContent=Math.ceil(S.stab)+" s";st.className="hi";}
+  else if(S.uA&&S.uB&&(S.b.EA||S.b.EB)){st.textContent="Cumplido";st.className="gd";}
+  else{st.textContent="—";st.className="";}
+  $("tScale").textContent="×"+(S.slow<1?(1/S.slow).toFixed(0):"1");
+  $("curBr").textContent=S.branch==="—"?"sin maniobra":"bus "+S.branch;
+
+  document.querySelectorAll('.seg button[data-b]').forEach(function(btn){
+    btn.classList.toggle("cl",S.b[btn.dataset.b]);
+  });
+}
+
+/* ---------- bucle ---------- */
+var last=performance.now(),pstep=-1;
+function loop(now){
+  var real=Math.min((now-last)/1000,0.05);last=now;
+  if(S.stab>0){S.stab=Math.max(0,S.stab-real);
+    if(S.stab===0){log("Retardo de estabilidad cumplido. El HMI habilita el regreso de TR-01.","e-ok");refreshBtns();}}
+  var dt=real*S.slow;
+  if(S.seq){run(dt); if(S.step!==pstep){pstep=S.step;flash($("cSeq"));}}
+  else pstep=-1;
+  phys(dt);paintSLD(real);drawSyn();paint();
+  requestAnimationFrame(loop);
+}
+
+/* ---------- eventos ---------- */
+function pair(a,b,fn){
+  $(a).addEventListener("click",function(){$(a).setAttribute("aria-pressed","true");$(b).setAttribute("aria-pressed","false");fn(true);});
+  $(b).addEventListener("click",function(){$(b).setAttribute("aria-pressed","true");$(a).setAttribute("aria-pressed","false");fn(false);});
+}
+pair("tSoft","tFast",function(v){S.fast=!v;log(v?"Transferencia en rampa suave, como indica la placa.":"Transferencia rápida de 100 ms (comparativa).","");});
+pair("mAuto","mMan",function(v){S.auto=v;refreshBtns();log(v?"Modo automático.":"Modo manual: interruptores y reguladores liberados.","");});
+
+var RB=[["rAuto","auto"],["rG1","g1"],["rG2","g2"],["rBus","bus"]];
+RB.forEach(function(p){$(p[0]).addEventListener("click",function(){
+  S.refMode=p[1];RB.forEach(function(q){$(q[0]).setAttribute("aria-pressed",String(q[0]===p[0]));});});});
+
+[0,1].forEach(function(i){var n=i+1;
+  $("g"+n+"gov").addEventListener("input",function(e){S.g[i].gov=parseFloat(e.target.value);});
+  $("g"+n+"exc").addEventListener("input",function(e){S.g[i].exc=parseFloat(e.target.value);});});
+
+$("bFail").addEventListener("click",function(){
+  S.uA=false;S.uB=false;S.cutA=0;S.cutB=0;S.stab=0;S.r1done=false;
+  log("FALLA DE RED CFE. Temporizador de confirmación de 3 s en curso.","e-bad");
+  banner("Falla de red CFE. Tras 3 s abren los interruptores de acometida y arrancan las plantas.","bad");
+  flash($("cUtil"));startSeq("falla");});
+$("bRest").addEventListener("click",function(){
+  S.uA=true;S.uB=true;S.stab=180;S.r1done=false;refreshBtns();flash($("cUtil"));
+  log("Red CFE restablecida. Retardo de estabilidad de 180 s.","e-inf");
+  banner("Red restablecida. Durante 180 s el control bloquea el regreso; después lo activa el operador.","inf");});
+$("bSkip").addEventListener("click",function(){if(S.stab>0){S.stab=3;log("Retardo de estabilidad acelerado para la práctica.","e-warn");}});
+$("bR1").addEventListener("click",function(){log("HMI: el operador activa el regreso de TR-01.","e-inf");
+  banner("Regreso de TR-01: sincronía, cierre de acometida y transferencia en rampa suave.","inf");startSeq("r1");});
+$("bR2").addEventListener("click",function(){log("HMI: el operador activa el regreso de TR-02.","e-inf");
+  banner("Regreso de TR-02: al abrir su transferencia se abren también los interruptores de generador.","inf");startSeq("r2");});
+$("bStop").addEventListener("click",function(){log("Orden del operador: enfriamiento y paro.","e-inf");startSeq("stop");});
+$("bDip").addEventListener("click",function(){
+  if(!genRunning()){log("No hay generadores en marcha.","e-bad");return;}
+  S.dip=-1.9;log("Escalón de carga aplicado: observa el hundimiento de frecuencia.","e-warn");flash($("cBusG"));});
+$("bReset").addEventListener("click",function(){
+  S.seq=null;S.step=0;S.uA=true;S.uB=true;S.branch="—";S.ref=null;S.slow=1;S.refMode="auto";S.stab=0;S.r1done=false;
+  S.b={NA:true,NB:true,EA:false,EB:false,G1:false,G2:false};
+  S.g[0]={st:"paro",c:0,f:0,v:0,del:Math.PI*0.65,gov:0,exc:480,P:0,Q:0,fail:false};
+  S.g[1]={st:"paro",c:0,f:0,v:0,del:-Math.PI*0.35,gov:0,exc:480,P:0,Q:0,fail:false};
+  S.shA=0;S.shB=0;S.cutA=0;S.cutB=0;S.ovMs=0;S.dip=0;S.delBus=Math.PI*0.65;S.fBus=0;S.vBus=0;
+  ["kF1","kF2"].forEach(function(x){$(x).setAttribute("aria-pressed","false");});
+  ["g1gov","g2gov"].forEach(function(x){$(x).value=0;});
+  ["g1exc","g2exc"].forEach(function(x){$(x).value=480;});
+  RB.forEach(function(q){$(q[0]).setAttribute("aria-pressed",String(q[1]==="auto"));});
+  drawSeq();refreshBtns();
+  banner("Operación normal: TR-1 alimenta el bus de carga 01 y TR-2 el bus de carga 02.","ok");
+  log("Sistema reiniciado a operación normal.","");});
+[["kF1",0],["kF2",1]].forEach(function(p){$(p[0]).addEventListener("click",function(){
+  var on=$(p[0]).getAttribute("aria-pressed")!=="true";
+  $(p[0]).setAttribute("aria-pressed",String(on));S.g[p[1]].fail=on;
+  log("GE-0"+(p[1]+1)+(on?": se simulará falla al arranque.":": falla al arranque cancelada."),on?"e-warn":"");});});
+
+document.querySelectorAll('.seg button[data-b]').forEach(function(btn){
+  btn.addEventListener("click",function(){
+    var k=btn.dataset.b;
+    if(S.b[k]){
+      if((k==="EA"&&!S.b.NA&&liveA())||(k==="EB"&&!S.b.NB&&liveB()))
+        log("Apertura de "+NM[k]+" sin fuente alterna: el bus queda sin tensión.","e-bad");
+      setB(k,false);log(NM[k]+" abierto por maniobra manual.","");
+    }else{
+      var c=null;
+      if(k==="G1"&&busGLive())c=cmpGen(0);
+      else if(k==="G2"&&busGLive())c=cmpGen(1);
+      else if((k==="NA"&&S.b.EA&&genRunning())||(k==="NB"&&S.b.EB&&genRunning())||
+              (k==="EA"&&genRunning()&&S.b.NA&&S.uA)||(k==="EB"&&genRunning()&&S.b.NB&&S.uB))c=cmpBus();
+      if(c&&!okOf(c)){
+        log("Relé 25 bloquea el cierre de "+NM[k]+" · δ "+c.ang.toFixed(0)+"° · ΔV "+c.dv.toFixed(0)+" V","e-bad");
+        banner("Sin permisivo de sincronismo para "+NM[k]+".","bad");return;}
+      setB(k,true);log(NM[k]+" cerrado por maniobra manual.","e-ok");
+      if(k==="EA")S.shA=(S.b.NA&&S.uA)?0.5:1;
+      if(k==="EB")S.shB=(S.b.NB&&S.uB)?0.5:1;
+    }
+    refreshBtns();});});
+
+/* ---------- ajuste de pantalla ---------- */
+var u=1;
+function setU(v){u=clamp(v,0.72,1.25);document.documentElement.style.setProperty("--u",u.toFixed(2));checkFit();}
+$("zIn").addEventListener("click",function(){setU(u+0.06);});
+$("zOut").addEventListener("click",function(){setU(u-0.06);});
+function checkFit(){
+  var w=window.innerWidth,h=window.innerHeight;
+  var ok=(w>=1080&&h>=600);
+  document.body.className=ok?"fit":"scroll";
+  var s=Math.round(126*u);
+  sc.width=s;sc.height=s;sc.style.width=s+"px";sc.style.height=s+"px";
+}
+window.addEventListener("resize",checkFit);
+// ajuste automático inicial para pantallas cortas
+(function(){
+  var h=window.innerHeight;
+  if(h<760&&h>=600)setU(0.9);
+  else if(h<860&&h>=760)setU(0.95);
+  else checkFit();
+})();
+
+drawSeq();refreshBtns();
+log("Operación normal. TGS 01: 1100 kW · TGS 02: 1100 kW.","e-ok");
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
