@@ -50,7 +50,7 @@ Si solo tienes CSV exportados de la bitácora de UPS: **Ajustes → Importar CSV
 ## 7. Publicar una actualización
 
 1. Sube los archivos nuevos al repositorio (Add file → Upload files, reemplazan a los anteriores).
-2. En `sw.js` cambia el número de `const VERSION = "bitacoras-v23";` por el siguiente (`"bitacoras-v24"`, y así sucesivamente). Sin este cambio, los teléfonos seguirán usando la copia guardada.
+2. En `sw.js` cambia el número de `const VERSION = "bitacoras-v24";` por el siguiente (`"bitacoras-v25"`, y así sucesivamente). Sin este cambio, los teléfonos seguirán usando la copia guardada.
 3. En el teléfono, abre la app con internet. Cuando termine de descargar la versión nueva aparece abajo el aviso **"Hay una versión nueva de la app"**: toca **Actualizar**. Tus datos no se tocan. La pantalla de inicio muestra la versión instalada.
 4. Si el teléfono se queda con una versión vieja, abre en Chrome `https://tuusuario.github.io/bitacoras/reparar.html` y toca **Reparar ahora** (también está el botón **Reparar actualización** en la pantalla de inicio). Vuelve a descargar el programa sin borrar lecturas, fotos ni ajustes. Esa página siempre se baja del servidor, aunque la copia del teléfono esté atorada, y muestra un diagnóstico que puedes copiar.
 
@@ -85,7 +85,7 @@ La primera vez se suben todas las lecturas que ya tenías en el teléfono. Arrib
 - **Lecturas:** cada una es un renglón con la persona que la capturó. Las de los demás aparecen en tu Historial (columna **Capturó**), Resumen, Tendencias e Informe.
 - **Fotos:** se bajan de Drive la primera vez que las abres o generas un informe.
 - **Interruptores y medidores de calidad:** el catálogo (y en interruptores, las líneas base) también se comparte.
-- **Baterías:** la telemetría diaria de Gexia se queda en el teléfono que cargó los CSV. Se comparten el **resumen mensual de cada banco** (estado, conteos, resistencia mediana, flotación, hallazgos y las 20 baterías más urgentes) y el **registro de reemplazos** con su foto. Quien no cargó los CSV ve los bancos con ☁ y puede generar el informe mensual con esos resúmenes. Si dos personas dan de alta el mismo identificador, se queda el primero y las lecturas del segundo se pasan a ese.
+- **Baterías:** la telemetría diaria de Gexia se queda en el teléfono que cargó los CSV. Se comparten el **resumen mensual de cada banco** (estado, conteos, resistencia mediana, flotación, hallazgos y las 20 baterías más urgentes) y el **registro de reemplazos** con su foto. Quien no cargó los CSV ve los bancos con ☁ y puede generar el informe con esos resúmenes. La telemetría de los cargadores (CSV `CARGADORES_LADO_A` y `_B`) también se queda en el teléfono, agrupada por hora; no se sube a la hoja. Si dos personas dan de alta el mismo identificador, se queda el primero y las lecturas del segundo se pasan a ese.
 - **Borrados:** borra siempre desde la app (Historial → Borrar), no en la hoja; así el borrado llega a todos los teléfonos. En la hoja la lectura queda marcada con la fecha en la columna "Borrado".
 - **Columnas de la derecha:** `rev`, `id` y `datos` las usa la app. No las edites.
 - **Parámetros:** los de UPS y los límites de interruptores y de calidad de energía siguen siendo de cada teléfono.
