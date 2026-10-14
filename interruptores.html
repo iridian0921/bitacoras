@@ -58,8 +58,13 @@
 .badge.ok{background:var(--okbg);color:var(--ok)}.badge.bad{background:var(--badbg);color:var(--bad)}.badge.warn{background:var(--warnbg);color:var(--ink)}
 .formg{display:grid;grid-template-columns:120px minmax(0,1fr);gap:8px;align-items:center}
 .formg input,.formg select{width:100%;min-width:0;text-overflow:ellipsis}
+input.plain{font:500 16px var(--fb);padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);max-width:100%}
 
 @media (max-width:480px){.etu-lcd .g4{grid-template-columns:repeat(2,1fr)}.formg{grid-template-columns:minmax(0,1fr);gap:4px}.formg label{margin-top:6px;font-size:14px;color:var(--muted)}}
+.igrow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-top:4px}
+.igrow label{display:flex;flex-direction:column;font-weight:700;font-size:13px;gap:2px}
+.igrow input{width:100%;min-width:0;padding:8px 2px;text-align:center;-moz-appearance:textfield;appearance:textfield}
+.igrow input::-webkit-inner-spin-button,.igrow input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 </style>
 </head>
 <body>
@@ -153,9 +158,16 @@
       <label for="fTag">Identificador</label><input class="plain" id="fTag" placeholder="Ej. INT-TGS01-P">
       <label for="fTab">Tablero</label><input class="plain" id="fTab" placeholder="Ej. TGS 01">
       <label for="fRama">Rama</label><select id="fRama"><option value="A">A</option><option value="B">B</option><option value="-">Sin rama</option></select>
-      <label for="fIn">In rating plug (A)</label><input class="plain" id="fIn" type="number" inputmode="numeric" value="3200">
+      <label for="fFun">Función</label><select id="fFun"></select>
+      <label for="fIn">In rating plug (A)</label><select id="fIn"></select>
+      <label for="fVer">Disparador</label><select id="fVer"></select>
+      <label for="fSerie">Número de serie</label><input class="plain" id="fSerie" placeholder="Opcional">
       <label for="fDesc">Descripción</label><input class="plain" id="fDesc" placeholder="Ej. Principal, alimenta UPS 1">
       <label for="fGf">Falla a tierra</label><select id="fGf"><option value="1">Con módulo GFM AT 45B</option><option value="0">Sin módulo</option></select>
+    </div>
+    <div id="fIgBox" style="margin-top:10px">
+      <div class="muted" style="font-size:14px">Pick-up de falla a tierra por letra (etiqueta «Erdschlußschutz» del interruptor), en A:</div>
+      <div class="igrow"><label>A<input class="plain" type="number" inputmode="numeric" data-ig="A" aria-label="Ig A en amperes"></label><label>B<input class="plain" type="number" inputmode="numeric" data-ig="B" aria-label="Ig B en amperes"></label><label>C<input class="plain" type="number" inputmode="numeric" data-ig="C" aria-label="Ig C en amperes"></label><label>D<input class="plain" type="number" inputmode="numeric" data-ig="D" aria-label="Ig D en amperes"></label><label>E<input class="plain" type="number" inputmode="numeric" data-ig="E" aria-label="Ig E en amperes"></label></div>
     </div>
     <div class="row" style="margin-top:10px">
       <button class="btn" id="eqSave">Guardar interruptor</button>
@@ -262,6 +274,17 @@ const SETS = [
     {k:"gTrip", l:"Ig disparo (TRIP)", o:["OFF","A","B","C","D","E"], c:"c6"},
     {k:"gAlarm", l:"Ig alarma (ALARM)", o:["OFF","A","B","C","D","E"], c:"c6"},
     {k:"tg", l:"tg (s)  ·  I²t tg (s)", o:["0.1","0.2","0.3","0.4","0.5","I²t 0.1","I²t 0.2","I²t 0.3","I²t 0.4","I²t 0.5"]}]}];
+/* Función del interruptor: la revisión de NOM-001-SEDE-2012 230-95 solo aplica a la desconexión principal de acometida. */
+const FUNCIONES = {acometida:"Desconexión principal (acometida)", generador:"Generador", transferencia:"Transferencia", enlace:"Enlace (tie)", alimentador:"Alimentador / derivado", otro:"Otro"};
+const PLUGS = [250,315,400,500,630,800,1000,1250,1600,2000,2500,3200,4000,5000,6300];
+const VERSIONES = ["ETU45B", "ETU45B Release 2"];
+/* Pick-up del GFM AT 45B por letra (etiqueta "Erdschlußschutz" del interruptor): hasta 3200 A 100/300/600/900/1200 A,
+   desde 4000 A 400/600/800/1000/1200 A. Cada equipo puede guardar los de su etiqueta. */
+const IG_LETRAS = ["A","B","C","D","E"];
+const igDef = In => In >= 4000 ? [400,600,800,1000,1200] : [100,300,600,900,1200];
+const igTabla = e => Array.isArray(e?.ig) && e.ig.length===5 && e.ig.every(x => x > 0) ? e.ig : igDef(num(e?.in) || 0);
+const igA = (e, letra) => { const i = IG_LETRAS.indexOf(letra); return i >= 0 ? igTabla(e)[i] : null; };
+const igTxt = e => IG_LETRAS.map((l, i) => `${l} = ${igTabla(e)[i]} A`).join(" · ");
 const SET_NAMES = {char:"Característica L", ir:"IR", tr:"tR", isd:"Isd", tsd:"tsd", ii:"Ii", gMet:"Detección G", gTrip:"Ig disparo", gAlarm:"Ig alarma", tg:"tg", mem:"Memoria", nOn:"Prot. neutro", nFac:"IN ="};
 const optsFor = (it, s) => it.k==="tr" ? (s.char==="I⁴t" ? TR_I4T : TR_I2T) : it.o;
 /* El selector del equipo dice "0.5 / 1 × IR"; se guarda con el texto de siempre para no marcar cambios falsos contra la línea base. */
@@ -344,6 +367,17 @@ function calcularLectura(r){
   IND.forEach(i => { if (i.bad && ind[i.k]===i.bad) flag(i.l+": "+i.bad); });
   if (isdA && irA && isdA <= irA) flag("Ajustes incoherentes", "Isd no supera a IR");
   if (iiA && isdA && iiA <= isdA) flag("Ajustes incoherentes", "Ii no supera a Isd");
+  // falla a tierra: la alarma avisa antes que el disparo, y el disparo queda abajo de la sobrecarga
+  const gTripA = e?.gf ? igA(e, s.gTrip) : null, gAlarmA = e?.gf ? igA(e, s.gAlarm) : null;
+  Object.assign(x, {gTripA, gAlarmA});
+  if (gTripA && gAlarmA && gAlarmA > gTripA) flag("Ajustes incoherentes", `alarma de falla a tierra ${s.gAlarm} = ${gAlarmA} A arriba del disparo ${s.gTrip} = ${gTripA} A`);
+  if (gTripA && irA && gTripA >= irA) flag("Ajustes incoherentes", `Ig disparo ${gTripA} A no queda abajo de IR ${fx(irA,0)} A`);
+  // NOM-001-SEDE-2012 230-95: desconexión principal de 1000 A o más en sistema estrella aterrizado de 480Y/277 V
+  if (e?.funcion === "acometida" && In >= 1000){
+    if (!e.gf) flag("NOM-001 230-95", "desconexión principal de 1000 A o más sin protección de falla a tierra");
+    else if (s.gTrip === "OFF") flag("NOM-001 230-95", "protección de falla a tierra en OFF");
+    else if (gTripA > 1200) flag("NOM-001 230-95", `Ig disparo ${gTripA} A, el máximo es 1200 A`);
+  }
   // cambios contra línea base
   x.cambios = [];
   const keys = activeKeys(e);
@@ -362,12 +396,15 @@ function estadoBase(e, r){
   const x = calc(r);
   return x.cambios.length ? {t:`Cambió: ${cambiosTxt(x.cambios, "→")}`, c:"bad"} : {t:"Coincide con línea base", c:"ok"};
 }
+/* Ajustes con su valor en amperes (con la In del rating plug y la tabla Ig del equipo). */
 const ajustesTxt = (s, e) => {
   if (!s) return "—";
-  let t = `IR ${s.ir??"?"} · tR ${s.tr??"?"}${s.char==="I⁴t"?" (I⁴t)":""} · Isd ${s.isd??"?"} · tsd ${s.tsd??"?"} · Ii ${s.ii??"?"}`;
-  if (e?.gf) t += ` · G ${s.gMet?s.gMet+" ":""}${s.gTrip??"?"}/${s.gAlarm??"?"} tg ${s.tg??"?"}`;
+  const In = num(e?.in), a = v => In && num(v) !== null ? ` (${fx(num(v)*In,0)} A)` : "", g = l => { const v = igA(e, l); return v ? ` (${v} A)` : ""; };
+  let t = `IR ${s.ir??"?"}${a(s.ir)} · tR ${s.tr??"?"}${s.char==="I⁴t"?" (I⁴t)":""} · Isd ${s.isd??"?"}${a(s.isd)} · tsd ${s.tsd??"?"} · Ii ${s.ii??"?"}${s.ii==="MAX"||s.ii==="OFF"?"":a(s.ii)}`;
+  if (e?.gf) t += ` · G ${s.gMet?s.gMet+" ":""}disparo ${s.gTrip??"?"}${g(s.gTrip)} / alarma ${s.gAlarm??"?"}${g(s.gAlarm)} · tg ${s.tg??"?"}`;
   return t;
 };
+const eqDatos = e => [FUNCIONES[e.funcion] || "", e.version || "", e.serie ? "serie " + e.serie : ""].filter(Boolean).join(" · ");
 
 /* ================= pestañas ================= */
 const tabs = Comun.pestanas({res:renderResumen, equ:renderEquipos, ten:renderChart, inf:()=>ramaOpts($("#repRama")), his:renderHis, cfg:renderUsage});
@@ -382,7 +419,7 @@ function renderEqSel(){
   $("#eqSel").innerHTML = list.map(e=>`<option value="${esc(e.id)}">${e.rama!=="-"?"Rama "+esc(e.rama)+" · ":""}${esc(eqName(e))}</option>`).join("");
   if (selEq) $("#eqSel").value = selEq;
   const e = eqById(selEq);
-  $("#eqInfo").textContent = e ? `In ${e.in} A${e.desc?" · "+e.desc:""}${e.base?" · Línea base del "+fdate(e.base.fecha):" · Sin línea base"}` : "";
+  $("#eqInfo").textContent = e ? `In ${e.in} A${eqDatos(e)?" · "+eqDatos(e):""}${e.desc?" · "+e.desc:""}${e.base?" · Línea base del "+fdate(e.base.fecha):" · Sin línea base"}` : "";
 }
 $("#eqSel").onchange = () => { selEq = $("#eqSel").value; renderEqSel(); renderTU(); saveDraft(); };
 function renderTU(){
@@ -391,7 +428,7 @@ function renderTU(){
     return `<button type="button" class="led ${i.led}${on?" on":""}" data-i="${i.k}" aria-pressed="${on}" aria-label="${esc(i.l)}"><i></i>${esc(i.t)}</button>`; };
   const leds = ks => `<div class="leds">${ks.map(k => led(indDe(k))).join("")}</div>`;
   const trip = indDe("tripped"), disp = draft.ind.tripped===trip.bad;
-  let h = `<div class="tuh"><div><b>SIEMENS ETU45B</b><span>Release 2</span></div><div class="plug">Rating plug<b>In = ${e ? fx(e.in,0)+" A" : "—"}</b></div></div>
+  let h = `<div class="tuh"><div><b>SIEMENS ETU45B</b><span>${e?.version === "ETU45B Release 2" ? "Release 2" : e?.version ? "" : "&nbsp;"}</span></div><div class="plug">Rating plug<b>In = ${e ? fx(e.in,0)+" A" : "—"}</b></div></div>
     <div class="frente">
       <button type="button" class="trip${disp?" on":""}" data-i="tripped" aria-pressed="${disp}"><span>BREAKER<br>TRIPPED</span><b>${disp?"Sí":"No"}</b></button>
       ${leds(IND.filter(i => i.z==="top" && i.led).map(i => i.k))}
@@ -407,10 +444,12 @@ function renderTU(){
       const n = num(v);
       let extra = (e && n && (it.k==="ir" || it.k==="isd" || it.k==="ii")) ? `= ${fx(n*e.in,0)} A` : "";
       if (it.k==="nFac" && e && v && num(draft.set.ir)) extra = `= ${fx(parseFloat(v)*num(draft.set.ir)*e.in,0)} A`;
+      if ((it.k==="gTrip" || it.k==="gAlarm") && igA(e, v)) extra = `= ${igA(e, v)} A`;
       h += `<div class="set"><div class="sl"><span>${it.l}</span><b>${v?esc(verVal(it.k,v))+" "+extra:"sin elegir"}</b></div>
         <div class="pick ${it.c||""} ${v?"":"miss"}" role="group" aria-label="${esc(it.l)}">${o.map(op=>`<button data-k="${it.k}" data-v="${esc(op)}" aria-pressed="${v===op}">${esc(verVal(it.k,op))}</button>`).join("")}</div></div>`;
     }
     if (g.nota) h += `<div class="nota">${g.nota}</div>`;
+    if (g.gf) h += `<div class="nota">Etiqueta de falla a tierra: ${igTxt(e)}</div>`;
     h += `</div>`;
   }
   $("#tu").innerHTML = h;
@@ -448,7 +487,8 @@ function renderChecks(){
     ["Ajustes capturados", x.faltan.length?`Faltan ${x.faltan.length}: ${x.faltan.map(k=>SET_NAMES[k]).join(", ")}`:"Completos", x.faltan.length===0],
     ["Línea base", !e?.base ? "Sin línea base" : (x.faltan.length && !x.cambios.length ? "Completa los ajustes para comparar" : (x.cambios.length ? cambiosTxt(x.cambios, " → ") : "Coincide")), !e?.base ? null : (x.cambios.length ? false : (x.faltan.length?null:true))],
     ["Indicadores", indMal.map(i=>i.l).join(", ") || "Normales", !indMal.length],
-    ["Coherencia de ajustes", x.det.filter(d=>d.startsWith("Ajustes incoherentes")).join("; ") || (x.isdA&&x.irA?"IR < Isd < Ii":"—"), x.isdA&&x.irA ? !x.flags.includes("Ajustes incoherentes") : null]
+    ["Coherencia de ajustes", x.det.filter(d=>d.startsWith("Ajustes incoherentes")).join("; ") || (x.isdA&&x.irA?"IR < Isd < Ii":"—"), x.isdA&&x.irA ? !x.flags.includes("Ajustes incoherentes") : null],
+    ...(e?.funcion==="acometida" && num(e.in) >= 1000 ? [["NOM-001 230-95", x.det.filter(d=>d.startsWith("NOM-001")).map(d=>d.replace(/^NOM-001 230-95 \(|\)$/g,"")).join("; ") || (e.gf && draft.set.gTrip ? `Falla a tierra activa, Ig ${x.gTripA} A ≤ 1200 A` : "Elige el ajuste de falla a tierra"), x.flags.includes("NOM-001 230-95") ? false : (e.gf && draft.set.gTrip ? true : null)]] : [])
   ];
   $("#checks").innerHTML = rows.map(([a,b,ok]) => `<div class="chk ${ok===null?"na":ok?"ok":"bad"}"><span>${a}</span><b>${esc(b)}</b></div>`).join("");
 }
@@ -506,7 +546,9 @@ function renderEquipos(){
   const ult = ultimas();
   $("#eqList").innerHTML = L.map(e => `<div class="unit"><div class="row" style="justify-content:space-between"><span class="n">${esc(e.tag)}</span><span class="badge">${e.rama==="-"?"Sin rama":"Rama "+esc(e.rama)}</span></div>
       <div class="muted">${esc(e.tablero||"")}${e.desc?" · "+esc(e.desc):""}</div>
-      <div>In ${e.in} A${e.gf?" · con falla a tierra":""}</div>
+      <div>In ${e.in} A${eqDatos(e)?" · "+esc(eqDatos(e)):""}</div>
+      ${e.gf ? `<div class="muted">Falla a tierra: ${igTxt(e)}</div>` : `<div class="muted">Sin módulo de falla a tierra</div>`}
+      ${e.funcion==="acometida" && num(e.in) >= 1000 ? `<div class="muted">Revisión NOM-001-SEDE-2012 230-95: falla a tierra obligatoria, Ig ≤ 1200 A</div>` : ""}
       <div class="muted">${e.base?`Línea base: ${fdate(e.base.fecha)}${e.base.ref?" · "+esc(e.base.ref):""}<br>${esc(ajustesTxt(e.base.set,e))}`:"Sin línea base"}</div>
       <div class="row">
         <button class="linkbtn" data-ed="${esc(e.id)}">Editar</button>
@@ -518,7 +560,8 @@ function renderEquipos(){
 const accionesEquipo = {
   ed(e){
     editId = e.id;
-    $("#fTag").value=e.tag; $("#fTab").value=e.tablero||""; $("#fRama").value=e.rama; $("#fIn").value=e.in; $("#fDesc").value=e.desc||""; $("#fGf").value=e.gf?"1":"0";
+    $("#fTag").value=e.tag; $("#fTab").value=e.tablero||""; $("#fRama").value=e.rama; opcionesIn(e.in); $("#fIn").value=String(e.in); $("#fDesc").value=e.desc||""; $("#fGf").value=e.gf?"1":"0";
+    $("#fFun").value=e.funcion||"otro"; $("#fVer").value=e.version||""; $("#fSerie").value=e.serie||""; ponerIg(igTabla(e)); igEditado = Array.isArray(e.ig); verIg();
     $("#eqFormTitle").textContent="Editar interruptor"; $("#eqCancel").classList.remove("hidden"); window.scrollTo({top:0,behavior:"smooth"});
   },
   base(e){
@@ -542,14 +585,35 @@ $("#eqList").addEventListener("click", ev => {
   const b = ev.target.closest("button"); if (!b) return;
   for (const [k, fn] of Object.entries(accionesEquipo)) if (b.dataset[k]){ const e = eqById(b.dataset[k]); if (e) fn(e); return; }
 });
-function resetEqForm(){ editId=null; ["fTag","fTab","fDesc"].forEach(i=>$("#"+i).value=""); $("#fIn").value="3200"; $("#fRama").value="A"; $("#fGf").value="1"; $("#eqFormTitle").textContent="Agregar interruptor"; $("#eqCancel").classList.add("hidden"); }
+/* Formulario: In del rating plug de una lista, y la tabla Ig se propone según la In mientras no se edite a mano. */
+let igEditado = false;
+function opcionesIn(extra){
+  const v = [...new Set([...PLUGS, ...(num(extra) ? [num(extra)] : [])])].sort((a, b) => a - b);
+  $("#fIn").innerHTML = v.map(x => `<option value="${x}">${x} A</option>`).join("");
+}
+const ponerIg = t => document.querySelectorAll("#fIgBox input[data-ig]").forEach((inp, i) => inp.value = t[i]);
+const leerIg = () => [...document.querySelectorAll("#fIgBox input[data-ig]")].map(inp => num(inp.value));
+const verIg = () => $("#fIgBox").classList.toggle("hidden", $("#fGf").value !== "1");
+$("#fFun").innerHTML = Object.entries(FUNCIONES).map(([k, t]) => `<option value="${k}">${t}</option>`).join("");
+$("#fVer").innerHTML = `<option value="">Sin especificar</option>` + VERSIONES.map(v => `<option>${v}</option>`).join("");
+$("#fIn").onchange = () => { if (!igEditado) ponerIg(igDef(num($("#fIn").value))); };
+$("#fGf").onchange = verIg;
+$("#fIgBox").addEventListener("input", () => { igEditado = true; });
+function resetEqForm(){ editId=null; ["fTag","fTab","fDesc","fSerie"].forEach(i=>$("#"+i).value=""); opcionesIn(); $("#fIn").value="3200"; $("#fRama").value="A"; $("#fGf").value="1";
+  $("#fFun").value="alimentador"; $("#fVer").value=""; igEditado=false; ponerIg(igDef(3200)); verIg(); $("#eqFormTitle").textContent="Agregar interruptor"; $("#eqCancel").classList.add("hidden"); }
 $("#eqCancel").onclick = resetEqForm;
 $("#eqSave").onclick = () => {
   const st = $("#eqStatus"); estado(st, "");
   const tag = $("#fTag").value.trim(), In = num($("#fIn").value);
   if (!tag || !In){ estado(st, "El identificador y la In son obligatorios.", true); return; }
   if (equipos.some(e=>e.tag.toLowerCase()===tag.toLowerCase() && e.id!==editId)){ estado(st, "Ya existe un interruptor con ese identificador.", true); return; }
-  const data = {tag, tablero:$("#fTab").value.trim(), rama:$("#fRama").value, in:In, desc:$("#fDesc").value.trim(), gf:$("#fGf").value==="1"};
+  const ig = leerIg(), gf = $("#fGf").value==="1";
+  if (gf && ig.some(v => !(v > 0))){ estado(st, "Escribe los cinco valores de falla a tierra (A a E) en amperes.", true); return; }
+  if (gf && ig.some((v, i) => i && v <= ig[i-1])){ estado(st, "Los valores de falla a tierra deben ir de menor a mayor (A < B < C < D < E).", true); return; }
+  const data = {tag, tablero:$("#fTab").value.trim(), rama:$("#fRama").value, in:In, desc:$("#fDesc").value.trim(), gf,
+    funcion:$("#fFun").value, version:$("#fVer").value, serie:$("#fSerie").value.trim(),
+    // solo se guarda la tabla si difiere de la estándar para esa In
+    ig: gf && ig.join() !== igDef(In).join() ? ig : null};
   if (editId){ Object.assign(eqById(editId), data, {upd:Date.now()}); st.textContent = "Interruptor actualizado."; }
   else { const e = {id:"e"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), ...data, base:null, upd:Date.now()}; equipos.push(e); if (!selEq) selEq = e.id; st.textContent = `${tag} agregado.`; }
   persist(); resetEqForm(); renderAll(); renderTU(); sync.sincronizar();
@@ -621,10 +685,10 @@ Comun.visorFotos(fotos, $("#hisTbl"));
 $("#hisEq").onchange = renderHis;
 $("#csvBtn").onclick = () => {
   const keys = SETS.flatMap(g=>g.items.map(i=>i.k));
-  const head = ["fecha","interruptor","tablero","rama","in_A","i1","i2","i3","in_neutro","i_prom","pct_In","IR_A","pct_IR","desbalance","neutro_vs_prom",...keys,"Isd_A","Ii_A",...IND.map(i=>i.k),"cambios_vs_base","estado","observaciones","nota","foto","capturo","hora_manual","guardado"];
+  const head = ["fecha","interruptor","tablero","rama","in_A","i1","i2","i3","in_neutro","i_prom","pct_In","IR_A","pct_IR","desbalance","neutro_vs_prom",...keys,"Isd_A","Ii_A","Ig_disparo_A","Ig_alarma_A","funcion","disparador","serie",...IND.map(i=>i.k),"cambios_vs_base","estado","observaciones","nota","foto","capturo","hora_manual","guardado"];
   const filas = [...lecturas].reverse().map(r => { const x=calc(r), e=eqById(r.eq), c=r.cur||{};
     return [isoLocal(new Date(r.ts)).replace("T"," "),e?.tag,e?.tablero,e?.rama,e?.in,c.i1,c.i2,c.i3,c.in,x.avg?.toFixed(1),x.pctIn?.toFixed(4),x.irA,x.pctIR?.toFixed(4),x.desb?.toFixed(4),x.pctN?.toFixed(4),
-      ...keys.map(k=>verVal(k, r.set?.[k])),x.isdA,x.iiA,...IND.map(i=>r.ind?.[i.k]),x.cambios.map(cb=>`${SET_NAMES[cb.k]} ${verVal(cb.k,cb.de)}->${verVal(cb.k,cb.a)}`).join("; "),x.ok?"OK":"REVISAR",x.det.join("; "),r.nota,r.foto?"sí":"",r.autor,r.tsManual?"sí":"",r.guardado?isoLocal(new Date(r.guardado)).replace("T"," "):""]; });
+      ...keys.map(k=>verVal(k, r.set?.[k])),x.isdA,x.iiA,x.gTripA,x.gAlarmA,FUNCIONES[e?.funcion]||"",e?.version||"",e?.serie||"",...IND.map(i=>r.ind?.[i.k]),x.cambios.map(cb=>`${SET_NAMES[cb.k]} ${verVal(cb.k,cb.de)}->${verVal(cb.k,cb.a)}`).join("; "),x.ok?"OK":"REVISAR",x.det.join("; "),r.nota,r.foto?"sí":"",r.autor,r.tsManual?"sí":"",r.guardado?isoLocal(new Date(r.guardado)).replace("T"," "):""]; });
   descargarCSV(`lecturas_interruptores_${stamp()}.csv`, head, filas);
 };
 
@@ -707,7 +771,7 @@ async function generarInforme(){
   ${notas?`<h2>Notas de campo</h2><ul>${notas}</ul>`:""}
   ${fotosInf?`<h2>Evidencia fotográfica</h2><div class="fotos">${fotosInf}</div>`:""}
   <h2>Criterios</h2>
-  <div style="font-size:12px">Carga máxima ${pct(P.limCargaIR,0)} de IR; desbalance de corriente ${pct(P.limDesb,0)}; corriente de neutro ${pct(P.limNeutro,0)} del promedio. Se reporta cualquier ajuste distinto a la línea base registrada, LED de alarma o de error del disparador encendido e indicador de disparo activo. La coherencia verifica IR &lt; Isd &lt; Ii.</div>
+  <div style="font-size:12px">Carga máxima ${pct(P.limCargaIR,0)} de IR; desbalance de corriente ${pct(P.limDesb,0)}; corriente de neutro ${pct(P.limNeutro,0)} del promedio. Se reporta cualquier ajuste distinto a la línea base registrada, LED de alarma o de error del disparador encendido e indicador de disparo activo. La coherencia verifica IR &lt; Isd &lt; Ii, que la alarma de falla a tierra no esté arriba del disparo y que Ig de disparo quede abajo de IR (Ig en amperes según la etiqueta del interruptor). En la desconexión principal de acometida de 1000 A o más (NOM-001-SEDE-2012, 230-95) la falla a tierra debe estar activa con Ig ≤ 1200 A; el retardo máximo del GFM AT 45B (0.5 s) cumple el límite de 1 s a 3000 A.</div>
   <div class="firma"><div>Elaboró${elab?`<br>${esc(elab)}`:""}</div><div>Revisó${revi?`<br>${esc(revi)}`:""}</div></div>
   ${con.some(u => u.r.tsManual) ? `<div style="font-size:11px;color:#6a7784;margin-top:4px">✎: hora de la lectura corregida a mano.</div>` : ""}
   <div class="pie">Generado con Bitácora de interruptores. Valores tomados de la pantalla y diales del disparador por inspección visual; no se modificó ningún ajuste.</div></div>`;
@@ -737,7 +801,7 @@ const sync = Comun.compartir({bitacora:"interruptores", fotos,
   equipos:()=>equipos, setEquipos:a=>{ equipos = a; },
   fila: r => { const x = calc(r), e = eqById(r.eq), c = r.cur||{};
     return {Fecha:r.ts, Interruptor:e?.tag||"", Tablero:e?.tablero||"", "I1 (A)":num(c.i1), "I2 (A)":num(c.i2), "I3 (A)":num(c.i3), "IN (A)":num(c.in), Estado:x.ok?"OK":"Revisar: "+x.flags.join(", "), Nota:r.nota||""}; },
-  filaEquipo: e => ({Identificador:e.tag, Tablero:e.tablero||"", Rama:e.rama==="-"?"Sin rama":e.rama, "In (A)":e.in, "Descripción":e.desc||"",
+  filaEquipo: e => ({Identificador:e.tag, Tablero:e.tablero||"", Rama:e.rama==="-"?"Sin rama":e.rama, "In (A)":e.in, "Descripción":[eqDatos(e), e.desc].filter(Boolean).join(" · "),
     "Línea base":e.base?`${ajustesTxt(e.base.set,e)} (${fdate(e.base.fecha)}${e.base.ref?", "+e.base.ref:""})`:""}),
   alCambiar(){ const antes = selEq; sortL(); persist(); renderAll(); if (selEq !== antes) renderTU(); else renderChecks(); }});
 $("#bakBtn").onclick = () => { download(`respaldo_interruptores_${stamp()}.json`, JSON.stringify({app:"bitacora-interruptores", version:1, exportado:new Date().toISOString(), cfg:P, equipos, lecturas}, null, 1), "application/json"); $("#bakStatus").textContent = "Respaldo descargado. Guárdalo en Drive o en tu PC."; bak.marcar(); };
@@ -770,7 +834,7 @@ function renderAll(){ bak.aviso(); renderEqSel(); tabs.renderVisible(); }
   renderCfg(); $("#repSitio").value = P.sitio||""; $("#repElab").value = P.elaboro||""; $("#repRevi").value = P.reviso||"";
   newDraft();
   await loadDraft();
-  fillCur(); renderAll(); renderTU();
+  resetEqForm(); fillCur(); renderAll(); renderTU();
   if (!equipos.length) tabs.ir("equ");
   sync.sincronizar();
 })();
