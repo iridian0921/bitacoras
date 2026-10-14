@@ -260,9 +260,18 @@ const fx = (v, d=2) => v==null || !isFinite(v) ? "—" : (+v).toFixed(d);
 const pct = v => v==null || !isFinite(v) ? "—" : (v>0?"+":"")+(v*100).toFixed(0)+" %";
 const med = a => { const b = a.filter(x => x!=null && isFinite(x)).sort((x,y)=>x-y); if (!b.length) return null; const m = b.length>>1; return b.length%2 ? b[m] : (b[m-1]+b[m])/2; };
 const avg = a => { const b = a.filter(x => x!=null && isFinite(x)); return b.length ? b.reduce((s,x)=>s+x,0)/b.length : null; };
-const fdia = iso => new Date(iso.length===10 ? iso+"T12:00:00Z" : iso).toLocaleDateString("es-MX", {day:"2-digit", month:"short", year:"2-digit", timeZone:"UTC"});
+const fdia = iso => new Date((iso.length===10 ? iso : dia(iso)) + "T12:00:00Z").toLocaleDateString("es-MX", {day:"2-digit", month:"short", year:"2-digit", timeZone:"UTC"});
 const DIA = 86400000;
-const dia = t => t.slice(0,10);
+/* Día que representa una fila de Gexia. Gexia captura una vez al día a las 23:00 y le pone la fecha del día siguiente
+   a las 05:00 UTC (la fila «13 oct 05:00Z» ya trae datos el 13 a mediodía: es la captura del 12 a las 23:00).
+   Se resta 8 h para que quede en el día de la captura con hora local UTC−5 o UTC−6. */
+const diaMemo = new Map();
+const dia = t => {
+  if (t.length <= 10) return t;
+  let d = diaMemo.get(t);
+  if (!d){ const ms = Date.parse(t); d = isFinite(ms) ? new Date(ms - 8*3600000).toISOString().slice(0,10) : t.slice(0,10); diaMemo.set(t, d); }
+  return d;
+};
 const mesTxt = m => new Date(m+"-15T12:00:00Z").toLocaleDateString("es-MX", {month:"long", year:"numeric", timeZone:"UTC"});
 const vivo = x => x != null && x > 0.5;
 const CLAVES = ["A","B"].flatMap(l => [1,2,3,4].flatMap(u => ["01","02","03","04"].map(b => `${l}|${u}|${b}`)));
@@ -395,7 +404,7 @@ function leer(nombre, txt){
   if (iT < 0 || !cols.length) throw new Error("no tiene el formato de Gexia (baterías ni cargadores)");
   const lado = ladoDe(nombre);
   const clave = `${lado}|${cols[0].ups}|${cols[0].b}`, nuevas = [];
-  let vacias = 0;
+  const vacias = [];
   for (const r of rows.slice(1)){
     const t = r[iT]; if (!t) continue;
     const f = {t, bat:{}, con:{}, tot:{}};
@@ -405,10 +414,12 @@ function leer(nombre, txt){
       else if (c.tipo === "con") f.con[c.n] = v;
       else f.tot[c.k] = v;
     }
-    if (vacia(f)){ vacias++; continue; }
+    if (vacia(f)){ vacias.push(t); continue; }
     agregarFila(clave, f); nuevas.push(f);
   }
-  return {clave, nuevas, vacias, txt:`${nombreK(clave)} (${nuevas.length} días${nuevas.length ? `, hasta el ${fdia(nuevas[nuevas.length-1].t)}` : ""}${vacias ? `; ${vacias} sin capturar todavía` : ""})`};
+  // vacías después de la última captura: días que Gexia aún no captura; antes: días sin datos (monitoreo caído)
+  const ult = nuevas.reduce((m, f) => f.t > m ? f.t : m, ""), pend = vacias.filter(t => t > ult).length, huecos = vacias.length - pend;
+  return {clave, nuevas, txt:`${nombreK(clave)} (${nuevas.length} días${ult ? `, hasta el ${fdia(ult)}` : ""}${huecos ? `; ${huecos} sin datos` : ""}${pend ? `; ${pend} sin capturar todavía` : ""})`};
 }
 /* Cargadores: una fila por lectura (~cada 5 min por banco), con la columna del banco que la reporta. Se guarda por hora. */
 function leerCarg(nombre, rows, H){
@@ -854,8 +865,8 @@ function cargBanco(){
     <div style="font-size:14px">${mesTxt(mes)} · ${r.hs.length} horas con lecturas · flotación ${fx(r.vc,3)} V/celda (${fx(r.vc == null ? null : r.vc*c,1)} V) · corriente de flotación ${fx(r.iFlot,2)} A${r.iMed ? ` (mediana de los ${r.mod}: ${fx(r.iMed,2)} A)` : ""}</div>
     ${r.hall.length || ev.length ? `<ul class="f" style="font-size:14px">${ev.map(e => `<li><span class="tag t-warn">⚡</span> ${esc(eventoTxt(e))}</li>`).join("")}${r.hall.map(h => `<li><span class="tag t-${h.est}">${ICON[h.est]}</span> ${esc(h.t)}</li>`).join("")}</ul>` : `<p class="muted">Sin hallazgos del cargador.</p>`}
     <div class="graf">
-      ${mini({pts, k:"v", titulo:"Voltaje del cargador por celda", unidad:"V/celda", dec:3, col:"var(--accent)", serie:"Mínimo de cada hora", lim:lv})}
-      ${mini({pts, k:"i", titulo:"Corriente del cargador", unidad:"A", dec:2, col:"var(--accent)", serie:"Máximo de cada hora"})}
+      ${mini({pts, k:"v", titulo:"Voltaje del cargador por celda", unidad:"V/celda", dec:3, col:"var(--accent)", serie:"Mínimo de cada hora", lim:lv, fd:t => fdia(t.slice(0,10))})}
+      ${mini({pts, k:"i", titulo:"Corriente del cargador", unidad:"A", dec:2, col:"var(--accent)", serie:"Máximo de cada hora", fd:t => fdia(t.slice(0,10))})}
     </div>`;
 }
 $("#banSel").onchange = () => { sel = $("#banSel").value; selBat = null; renderBanco(); };
@@ -864,7 +875,7 @@ $("#map").addEventListener("click", e => { const c = e.target.closest("[data-n]"
 $("#tabla").addEventListener("click", e => { const tr = e.target.closest("tr[data-n]"); if (!tr) return; selBat = +tr.dataset.n; renderBanco(); $("#bat").scrollIntoView({behavior:"smooth"}); });
 
 /* gráfica chica de una variable contra la referencia del banco, con límite y marcas de reemplazo */
-function mini({pts, k, titulo, unidad, dec, col, refTxt, lim, marcas=[], serie="Batería"}){
+function mini({pts, k, titulo, unidad, dec, col, refTxt, lim, marcas=[], serie="Batería", fd=fdia}){
   const p = pts.filter(x => x[k] != null);
   if (p.length < 2) return `<div><h4>${titulo}</h4><p class="muted" style="font-size:13px">Sin lecturas en el periodo.</p></div>`;
   const W = 360, H = 140, Lm = 44, R = 6, T = 10, Bm = 20;
@@ -883,7 +894,7 @@ function mini({pts, k, titulo, unidad, dec, col, refTxt, lim, marcas=[], serie="
       ${lims.map(l => `<line x1="${Lm}" x2="${W-R}" y1="${Y(l.v)}" y2="${Y(l.v)}" stroke="${l.col||"var(--bad)"}" stroke-dasharray="3 3"/><text x="${W-R}" y="${Y(l.v)-3}" text-anchor="end" font-size="11" fill="${l.col||"var(--bad)"}">${l.txt}</text>`).join("")}
       ${rf.length > 1 ? `<polyline fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4" points="${pl(p.filter(x => x.ref?.[k] != null), x => x.ref[k])}"/>` : ""}
       <polyline fill="none" stroke="${col}" stroke-width="2" points="${pl(p, x => x[k])}"/>
-      <text x="${Lm}" y="${H-4}" font-size="11" fill="var(--muted)">${fdia(p[0].t)}</text><text x="${W-R}" y="${H-4}" text-anchor="end" font-size="11" fill="var(--muted)">${fdia(p[p.length-1].t)}</text>
+      <text x="${Lm}" y="${H-4}" font-size="11" fill="var(--muted)">${fd(p[0].t)}</text><text x="${W-R}" y="${H-4}" text-anchor="end" font-size="11" fill="var(--muted)">${fd(p[p.length-1].t)}</text>
     </svg>
     <div class="ley"><span><i style="border-color:${col}"></i>${serie}</span>${refTxt && rf.length > 1 ? `<span><i style="border-color:var(--muted);border-top-style:dashed"></i>${refTxt}</span>` : ""}${lims.filter(l => l.ley).map(l => `<span><i style="border-color:${l.col||"var(--bad)"};border-top-style:dotted"></i>${l.ley}</span>`).join("")}${mk.length ? `<span style="color:var(--accent)">↻ reemplazo</span>` : ""}</div></div>`;
 }
