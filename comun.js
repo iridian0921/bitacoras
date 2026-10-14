@@ -426,7 +426,9 @@ const nuevoId = letra => letra + Date.now().toString(36) + Math.random().toStrin
 const SYNC_CFG = "bitacoras-sync";
 const leerLS = (k, def) => { try{ return {...def, ...JSON.parse(localStorage.getItem(k) || "{}")}; }catch{ return {...def}; } };
 const escribirLS = (k, v) => { try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} };
-const syncConfig = () => leerLS(SYNC_CFG, {url:"", clave:"", autor:""});
+/* autor, rol y captura los manda el script según la clave personal (no se escriben a mano). */
+const syncConfig = () => leerLS(SYNC_CFG, {url:"", clave:"", autor:"", rol:"", captura:true});
+const ROL_TXT = {admin:"administradora", captura:"captura", lectura:"solo lectura"};
 const blobAB64 = b => blobToDataURL(b).then(u => { if (!u) throw new Error("foto"); return u.slice(u.indexOf(",")+1); });
 const b64ABytes = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 const sinLocales = (o, ...k) => { const c = {...o}; k.forEach(x => delete c[x]); return c; };
@@ -455,6 +457,25 @@ function compartir(o){
   const guardarSt = () => escribirLS(KEY, st);
   let enCurso = null, otraVez = false, error = "";
   const activo = () => { const c = syncConfig(); return !!(c.url && c.clave); };
+  const puedeSubir = () => syncConfig().captura !== false;
+  /* Solo lectura: se ocultan los botones de guardar y queda una nota en su lugar. */
+  function aplicarModo(){
+    const lect = activo() && !puedeSubir();
+    document.body.classList.toggle("solo-lectura", lect);
+    ["#saveBtn", "#eqSave"].forEach(sel => {
+      const b = $(sel); if (!b) return;
+      let n = b.parentElement.querySelector(".nota-lectura");
+      if (!n){ n = document.createElement("span"); n.className = "nota-lectura muted"; n.textContent = "Tu usuario es de solo lectura: puedes consultar, pero no capturar."; b.after(n); }
+    });
+  }
+  /* El script dice quién eres en cada respuesta: si la administradora cambió tu acceso, se aplica aquí. */
+  function recordarUsuario(u){
+    if (!u || !activo()) return;
+    const c = syncConfig();
+    if (c.autor === u.nombre && c.rol === u.rol && c.captura === u.captura) return;
+    escribirLS(SYNC_CFG, {...c, autor:u.nombre, rol:u.rol, captura:u.captura});
+    aplicarModo(); pintarUsuario();
+  }
 
   o.fotos.remoto = async id => {
     const cfg = syncConfig(); if (!activo()) return null;
@@ -467,6 +488,7 @@ function compartir(o){
   };
 
   const pendientes = () => {
+    if (!puedeSubir()) return 0;
     let n = 0; for (const r of o.lecturas()) if (!r.srv || (r.foto && !r.fotoSrv)) n++;
     return n + st.borrar.length;
   };
@@ -481,7 +503,7 @@ function compartir(o){
     const pend = pendientes();
     const txt = enCurso ? "Sincronizando…"
       : error ? `${error}${pend ? ` ${pend} cambio(s) por subir.` : ""}`
-      : `Compartida con el equipo${st.ultima ? ", actualizada " + haceTxt(st.ultima) : ""}${pend ? ` · ${pend} por subir` : ""}`;
+      : `Compartida con el equipo${st.ultima ? ", actualizada " + haceTxt(st.ultima) : ""}${pend ? ` · ${pend} por subir` : ""}${puedeSubir() ? "" : " · solo lectura"}`;
     if (bar){ bar.textContent = "☁ " + txt; bar.classList.toggle("warn", !!error && !enCurso); bar.classList.remove("hidden"); }
     if (sts) estado(sts, txt, !!error && !enCurso);
   }
@@ -547,14 +569,16 @@ function compartir(o){
     if (st.url !== cfg.url) cambioDeHoja(cfg.url);
     // una vez: volver a leer toda la hoja para completar quién capturó las lecturas que ya estaban aquí
     if (!st.autores){ st.cursor = 0; st.autores = 1; }
-    let pend = o.lecturas().filter(r => !r.srv), primera = true;
+    const sube = cfg.captura !== false;
+    let pend = sube ? o.lecturas().filter(r => !r.srv) : [], primera = true;
     while (primera || pend.length){
       primera = false;
-      const lote = pend.slice(0, 100), borrar = st.borrar.slice(), borrarEq = st.borrarEq.slice();
-      const eqs = o.equipos ? o.equipos().filter(e => e.srvUpd === undefined || e.srvUpd !== (e.upd || 0)) : [];
+      const lote = pend.slice(0, 100), borrar = sube ? st.borrar.slice() : [], borrarEq = sube ? st.borrarEq.slice() : [];
+      const eqs = sube && o.equipos ? o.equipos().filter(e => e.srvUpd === undefined || e.srvUpd !== (e.upd || 0)) : [];
       const res = await llamarScript(cfg, {accion:"sync", bitacora:o.bitacora, desde:st.cursor, borrar, borrarEq,
-        subir: lote.map(r => ({id:r.id, autor:r.autor || cfg.autor, datos:sinLocales(r, "srv", "fotoSrv", "foto"), vista:o.fila(r)})),
-        equipos: eqs.map(e => ({id:e.id, autor:cfg.autor, datos:sinLocales(e, "srvUpd"), vista:o.filaEquipo(e)}))});
+        subir: lote.map(r => ({id:r.id, datos:sinLocales(r, "srv", "fotoSrv", "foto"), vista:o.fila(r)})),
+        equipos: eqs.map(e => ({id:e.id, datos:sinLocales(e, "srvUpd"), vista:o.filaEquipo(e)}))});
+      recordarUsuario(res.usuario);
       // las capturadas antes de conectar se suben con tu nombre: el teléfono se queda con el mismo
       lote.forEach(r => { r.srv = true; if (!r.autor && cfg.autor) r.autor = cfg.autor; });
       eqs.forEach(e => e.srvUpd = e.upd || 0);
@@ -567,6 +591,7 @@ function compartir(o){
       pend = pend.slice(100);
     }
     // fotos propias que aún no están en Drive
+    if (syncConfig().captura === false) return;
     for (const r of o.lecturas().filter(r => r.srv && r.foto && !r.fotoSrv)){
       const b = await o.fotos.getLocal(r.id); if (!b) continue;
       await llamarScript(cfg, {accion:"subirFoto", bitacora:o.bitacora, id:r.id, tipo:b.type || "image/jpeg", b64:await blobAB64(b)});
@@ -606,36 +631,73 @@ function compartir(o){
 
   /* Tarjeta de Ajustes */
   const card = $("#syncCard");
+  function pintarUsuario(){
+    const box = $("#syUsuario"); if (!box) return;
+    const c = syncConfig();
+    box.innerHTML = activo() && c.autor ? `Conectada como <b>${esc(c.autor)}</b> · ${esc(ROL_TXT[c.rol] || c.rol || "")}${c.captura === false && c.rol !== "lectura" ? " (captura deshabilitada)" : ""}` : "";
+    $("#syAdmin")?.classList.toggle("hidden", !(activo() && c.rol === "admin"));
+  }
+  /* Panel de la administradora: acceso y captura de cada persona (la administradora no se puede deshabilitar). */
+  async function usuarios(cambio){
+    const box = $("#syUsers"), sts = $("#syAdmSt");
+    estado(sts, cambio ? "Guardando…" : "Cargando…");
+    try{
+      const r = await llamarScript(syncConfig(), {accion: cambio ? "acceso" : "usuarios", bitacora:o.bitacora, ...(cambio || {})});
+      recordarUsuario(r.usuario);
+      box.innerHTML = `<table class="usuarios"><thead><tr><th>Persona</th><th>Rol base</th><th>Acceso</th><th>Captura</th></tr></thead><tbody>${r.usuarios.map(u => {
+        const adm = u.rol === "admin";
+        return `<tr><td><b>${esc(u.nombre)}</b></td><td>${esc(ROL_TXT[u.rol] || u.rol)}</td>
+          <td><label><input type="checkbox" data-u="${esc(u.nombre)}" data-k="activo"${u.activo ? " checked" : ""}${adm ? " disabled" : ""}> ${u.activo ? "Habilitado" : "Deshabilitado"}</label></td>
+          <td><label><input type="checkbox" data-u="${esc(u.nombre)}" data-k="captura"${u.captura ? " checked" : ""}${adm || !u.activo ? " disabled" : ""}> ${u.captura ? "Puede capturar" : "Solo ve"}</label></td></tr>`; }).join("")}</tbody></table>`;
+      estado(sts, cambio ? "Guardado. Se aplica en su siguiente sincronización." : "");
+    }catch(e){ estado(sts, e.message, true); }
+  }
   if (card){
     const c = syncConfig();
     card.innerHTML = `<p class="muted" style="margin-top:0">Sube tus lecturas a la hoja de Google Sheets del equipo y recibe las de los demás. Sin señal se guardan aquí y se suben cuando vuelve. La configuración aplica a todas las bitácoras.</p>
       <div class="campos">
         <label for="syUrl">Dirección del script (termina en /exec)</label><input class="plain" id="syUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(c.url)}">
-        <label for="syClave">Clave del equipo</label><input class="plain" id="syClave" type="password" autocomplete="off" value="${esc(c.clave)}">
-        <label for="syAutor">Tu nombre (aparece en la hoja como quien capturó)</label><input class="plain" id="syAutor" autocomplete="name" placeholder="Ej. Iridian J." value="${esc(c.autor)}">
+        <label for="syClave">Tu clave personal (te la da la administradora)</label><input class="plain" id="syClave" type="password" autocomplete="off" value="${esc(c.clave)}">
       </div>
+      <p class="muted" id="syUsuario" style="margin:8px 0 0"></p>
       <div class="row" style="margin-top:12px">
         <button class="btn" id="sySave">Conectar y sincronizar</button>
         <button class="btn sec" id="syOff">Desconectar</button>
       </div>
-      <div class="status" id="syStatus"></div>`;
+      <div class="status" id="syStatus"></div>
+      <div id="syAdmin" class="hidden" style="margin-top:14px;border-top:1px solid var(--line);padding-top:10px">
+        <h3 style="margin:0 0 6px">Usuarios</h3>
+        <p class="muted" style="margin:0 0 8px">Habilita o deshabilita el acceso y la captura de cada persona. Tú siempre tienes acceso. Los cambios se aplican en su siguiente sincronización; lo que ya tengan en su teléfono no se borra.</p>
+        <div class="row"><button class="btn sec" id="syVer">Ver usuarios</button><button class="btn sec" id="syTodosNo">Deshabilitar a todos</button><button class="btn sec" id="syTodosSi">Habilitar a todos</button></div>
+        <div class="tbl-wrap" id="syUsers" style="margin-top:8px"></div>
+        <div class="status" id="syAdmSt"></div>
+      </div>`;
     $("#sySave").onclick = async () => {
-      const nueva = {url:$("#syUrl").value.trim(), clave:$("#syClave").value.trim(), autor:$("#syAutor").value.trim()};
+      const nueva = {url:$("#syUrl").value.trim(), clave:$("#syClave").value.trim()};
       const sts = $("#syStatus");
       if (!/^https:\/\/script\.google(usercontent)?\.com\/.+/.test(nueva.url) && !/^http:\/\/localhost[:/]/.test(nueva.url)){ estado(sts, "La dirección debe ser la de la implementación del script: https://script.google.com/macros/s/…/exec", true); return; }
-      if (!nueva.clave || !nueva.autor){ estado(sts, "Escribe la clave del equipo y tu nombre.", true); return; }
+      if (!nueva.clave){ estado(sts, "Escribe tu clave personal.", true); return; }
       estado(sts, "Probando la conexión…"); $("#sySave").disabled = true;
-      try{ await llamarScript(nueva, {accion:"ping", bitacora:o.bitacora}); }
+      let r;
+      try{ r = await llamarScript(nueva, {accion:"ping", bitacora:o.bitacora}); }
       catch(e){ estado(sts, e.message, true); $("#sySave").disabled = false; return; }
-      escribirLS(SYNC_CFG, nueva); error = "";
+      const u = r.usuario || {};
+      escribirLS(SYNC_CFG, {...nueva, autor:u.nombre || "", rol:u.rol || "", captura:u.captura !== false}); error = "";
       $("#sySave").disabled = false;
+      aplicarModo(); pintarUsuario();
       await sincronizar();
     };
     $("#syOff").onclick = () => {
       if (!activo() || !confirm("¿Dejar de compartir en este teléfono? Las lecturas guardadas aquí no se borran.")) return;
-      escribirLS(SYNC_CFG, {...syncConfig(), url:"", clave:""}); $("#syUrl").value = ""; $("#syClave").value = ""; estadoUI();
+      escribirLS(SYNC_CFG, {...syncConfig(), url:"", clave:""}); $("#syUrl").value = ""; $("#syClave").value = ""; aplicarModo(); pintarUsuario(); estadoUI();
     };
+    $("#syVer").onclick = () => usuarios();
+    $("#syTodosNo").onclick = () => { if (confirm("¿Deshabilitar el acceso de todos menos el tuyo?")) usuarios({nombre:"*", activo:false}); };
+    $("#syTodosSi").onclick = () => usuarios({nombre:"*", activo:true});
+    $("#syUsers").addEventListener("change", e => { const x = e.target.closest("input[data-u]"); if (x) usuarios({nombre:x.dataset.u, [x.dataset.k]:x.checked}); });
+    pintarUsuario();
   }
+  aplicarModo();
   $("#syncBar")?.addEventListener("click", () => { error = ""; sincronizar(); });
 
   addEventListener("online", () => sincronizar());

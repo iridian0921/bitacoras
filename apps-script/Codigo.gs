@@ -5,7 +5,44 @@
    (rev, id, datos) las usa la app: no las edites ni las borres. Para borrar una lectura,
    hazlo desde la app (Historial → Borrar) para que el borrado llegue a todos los teléfonos. */
 
-const CLAVE = "CAMBIA_ESTA_CLAVE";   // la clave del equipo: escribe la misma en la app
+/* ===== usuarios =====
+   Cada persona tiene su propia clave; la escribe en la app (Ajustes → Compartir con el equipo).
+   La hoja registra como "Capturó" el nombre de este cuadro, no lo que cada quien escriba en su teléfono.
+   rol: "admin"   = siempre tiene acceso y desde la app habilita o deshabilita a los demás.
+        "captura" = ve y sube lecturas.
+        "lectura" = solo ve: el script rechaza todo lo que intente subir o borrar.
+   El rol es el punto de partida: la administradora puede habilitar o deshabilitar el acceso y la captura
+   de cada persona desde la app, sin tocar el script.
+   Claves: largas y distintas (puedes generarlas con la función generarClaves de abajo).
+   Para quitarle el acceso a alguien al instante, hazlo desde la app; para sacarlo para siempre,
+   borra su renglón o cámbiale la clave y vuelve a implementar. */
+const USUARIOS = [
+  {nombre:"Iridian", clave:"CAMBIA_CLAVE_IRIDIAN", rol:"admin"},
+  {nombre:"Gerardo", clave:"CAMBIA_CLAVE_GERARDO", rol:"lectura"},
+  {nombre:"Diana",   clave:"CAMBIA_CLAVE_DIANA",   rol:"captura"},
+  {nombre:"Jorge",   clave:"CAMBIA_CLAVE_JORGE",   rol:"captura"},
+  {nombre:"Manuel",  clave:"CAMBIA_CLAVE_MANUEL",  rol:"captura"}
+];
+
+/* Ejecútala una vez desde el editor (botón Ejecutar) y copia las claves del registro de ejecución al cuadro de arriba. */
+function generarClaves(){
+  USUARIOS.forEach(u => Logger.log(u.nombre + ": " + Utilities.getUuid().replace(/-/g, "").slice(0, 16)));
+}
+
+/* Lo que el administrador cambia desde la app se guarda en las propiedades del script:
+   {nombre: {activo:bool, captura:bool}}. Sin cambio, cada quien queda activo y captura según su rol. */
+function permisos(){
+  try{ return JSON.parse(PropertiesService.getScriptProperties().getProperty("permisos") || "{}"); }catch(err){ return {}; }
+}
+function estadoDe(u, P){
+  const x = (P || permisos())[u.nombre] || {};
+  if (u.rol === "admin") return {nombre:u.nombre, rol:u.rol, activo:true, captura:true};
+  return {nombre:u.nombre, rol:u.rol, activo:x.activo !== false, captura:typeof x.captura === "boolean" ? x.captura : u.rol === "captura"};
+}
+function usuarioDe(clave){
+  if (typeof clave !== "string" || clave.length < 8 || /^CAMBIA_CLAVE_/.test(clave)) return null;
+  return USUARIOS.find(u => u.clave === clave) || null;
+}
 
 const HOJAS = {
   ups: {nombre:"UPS", vista:["Fecha","Rama","Equipo","kW","kVA","Estado","Nota"]},
@@ -28,22 +65,47 @@ function doGet(){
 function doPost(e){
   let p;
   try{ p = JSON.parse(e.postData.contents); }catch(err){ return json({ok:false, error:"Solicitud inválida."}); }
-  if (CLAVE === "CAMBIA_ESTA_CLAVE") return json({ok:false, error:"Falta cambiar la CLAVE en el script (línea 8) y volver a implementar."});
-  if (p.clave !== CLAVE) return json({ok:false, error:"La clave del equipo no coincide."});
+  if (USUARIOS.every(u => /^CAMBIA_CLAVE_/.test(u.clave))) return json({ok:false, error:"Falta poner las claves de los usuarios en el script y volver a implementar."});
+  const u = usuarioDe(p.clave);
+  if (!u){ Utilities.sleep(1500); return json({ok:false, error:"Esa clave no está registrada. Pide tu clave personal a la administradora."}); }
+  const yo = estadoDe(u);
+  if (!yo.activo) return json({ok:false, error:"Tu acceso está deshabilitado. Pide a la administradora que lo habilite.", usuario:yo});
   if (!POR_BITACORA[p.bitacora]) return json({ok:false, error:"Bitácora desconocida."});
+  const conUsuario = o => json(Object.assign(o, {usuario:yo}));
   try{
-    if (p.accion === "ping") return json({ok:true});
-    if (p.accion === "foto") return json(foto(p));
+    if (p.accion === "ping") return conUsuario({ok:true});
+    if (p.accion === "foto") return conUsuario(foto(p));
+    if (p.accion === "usuarios" || p.accion === "acceso"){
+      if (yo.rol !== "admin") return json({ok:false, error:"Solo la administradora puede cambiar los accesos."});
+      if (p.accion === "acceso") cambiarAcceso(p);
+      const P = permisos();
+      return conUsuario({ok:true, usuarios:USUARIOS.map(x => estadoDe(x, P))});
+    }
+    // solo lectura: nada se sube ni se borra
+    if (!yo.captura && (p.accion === "subirFoto" || (p.subir || []).length || (p.borrar || []).length || (p.equipos || []).length || (p.borrarEq || []).length))
+      return json({ok:false, error:"Tu usuario es de solo lectura: no puede subir ni borrar.", usuario:yo});
     const lock = LockService.getScriptLock();
     lock.waitLock(30000);
     try{
-      if (p.accion === "sync") return json(sync(p));
-      if (p.accion === "subirFoto") return json(subirFoto(p));
+      if (p.accion === "sync") return conUsuario(sync(p, u.nombre));
+      if (p.accion === "subirFoto") return conUsuario(subirFoto(p));
     }finally{ lock.releaseLock(); }
     return json({ok:false, error:"Acción desconocida."});
   }catch(err){
     return json({ok:false, error:"Error en el script: " + (err && err.message || err)});
   }
+}
+
+/* p.nombre: a quién (o "*" para todos menos la administradora); p.activo / p.captura: true o false. */
+function cambiarAcceso(p){
+  const P = permisos(), quienes = p.nombre === "*" ? USUARIOS.filter(x => x.rol !== "admin") : USUARIOS.filter(x => x.nombre === p.nombre && x.rol !== "admin");
+  quienes.forEach(x => {
+    const e = P[x.nombre] || {};
+    if (typeof p.activo === "boolean") e.activo = p.activo;
+    if (typeof p.captura === "boolean") e.captura = p.captura;
+    P[x.nombre] = e;
+  });
+  PropertiesService.getScriptProperties().setProperty("permisos", JSON.stringify(P));
 }
 
 function json(o){ return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
@@ -104,7 +166,7 @@ function vista(it){
 /* ===== sincronización =====
    rev es un contador global: cada renglón nuevo o cambiado recibe el siguiente número,
    y cada teléfono pide "lo que cambió desde el último rev que vi". */
-function sync(p){
+function sync(p, autor){
   const props = PropertiesService.getScriptProperties();
   let rev = Number(props.getProperty("rev") || 0);
   const ahora = new Date(), remap = {};
@@ -124,13 +186,13 @@ function sync(p){
         const tag = String(d.tag || "").trim().toLowerCase(), j = porTag.get(tag);
         if (j !== undefined){ remap[it.id] = String(E.filas[j][E.col.id]); return; }   // ya registrado por otra persona
         rev++;
-        nuevos.push(Object.assign(vista(it), {"Capturó":it.autor || "", Guardado:ahora, rev, id:it.id, datos:JSON.stringify(d)}));
+        nuevos.push(Object.assign(vista(it), {"Capturó":autor, Guardado:ahora, rev, id:it.id, datos:JSON.stringify(d)}));
         E.porId.set(it.id, -1); porTag.set(tag, -1);
       } else if (i >= 0 && !E.filas[i][E.col.Borrado]){
         let prev = {}; try{ prev = JSON.parse(E.filas[i][E.col.datos] || "{}"); }catch(err){}
         if ((d.upd || 0) > (prev.upd || 0)){
           rev++;
-          actualizar(E, i, Object.assign(vista(it), {"Capturó":it.autor || "", Guardado:ahora, rev, datos:JSON.stringify(d)}));
+          actualizar(E, i, Object.assign(vista(it), {"Capturó":autor, Guardado:ahora, rev, datos:JSON.stringify(d)}));
         }
       }
     });
@@ -148,7 +210,7 @@ function sync(p){
     const d = it.datos;
     if (d.eq && remap[d.eq]) d.eq = remap[d.eq];
     rev++;
-    nuevas.push(Object.assign(vista(it), {"Capturó":it.autor || "", Guardado:ahora, rev, id:it.id, datos:JSON.stringify(d)}));
+    nuevas.push(Object.assign(vista(it), {"Capturó":autor, Guardado:ahora, rev, id:it.id, datos:JSON.stringify(d)}));
     H.porId.set(it.id, -1);
   });
   agregar(H, nuevas);

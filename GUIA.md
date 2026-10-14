@@ -50,7 +50,7 @@ Si solo tienes CSV exportados de la bitácora de UPS: **Ajustes → Importar CSV
 ## 7. Publicar una actualización
 
 1. Sube los archivos nuevos al repositorio (Add file → Upload files, reemplazan a los anteriores).
-2. En `sw.js` cambia el número de `const VERSION = "bitacoras-v30";` por el siguiente (`"bitacoras-v31"`, y así sucesivamente). Sin este cambio, los teléfonos seguirán usando la copia guardada.
+2. En `sw.js` cambia el número de `const VERSION = "bitacoras-v31";` por el siguiente (`"bitacoras-v32"`, y así sucesivamente). Sin este cambio, los teléfonos seguirán usando la copia guardada.
 3. En el teléfono, abre la app con internet. Cuando termine de descargar la versión nueva aparece abajo el aviso **"Hay una versión nueva de la app"**: toca **Actualizar**. Tus datos no se tocan. La pantalla de inicio muestra la versión instalada.
 4. Si el teléfono se queda con una versión vieja, abre en Chrome `https://tuusuario.github.io/bitacoras/reparar.html` y toca **Reparar ahora** (también está el botón **Reparar actualización** en la pantalla de inicio). Vuelve a descargar el programa sin borrar lecturas, fotos ni ajustes. Esa página siempre se baja del servidor, aunque la copia del teléfono esté atorada, y muestra un diagnóstico que puedes copiar.
 
@@ -63,8 +63,11 @@ Cada persona captura en su teléfono como siempre. Cuando hay señal, la app sub
 1. En Google Drive crea una hoja de cálculo nueva, por ejemplo "Bitácoras del sitio".
 2. En la hoja: **Extensiones → Apps Script**.
 3. Borra lo que aparece y pega todo el contenido del archivo `apps-script/Codigo.gs` de este repositorio.
-4. En la línea `const CLAVE = "CAMBIA_ESTA_CLAVE";` escribe una clave para el equipo, por ejemplo `const CLAVE = "sala-electrica-2026";`. Es la que escribirá cada persona en la app.
-5. Presiona **Guardar** (ícono de disco).
+4. **Claves personales.** Arriba del script está el cuadro `USUARIOS` (Iridian administradora; Gerardo solo lectura; Diana, Jorge y Manuel captura). Cada persona necesita su propia clave:
+   - Presiona **Guardar** (ícono de disco), elige la función **generarClaves** en la lista de arriba y toca **Ejecutar**. En el **Registro de ejecución** aparecen 5 claves de 16 caracteres.
+   - Copia cada una en su renglón, en lugar de `CAMBIA_CLAVE_…`. No reutilices claves ni uses palabras fáciles.
+   - Entrégale a cada quien **solo la suya**, en persona o por mensaje directo (no en un grupo).
+5. Presiona **Guardar** otra vez.
 6. Arriba a la derecha: **Implementar → Nueva implementación**. En el engrane elige **Aplicación web** y llena:
    - Descripción: `Bitácoras`
    - Ejecutar como: **Yo**
@@ -76,7 +79,7 @@ Las pestañas **UPS**, **Interruptores**, **Equipos interruptores**, **Calidad d
 
 ### Conectar cada teléfono
 
-En cualquiera de las bitácoras: **Ajustes → Compartir con el equipo**. Pega la dirección del script, escribe la clave y tu nombre, y toca **Conectar y sincronizar**. Basta hacerlo en una bitácora: la configuración aplica a todas.
+En cualquiera de las bitácoras: **Ajustes → Compartir con el equipo**. Pega la dirección del script, escribe **tu clave personal** y toca **Conectar y sincronizar**. Abajo aparece «Conectada como …» con tu nombre y tu rol: el nombre lo pone el script según la clave, así nadie puede capturar a nombre de otra persona. Basta hacerlo en una bitácora: la configuración aplica a todas.
 
 La primera vez se suben todas las lecturas que ya tenías en el teléfono. Arriba de cada bitácora aparece la barra ☁ con el estado. Tócala para sincronizar en ese momento.
 
@@ -92,15 +95,25 @@ La primera vez se suben todas las lecturas que ya tenías en el teléfono. Arrib
 
 ### Si una bitácora dice que el script es de una versión anterior
 
-La hoja necesita el `Codigo.gs` actualizado (agrega las pestañas de calidad de energía y de baterías). Copia el archivo nuevo completo, conserva tu línea `const CLAVE = ...` y publícalo como se explica abajo. Las lecturas que ya están en la hoja no se tocan.
+La hoja necesita el `Codigo.gs` actualizado. Copia el archivo nuevo completo, vuelve a poner las claves del cuadro `USUARIOS` y publícalo como se explica abajo. Las lecturas que ya están en la hoja no se tocan.
 
 ### Si cambias el script
 
 Después de editar `Codigo.gs`: **Implementar → Administrar implementaciones → ✏️ → Versión: Nueva versión → Implementar**. Así la dirección no cambia. Si creas una implementación nueva, la dirección cambia y hay que pegarla otra vez en cada teléfono.
 
+### Usuarios y permisos
+
+- **Administradora (Iridian):** siempre tiene acceso. En **Ajustes → Compartir con el equipo → Usuarios → Ver usuarios** habilita o deshabilita el **acceso** y la **captura** de cada persona, o de todos a la vez («Deshabilitar a todos» / «Habilitar a todos»). No se necesita tocar el script; el cambio se aplica en la siguiente sincronización de esa persona.
+- **Captura:** ve y sube lecturas, fotos, equipos y borrados.
+- **Solo lectura (Gerardo):** ve todo lo del equipo, pero en su app no aparecen los botones de guardar y el script rechaza cualquier intento de subir o borrar. La administradora puede habilitarle la captura desde el mismo panel.
+- **Deshabilitado:** el script ya no le responde. Lo que tenga en su teléfono no se borra, pero ya no recibe ni envía nada.
+
 ### Seguridad
 
-Cualquiera con la dirección **y** la clave puede leer y escribir en la hoja. Compártelas solo con el equipo. Si la clave se filtra, cámbiala en el script, publica una nueva versión y actualízala en los teléfonos.
+- **Una clave por persona.** Si una clave se filtra o alguien deja el equipo: deshabilítalo desde el panel (inmediato) y después cámbiale la clave en el script o borra su renglón, y publica una nueva versión.
+- **La hoja y la carpeta de fotos no se comparten.** El script entra con tu cuenta; nadie más necesita acceso directo. En Drive, **Compartir** en la hoja «Bitácoras del sitio» y en la carpeta «Bitácoras - fotos» debe mostrar solo a ti (y, si quieres, a quien deba revisar la hoja). «Acceso general» debe decir **Restringido**, no «Cualquier persona con el vínculo».
+- **La dirección del script** (`/exec`) sola no da acceso: sin una clave registrada el script no responde datos.
+- **El programa** (las páginas de la app) está publicado en GitHub Pages y es visible para quien tenga la dirección, pero no contiene lecturas: esas viven en cada teléfono y en tu hoja.
 
 ## Notas
 
