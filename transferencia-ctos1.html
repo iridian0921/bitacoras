@@ -163,7 +163,7 @@ body.scroll .ttl{white-space:normal;flex-wrap:wrap}
 body.scroll .hintbar{display:block}
 </style>
 </head>
-<body class="fit">
+<body class="scroll">
 <div class="shell">
 
 <!-- ================= ENCABEZADO ================= -->
@@ -964,8 +964,10 @@ var u=1;
 function setU(v){u=clamp(v,0.72,1.25);document.documentElement.style.setProperty("--u",u.toFixed(2));checkFit();}
 $("zIn").addEventListener("click",function(){setU(u+0.06);});
 $("zOut").addEventListener("click",function(){setU(u-0.06);});
+/* Arranca en columna y decide con el ancho real de la pantalla: en el teléfono la vista completa es más ancha que la
+   pantalla y el navegador agranda innerWidth para que quepa (1164 px), así que innerWidth solo no sirve. */
 function checkFit(){
-  var w=window.innerWidth,h=window.innerHeight;
+  var w=Math.min(document.documentElement.clientWidth||window.innerWidth,(window.screen&&screen.width)||Infinity),h=window.innerHeight;
   var ok=(w>=1080&&h>=600);
   document.body.className=ok?"fit":"scroll";
   var s=Math.round(126*u);
@@ -975,6 +977,8 @@ window.addEventListener("resize",checkFit);
 // ajuste automático inicial para pantallas cortas
 (function(){
   var h=window.innerHeight;
+  checkFit();
+  if(document.body.className!=="fit")return;      // en teléfono no se achica la letra
   if(h<760&&h>=600)setU(0.9);
   else if(h<860&&h>=760)setU(0.95);
   else checkFit();
