@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<!--
+  Tablero de sincronización · generador 1500 kW / 480 V
+  Versión adaptable para PC y teléfono
+  Autor: Iridian Jiménez Jiménez · Técnico Electromecánico
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="author" content="Iridian Jiménez Jiménez">
+<title>Tablero de sincronización · Generador 1500 kW / 480 V</title>
+<style>
+:root{
+  --panel:#39423f;--panel-2:#2c3431;--bezel:#171c1a;--dial:#e9e3d3;--ink:#20241f;
+  --needle:#b8332a;--grid-c:#2f7fbf;--gen-c:#e0922b;
+  --ok:#4e9c53;--warn:#d6a028;--bad:#b8332a;--engrave:#cfd6cf;
+  --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --cond:"Roboto Condensed","Arial Narrow",Inter,system-ui,sans-serif;
+  --pad:14px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+html,body{margin:0;padding:0;overflow-x:hidden}
+body{
+  background:radial-gradient(120% 80% at 50% 0%,#4a5450 0%,#242b28 70%,#1a201d 100%);
+  background-attachment:fixed;
+  color:var(--engrave);font-family:var(--cond);font-size:16px;line-height:1.45;
+  padding:var(--pad);
+  padding-top:calc(var(--pad) + env(safe-area-inset-top,0px));
+  padding-bottom:calc(var(--pad) + env(safe-area-inset-bottom,0px));
+}
+.wrap{max-width:1280px;margin:0 auto}
+
+/* ---------- encabezado ---------- */
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+h1{font-size:clamp(1.15rem,4.4vw,1.75rem);font-weight:700;margin:0 0 2px;color:#f0f2ec}
+.sub{margin:0;color:#9fa9a2;font-size:.86rem}
+.by{margin:3px 0 0;color:#d9a441;font-size:.8rem}
+.viewtog{display:flex;gap:5px}
+.viewtog button{background:#222825;color:#c6cec5;border:1px solid #0d100e;padding:8px 12px;border-radius:4px;
+  font-family:var(--cond);font-size:.8rem;cursor:pointer;min-height:40px}
+.viewtog button[aria-pressed=true]{background:#d9a441;color:#1b1f1c;font-weight:700;border-color:#8a6620}
+
+/* ---------- paneles ---------- */
+.panel{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid #11150f;border-radius:6px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 6px 18px rgba(0,0,0,.45);padding:12px;margin-bottom:12px}
+.plate{display:inline-block;background:#11150f;color:#d7dcd4;font-size:.66rem;letter-spacing:.14em;
+  text-transform:uppercase;padding:3px 9px;border-radius:2px;border:1px solid #000;margin-bottom:9px}
+
+.banner{padding:10px 12px;border-radius:4px;margin-bottom:12px;font-size:.88rem;border-left:5px solid;background:#1e2320}
+.banner.ok{border-color:var(--ok);color:#a9dcac}
+.banner.bad{border-color:var(--bad);color:#efa79f}
+.banner.warn{border-color:var(--warn);color:#e6cd93}
+
+/* ---------- disposición ---------- */
+.layout{display:grid;gap:12px;align-items:start}
+body.pc .layout{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)}
+body.movil .layout{grid-template-columns:1fr}
+.layout>.panel{margin-bottom:0}
+
+/* instrumento fijo en teléfono */
+body.movil .instr{
+  position:sticky;top:calc(env(safe-area-inset-top,0px));z-index:20;
+  box-shadow:0 8px 20px rgba(0,0,0,.6);
+}
+.instr .plate{margin-bottom:6px}
+
+/* ---------- medidores ---------- */
+.meters{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+@media(max-width:400px){.meters{grid-template-columns:1fr}}
+.meter{background:var(--dial);border-radius:4px;border:3px solid var(--bezel);padding:8px 9px;color:var(--ink)}
+.meter h3{margin:0 0 5px;font-size:.68rem;letter-spacing:.11em;text-transform:uppercase;color:#5a6055;
+  border-bottom:1px solid #bdb8a5;padding-bottom:3px;font-weight:700}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.row+.row{margin-top:3px}
+.row span:first-child{font-size:.8rem;color:#5a6055}
+.val{font-family:var(--mono);font-size:1.08rem;font-weight:600;letter-spacing:-.02em}
+.val small{font-size:.6rem;font-weight:400;color:#6d7367;margin-left:2px}
+.val.hi{color:var(--bad)}.val.gd{color:#2f6b33}
+
+/* ---------- sincronoscopio ---------- */
+.scope{background:var(--bezel);border-radius:8px;padding:8px;border:1px solid #000}
+canvas{display:block;width:100%;height:auto}
+#syn{max-width:340px;margin:0 auto}
+body.movil #syn{max-width:min(46vh,270px)}
+
+.deltas{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.dbox{background:var(--dial);border:2px solid var(--bezel);border-radius:4px;padding:4px 5px;text-align:center;color:var(--ink)}
+.dbox i{display:block;font-style:normal;font-size:.63rem;letter-spacing:.08em;text-transform:uppercase;color:#5a6055}
+.dbox b{font-family:var(--mono);font-size:1rem;font-weight:700}
+.dbox b.hi{color:var(--bad)}.dbox b.gd{color:#2f6b33}
+
+/* ---------- condiciones ---------- */
+ul.check{list-style:none;margin:8px 0 0;padding:0}
+ul.check li{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px dashed #4b544f;font-size:.86rem}
+ul.check li:last-child{border-bottom:0}
+.dot{width:12px;height:12px;border-radius:50%;flex:0 0 auto;background:#5a635d}
+.dot.ok{background:var(--ok);box-shadow:0 0 7px var(--ok)}
+.dot.bad{background:var(--bad);box-shadow:0 0 7px var(--bad)}
+.li-val{margin-left:auto;font-family:var(--mono);font-size:.8rem;color:#e7ece5}
+.chips{display:flex;gap:5px;margin-top:7px}
+.chip{flex:1;text-align:center;font-size:.64rem;letter-spacing:.06em;text-transform:uppercase;
+  padding:4px 2px;border-radius:3px;background:#242b28;color:#79837b;border:1px solid #1a201d}
+.chip.ok{background:#1f3a22;color:#8fd894;border-color:#2c5330}
+.chip.bad{background:#3a1a16;color:#ef9d93;border-color:#5a251e}
+
+/* ---------- lámparas ---------- */
+.lamps{display:flex;justify-content:space-around;gap:10px}
+.lamp{text-align:center;flex:1}
+.bulb{width:100%;max-width:56px;aspect-ratio:1;margin:0 auto;border-radius:50%;
+  background:#2a2f27;border:3px solid var(--bezel);box-shadow:inset 0 2px 5px rgba(0,0,0,.8)}
+.lamp b{display:block;font-size:.72rem;margin-top:5px;color:#a9b2aa;font-weight:600}
+
+/* ---------- controles ---------- */
+.ctrl{margin-bottom:13px}
+.ctrl label{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  font-size:.85rem;margin-bottom:4px;color:#c8d0c7}
+.ctrl label b{font-family:var(--mono);color:#fff;font-weight:600;white-space:nowrap}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;background:transparent;height:40px;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:9px;border-radius:5px;background:#1b211e;border:1px solid #000}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:32px;height:32px;margin-top:-12px;
+  border-radius:50%;border:2px solid #0d100e;background:radial-gradient(circle at 35% 30%,#ffe37a,#d9a441);
+  box-shadow:0 2px 4px rgba(0,0,0,.5)}
+input[type=range]::-moz-range-track{height:9px;border-radius:5px;background:#1b211e;border:1px solid #000}
+input[type=range]::-moz-range-thumb{width:30px;height:30px;border-radius:50%;border:2px solid #0d100e;
+  background:radial-gradient(circle at 35% 30%,#ffe37a,#d9a441)}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1;min-width:120px;min-height:46px;background:#222825;color:#c6cec5;border:1px solid #0d100e;
+  padding:9px 6px;border-radius:4px;font-family:var(--cond);font-size:.84rem;cursor:pointer}
+.seg button[aria-pressed=true]{background:#d9a441;color:#1b1f1c;border-color:#8a6620;font-weight:700}
+.seg.sm{margin-bottom:6px}
+.seg.sm button{min-width:76px;min-height:40px;font-size:.8rem;padding:7px 4px}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
+.big{padding:16px 10px;min-height:56px;border-radius:5px;border:2px solid #0d100e;cursor:pointer;
+  font-family:var(--cond);font-size:1rem;font-weight:700;letter-spacing:.04em}
+.big.close{background:#2c7a35;color:#f2fff1;box-shadow:inset 0 2px 0 rgba(255,255,255,.25),0 3px 0 #14401a}
+.big.open{background:var(--bad);color:#fff3f2;box-shadow:inset 0 2px 0 rgba(255,255,255,.22),0 3px 0 #6b1c16}
+.big:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+.big:active:not(:disabled){transform:translateY(2px);box-shadow:none}
+button:focus-visible,input:focus-visible{outline:2px solid #7fc1ff;outline-offset:2px}
+
+/* barra de acción fija en teléfono */
+body.movil .actbar{position:sticky;bottom:calc(env(safe-area-inset-bottom,0px));z-index:15;
+  background:linear-gradient(180deg,rgba(44,52,49,.92),rgba(35,42,39,.98));
+  border:1px solid #11150f;border-radius:6px;padding:8px;margin-top:10px;
+  backdrop-filter:blur(3px);box-shadow:0 -6px 18px rgba(0,0,0,.5)}
+body.pc .actbar{margin-top:10px}
+
+/* ---------- bitácora ---------- */
+#log{font-family:var(--mono);font-size:.76rem;line-height:1.45;background:#12100c;border:1px solid #000;
+  border-radius:4px;padding:9px;height:132px;overflow-y:auto;overscroll-behavior:contain;color:#b7c2b6}
+#log p{margin:0 0 3px;word-break:break-word}
+#log .t{color:#6f7a6e}
+.e-ok{color:#79c97f}.e-bad{color:#e06a5f}.e-warn{color:#e0b24c}
+
+/* ---------- teoría ---------- */
+details{border-top:1px solid #48524c;padding-top:10px;margin-top:4px}
+summary{cursor:pointer;font-weight:700;color:#e2e8df;font-size:.94rem;padding:8px 0;min-height:40px}
+details p,details li{font-size:.88rem;color:#b8c1b8;max-width:70ch}
+details h4{margin:13px 0 4px;color:#e9c877;font-size:.89rem}
+code{font-family:var(--mono);font-size:.85em;background:#171c19;padding:1px 5px;border-radius:3px;color:#e3c68a}
+footer{text-align:center;color:#8f9a8e;font-size:.78rem;padding:4px 0 10px}
+footer b{color:#d9a441;font-weight:600}
+
+.shake{animation:sh .45s}
+@keyframes sh{0%,100%{transform:translateX(0)}15%{transform:translateX(-8px)}
+  35%{transform:translateX(7px)}55%{transform:translateX(-5px)}75%{transform:translateX(3px)}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body class="pc">
+<div class="wrap">
+
+<header>
+  <div>
+    <a href="index.html" style="color:#d9a441;font-size:.85rem;text-decoration:none">← Bitácoras</a>
+    <h1>Tablero de sincronización</h1>
+    <p class="sub">Generador de emergencia 1500 kW · 480 V · 4 polos · 1800 rpm — acoplamiento en paralelo con la red</p>
+    <p class="by">Autor: Iridian Jiménez Jiménez · Técnico Electromecánico</p>
+  </div>
+  <div class="viewtog">
+    <button id="vAuto" aria-pressed="true">Auto</button>
+    <button id="vPC" aria-pressed="false">PC</button>
+    <button id="vMov" aria-pressed="false">Teléfono</button>
+  </div>
+</header>
+
+<div id="banner" class="banner warn">Iguala tensión y frecuencia, espera a que la aguja pase por la zona verde y cierra el interruptor.</div>
+
+<div class="layout">
+
+  <!-- INSTRUMENTO PRINCIPAL -->
+  <section class="panel instr" id="panelTop">
+    <span class="plate">Sincronoscopio</span>
+    <div class="scope"><canvas id="syn" width="340" height="340"></canvas></div>
+    <div class="deltas">
+      <div class="dbox"><i>Δf</i><b id="dF">0.00</b></div>
+      <div class="dbox"><i>ΔV</i><b id="dV">0</b></div>
+      <div class="dbox"><i>δ</i><b id="dA">0°</b></div>
+    </div>
+    <div class="chips">
+      <span class="chip" id="k1">Secuencia</span>
+      <span class="chip" id="k2">Tensión</span>
+      <span class="chip" id="k3">Frecuencia</span>
+      <span class="chip" id="k4">Ángulo</span>
+    </div>
+  </section>
+
+  <!-- MEDICIÓN Y LÁMPARAS -->
+  <section class="panel">
+    <span class="plate">Medición</span>
+    <div class="meters">
+      <div class="meter">
+        <h3>Red (barra)</h3>
+        <div class="row"><span>Tensión</span><b class="val" id="vRed">480<small>V</small></b></div>
+        <div class="row"><span>Frecuencia</span><b class="val" id="fRed">60.00<small>Hz</small></b></div>
+        <div class="row"><span>Secuencia</span><b class="val" id="sRed">A-B-C</b></div>
+      </div>
+      <div class="meter">
+        <h3>Generador</h3>
+        <div class="row"><span>Tensión</span><b class="val" id="vGen">480<small>V</small></b></div>
+        <div class="row"><span>Frecuencia</span><b class="val" id="fGen">60.00<small>Hz</small></b></div>
+        <div class="row"><span>Secuencia</span><b class="val" id="sGen">A-B-C</b></div>
+      </div>
+    </div>
+
+    <div class="meters" style="margin-top:9px">
+      <div class="meter">
+        <h3>Carga del generador</h3>
+        <div class="row"><span>Potencia activa</span><b class="val" id="kw">—<small>kW</small></b></div>
+        <div class="row"><span>Potencia reactiva</span><b class="val" id="kvar">—<small>kVAr</small></b></div>
+        <div class="row"><span>Factor de potencia</span><b class="val" id="fp">—</b></div>
+      </div>
+      <div class="meter">
+        <h3>Condiciones de cierre</h3>
+        <ul class="check">
+          <li><i class="dot" id="c1"></i>Secuencia <span class="li-val" id="c1v">—</span></li>
+          <li><i class="dot" id="c2"></i>Tensión ±5 % <span class="li-val" id="c2v">—</span></li>
+          <li><i class="dot" id="c3"></i>Δf 0 a +0.2 <span class="li-val" id="c3v">—</span></li>
+          <li><i class="dot" id="c4"></i>Ángulo ±10° <span class="li-val" id="c4v">—</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <span class="plate" style="margin-top:10px">Lámparas de fase</span>
+    <div class="lamps">
+      <div class="lamp"><div class="bulb" id="l1"></div><b>L1</b></div>
+      <div class="lamp"><div class="bulb" id="l2"></div><b>L2</b></div>
+      <div class="lamp"><div class="bulb" id="l3"></div><b>L3</b></div>
+    </div>
+  </section>
+
+  <!-- CONTROL -->
+  <section class="panel">
+    <span class="plate">Control</span>
+
+    <div class="ctrl">
+      <label for="sGov"><span id="govLbl">Gobernador · velocidad</span><b id="govVal">1800 rpm</b></label>
+      <input type="range" id="sGov" min="-1" max="1" step="0.01" value="-0.45">
+    </div>
+
+    <div class="ctrl">
+      <label for="sExc"><span id="excLbl">Excitación · tensión</span><b id="excVal">452 V</b></label>
+      <input type="range" id="sExc" min="420" max="540" step="1" value="452">
+    </div>
+
+    <div class="ctrl">
+      <label>Secuencia de fases del generador</label>
+      <div class="seg">
+        <button id="bSeqA" aria-pressed="true">A-B-C correcta</button>
+        <button id="bSeqB" aria-pressed="false">A-C-B invertida</button>
+      </div>
+    </div>
+
+    <div class="ctrl">
+      <label>Conexión de las lámparas</label>
+      <div class="seg">
+        <button id="bLampD" aria-pressed="true">Oscuras</button>
+        <button id="bLampR" aria-pressed="false">Giratorias</button>
+      </div>
+    </div>
+
+    <div class="ctrl">
+      <label>Modo de cierre</label>
+      <div class="seg">
+        <button id="bMan" aria-pressed="true">Manual</button>
+        <button id="bAuto" aria-pressed="false">Automático · relé 25</button>
+      </div>
+    </div>
+
+    <div class="actbar">
+      <div class="actions">
+        <button class="big close" id="bClose">Cerrar 52</button>
+        <button class="big open" id="bOpen" disabled>Abrir 52</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- OSCILOSCOPIO -->
+<section class="panel" style="margin-top:12px">
+  <span class="plate">Osciloscopio · tensiones de fase</span>
+  <div class="seg sm">
+    <button id="oTri" aria-pressed="true">Trifásico</button>
+    <button id="oUni" aria-pressed="false">Solo fase A</button>
+  </div>
+  <div class="seg sm" style="margin-bottom:9px">
+    <button id="s1" aria-pressed="true">×1</button>
+    <button id="s4" aria-pressed="false">×1/4</button>
+    <button id="s10" aria-pressed="false">×1/10</button>
+    <button id="s0" aria-pressed="false">Pausa</button>
+  </div>
+  <div class="scope"><canvas id="osc" width="880" height="230"></canvas></div>
+</section>
+
+<!-- BITÁCORA -->
+<section class="panel">
+  <span class="plate">Bitácora de maniobra</span>
+  <div id="log"></div>
+</section>
+
+<!-- TEORÍA -->
+<section class="panel">
+  <details>
+    <summary>Las cuatro condiciones de sincronismo</summary>
+    <p>El interruptor de acoplamiento solo debe cerrar cuando el vector de tensión del generador está prácticamente encima del vector de la barra. Si no es así, la diferencia de tensión aparece sobre una impedancia muy baja y se traduce en corriente de choque y en un par torsional de impacto sobre el cigüeñal y el acoplamiento.</p>
+    <h4>1. Secuencia de fases</h4>
+    <p>Es la única condición que no se ajusta desde el tablero: se verifica en la puesta en servicio con secuencímetro. Si está invertida, las tres lámparas nunca se apagan juntas y el cierre equivale a un cortocircuito trifásico.</p>
+    <h4>2. Tensión</h4>
+    <p>Se iguala con la excitación. Tolerancia típica ±5 %. Una diferencia de tensión con ángulo cero produce sobre todo un golpe de reactivos, no de par.</p>
+    <h4>3. Frecuencia</h4>
+    <p>Se ajusta con el gobernador. Se busca un deslizamiento pequeño y positivo, entre +0.05 y +0.2 Hz, para que al cerrar el generador tome carga en lugar de quedar motorizado.</p>
+    <h4>4. Ángulo de fase</h4>
+    <p>Es la condición crítica. Ventana práctica ±10°. El relé 25 compensa el tiempo de cierre del interruptor: si el mecanismo tarda 80 ms y el deslizamiento es de 0.2 Hz, el vector avanza unos 6° durante el cierre, así que la orden se envía antes de llegar a cero.</p>
+    <h4>Después del cierre cambian los controles</h4>
+    <p>Una vez en paralelo con una red firme, la frecuencia y la tensión las impone la red. El gobernador ya no cambia la velocidad: reparte potencia activa. La excitación ya no cambia la tensión: reparte potencia reactiva. Este es el error conceptual más común en campo.</p>
+    <h4>Protecciones ANSI que intervienen</h4>
+    <ul>
+      <li><code>25</code> comprobador de sincronismo</li>
+      <li><code>32</code> potencia inversa, dispara si el generador se motoriza</li>
+      <li><code>40</code> pérdida de campo por subexcitación</li>
+      <li><code>27 / 59</code> baja y sobretensión · <code>81U / 81O</code> baja y sobrefrecuencia</li>
+    </ul>
+  </details>
+</section>
+
+<section class="panel">
+  <details>
+    <summary>Qué probar en el simulador</summary>
+    <ul>
+      <li>Deja el deslizamiento en +0.1 Hz y cronometra una vuelta completa de la aguja: son 10 segundos.</li>
+      <li>Cierra a 90° a propósito y compara el golpe con un cierre a 3°.</li>
+      <li>Invierte la secuencia y observa que las tres lámparas nunca se apagan a la vez.</li>
+      <li>Pon el osciloscopio en trifásico y a ×1/10: con secuencia correcta las tres del generador siguen el mismo orden que las de la red, y al invertirla B y C intercambian lugar.</li>
+      <li>Con el barrido en pausa mide el corrimiento entre la onda azul y la ámbar de la misma letra: ese desfase es el ángulo δ que marca el sincronoscopio.</li>
+      <li>Ya sincronizado, baja el gobernador por debajo de cero y espera el disparo por potencia inversa.</li>
+      <li>Ya sincronizado, baja la excitación y observa los kVAr negativos sin que cambie la tensión.</li>
+    </ul>
+  </details>
+</section>
+
+<footer>Simulador didáctico desarrollado por <b>Iridian Jiménez Jiménez</b>, Técnico Electromecánico</footer>
+
+</div>
+
+<script>
+/* Tablero de sincronización — autor: Iridian Jiménez Jiménez */
+(function(){
+"use strict";
+var F_RED=60,V_RED=480,P_NOM=1500;
+var TAU=Math.PI*2,D2R=Math.PI/180,R2D=180/Math.PI;
+
+var st={gov:-0.45,exc:452,seqOK:true,lampDark:true,auto:false,closed:false,
+  delta:Math.PI*0.6,dDelta:0,oscT:0,oscSpd:1,tri:true,P:0,Q:0,motorTimer:0};
+
+function $(id){return document.getElementById(id);}
+function wrapPi(a){while(a>Math.PI)a-=TAU;while(a<-Math.PI)a+=TAU;return a;}
+function clamp(v,a,b){return v<a?a:(v>b?b:v);}
+
+function log(msg,cls){
+  var d=new Date();
+  var p=document.createElement("p");
+  p.innerHTML='<span class="t">'+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+
+    ":"+String(d.getSeconds()).padStart(2,"0")+'</span> <span class="'+(cls||"")+'">'+msg+"</span>";
+  var L=$("log");L.appendChild(p);L.scrollTop=L.scrollHeight;
+  while(L.childNodes.length>60)L.removeChild(L.firstChild);
+}
+function banner(msg,cls){var b=$("banner");b.textContent=msg;b.className="banner "+cls;}
+
+function slip(){return st.closed?0:st.gov;}
+function fGen(){return F_RED+slip();}
+function vGen(){return st.closed?V_RED:st.exc;}
+function dV(){return vGen()-V_RED;}
+function conditions(){
+  var a=Math.abs(wrapPi(st.delta))*R2D;
+  return {seq:st.seqOK,volt:Math.abs(dV())<=V_RED*0.05,
+    freq:(st.gov>=-0.02&&st.gov<=0.2),ang:a<=10,angDeg:a};
+}
+
+/* ---------- lámparas ---------- */
+function lampAngles(){
+  var d=st.delta,off=(st.lampDark===st.seqOK)?0:(TAU/3);
+  return [d,d+off,d+2*off];
+}
+function lampLevel(th){
+  var vg=vGen(),vr=V_RED;
+  var vl=Math.sqrt(vg*vg+vr*vr-2*vg*vr*Math.cos(th));
+  return Math.pow(clamp(vl/(vg+vr),0,1),1.7);
+}
+
+/* ---------- sincronoscopio ---------- */
+var synC=$("syn"),sx=synC.getContext("2d");
+function drawSyn(){
+  var W=synC.width,H=synC.height,cx=W/2,cy=H/2,R=W*0.44;
+  sx.clearRect(0,0,W,H);
+  var g=sx.createRadialGradient(cx,cy-R*0.3,R*0.1,cx,cy,R);
+  g.addColorStop(0,"#f2ecdc");g.addColorStop(1,"#cec7b2");
+  sx.beginPath();sx.arc(cx,cy,R,0,TAU);sx.fillStyle=g;sx.fill();
+  sx.lineWidth=W*0.035;sx.strokeStyle="#171c1a";sx.stroke();
+
+  sx.beginPath();sx.moveTo(cx,cy);
+  sx.arc(cx,cy,R*0.93,-Math.PI/2-10*D2R,-Math.PI/2+10*D2R);sx.closePath();
+  sx.fillStyle="rgba(78,156,83,.35)";sx.fill();
+
+  for(var i=0;i<36;i++){
+    var a=i*10*D2R-Math.PI/2,maj=(i%3===0);
+    sx.beginPath();
+    sx.moveTo(cx+Math.cos(a)*R*0.93,cy+Math.sin(a)*R*0.93);
+    sx.lineTo(cx+Math.cos(a)*R*(maj?0.80:0.86),cy+Math.sin(a)*R*(maj?0.80:0.86));
+    sx.strokeStyle=maj?"#20241f":"#7c7869";sx.lineWidth=maj?W*0.008:W*0.004;sx.stroke();
+  }
+  sx.fillStyle="#20241f";sx.textAlign="center";sx.textBaseline="middle";
+  sx.font="600 "+(W*0.052)+"px 'Roboto Condensed',Arial,sans-serif";
+  sx.fillText("SINCRONISMO",cx,cy-R*0.66);
+  sx.fillStyle="#6b6558";sx.font="600 "+(W*0.046)+"px 'Roboto Condensed',Arial,sans-serif";
+  sx.fillText("LENTO",cx-R*0.60,cy+R*0.08);
+  sx.fillText("RÁPIDO",cx+R*0.60,cy+R*0.08);
+
+  var ang=wrapPi(st.delta)-Math.PI/2;
+  sx.save();sx.translate(cx,cy);sx.rotate(ang);
+  sx.beginPath();
+  sx.moveTo(R*0.88,0);sx.lineTo(-R*0.05,-W*0.018);sx.lineTo(-R*0.22,0);sx.lineTo(-R*0.05,W*0.018);
+  sx.closePath();sx.fillStyle=st.closed?"#2c6b31":"#b8332a";sx.fill();sx.restore();
+  sx.beginPath();sx.arc(cx,cy,W*0.035,0,TAU);sx.fillStyle="#171c1a";sx.fill();
+
+  sx.fillStyle="#20241f";sx.font="700 "+(W*0.075)+"px ui-monospace,Menlo,monospace";
+  sx.fillText((wrapPi(st.delta)*R2D).toFixed(0)+"°",cx,cy+R*0.26);
+}
+
+/* ---------- osciloscopio ---------- */
+var oscC=$("osc"),ox=oscC.getContext("2d");
+var RED_C=["#2f7fbf","#58a3dd","#93c9f0"],GEN_C=["#e0922b","#efb163","#f7d49e"];
+function drawOsc(){
+  var W=oscC.width,H=oscC.height,mid=H/2;
+  ox.clearRect(0,0,W,H);
+  ox.fillStyle="#0d1310";ox.fillRect(0,0,W,H);
+  ox.strokeStyle="#1e2b24";ox.lineWidth=1;
+  for(var x=0;x<=W;x+=W/16){ox.beginPath();ox.moveTo(x,0);ox.lineTo(x,H);ox.stroke();}
+  for(var y=0;y<=H;y+=H/8){ox.beginPath();ox.moveTo(0,y);ox.lineTo(W,y);ox.stroke();}
+  ox.strokeStyle="#35473c";ox.beginPath();ox.moveTo(0,mid);ox.lineTo(W,mid);ox.stroke();
+
+  var n=st.tri?3:1;
+  var cyc=2,amp=H*(st.tri?0.36:0.40);
+  function wave(color,ampScale,phase,width){
+    ox.beginPath();
+    for(var i=0;i<=W;i++){
+      var th=(i/W)*cyc*TAU+phase;
+      var v=mid-Math.sin(th)*amp*ampScale;
+      if(i===0)ox.moveTo(i,v);else ox.lineTo(i,v);
+    }
+    ox.strokeStyle=color;ox.lineWidth=width;ox.stroke();
+  }
+  var base=st.oscT*TAU*2;
+  var sgn=st.seqOK?-1:1;          // secuencia invertida gira al revés
+  var lw=Math.max(1.8,W*0.0028);
+  for(var i=0;i<n;i++) wave(RED_C[i],1,base-i*TAU/3,lw);
+  for(i=0;i<n;i++)     wave(GEN_C[i],vGen()/V_RED,base+st.delta+sgn*i*TAU/3,lw);
+
+  // leyenda
+  var fs=Math.max(11,W*0.016);
+  ox.font="600 "+fs+"px 'Roboto Condensed',Arial,sans-serif";
+  ox.textAlign="left";ox.textBaseline="alphabetic";
+  var yy=fs*1.4,px=10;
+  ox.fillStyle="#8fa39a";ox.fillText("RED",px,yy);px+=fs*2.6;
+  for(i=0;i<n;i++){ox.fillStyle=RED_C[i];ox.fillText("ABC".charAt(i),px,yy);px+=fs*0.95;}
+  px+=fs*1.1;
+  ox.fillStyle="#8fa39a";ox.fillText("GEN",px,yy);px+=fs*2.6;
+  for(i=0;i<n;i++){ox.fillStyle=GEN_C[i];ox.fillText("ABC".charAt(i),px,yy);px+=fs*0.95;}
+
+  ox.textAlign="right";
+  ox.fillStyle=st.oscSpd===0?"#e0b24c":"#7f8c84";
+  var lbl=st.oscSpd===0?"BARRIDO EN PAUSA":("BARRIDO ×"+(st.oscSpd===1?"1":"1/"+Math.round(1/st.oscSpd)));
+  ox.fillText(lbl,W-10,yy);
+  if(!st.seqOK){
+    ox.fillStyle="#e06a5f";ox.fillText("SECUENCIA INVERTIDA",W-10,yy+fs*1.35);
+  }
+  ox.textAlign="left";
+}
+
+/* ---------- interfaz ---------- */
+function paint(){
+  var c=conditions();
+  $("vGen").innerHTML=vGen().toFixed(0)+"<small>V</small>";
+  $("fGen").innerHTML=fGen().toFixed(2)+"<small>Hz</small>";
+  $("vRed").innerHTML=V_RED+"<small>V</small>";
+  $("fRed").innerHTML=F_RED.toFixed(2)+"<small>Hz</small>";
+  $("sGen").textContent=st.seqOK?"A-B-C":"A-C-B";
+  $("sGen").className="val "+(st.seqOK?"gd":"hi");
+
+  var df=st.closed?0:st.gov;
+  $("dF").textContent=(df>0?"+":"")+df.toFixed(2);
+  $("dV").textContent=(dV()>0?"+":"")+dV().toFixed(0);
+  $("dA").textContent=(wrapPi(st.delta)*R2D).toFixed(0)+"°";
+  $("dF").className=c.freq?"gd":"hi";
+  $("dV").className=c.volt?"gd":"hi";
+  $("dA").className=c.ang?"gd":"hi";
+
+  var ch=[["k1",c.seq],["k2",c.volt],["k3",c.freq],["k4",c.ang]];
+  for(var j=0;j<ch.length;j++)$(ch[j][0]).className="chip "+(st.closed?"ok":(ch[j][1]?"ok":"bad"));
+
+  if(st.closed){
+    $("kw").innerHTML=st.P.toFixed(0)+"<small>kW</small>";
+    $("kvar").innerHTML=st.Q.toFixed(0)+"<small>kVAr</small>";
+    var s=Math.sqrt(st.P*st.P+st.Q*st.Q);
+    $("fp").textContent=s>1?(Math.abs(st.P)/s).toFixed(3)+(st.Q<0?" cap":" ind"):"—";
+    $("kw").className="val "+(st.P<0?"hi":"gd");
+  }else{
+    $("kw").innerHTML='—<small>kW</small>';$("kw").className="val";
+    $("kvar").innerHTML='—<small>kVAr</small>';$("fp").textContent="—";
+  }
+
+  var set=[["c1",c.seq,c.seq?"A-B-C":"invertida"],
+           ["c2",c.volt,(dV()>0?"+":"")+dV().toFixed(0)+" V"],
+           ["c3",c.freq,(df>0?"+":"")+df.toFixed(2)+" Hz"],
+           ["c4",c.ang,c.angDeg.toFixed(0)+"°"]];
+  for(var i=0;i<set.length;i++){
+    $(set[i][0]).className="dot "+(st.closed?"ok":(set[i][1]?"ok":"bad"));
+    $(set[i][0]+"v").textContent=set[i][2];
+  }
+
+  var la=lampAngles();
+  for(var k=0;k<3;k++){
+    var b=st.closed?0:lampLevel(la[k]);
+    var el=$("l"+(k+1));
+    var r=Math.round(42+213*b),g2=Math.round(47+150*b),bl=Math.round(39+40*b);
+    el.style.background="rgb("+r+","+g2+","+bl+")";
+    el.style.boxShadow=b>0.25?("0 0 "+(b*26)+"px rgba(255,180,60,"+(b*0.85)+"), inset 0 2px 5px rgba(0,0,0,.5)")
+                             :"inset 0 2px 5px rgba(0,0,0,.8)";
+  }
+
+  $("govVal").textContent=st.closed?(st.P.toFixed(0)+" kW"):((1800+st.gov*30).toFixed(0)+" rpm · "+fGen().toFixed(2)+" Hz");
+  $("excVal").textContent=st.closed?(st.Q.toFixed(0)+" kVAr"):(vGen().toFixed(0)+" V");
+  $("govLbl").textContent=st.closed?"Gobernador · reparto de kW":"Gobernador · velocidad";
+  $("excLbl").textContent=st.closed?"Excitación · reparto de kVAr":"Excitación · tensión";
+}
+
+/* ---------- maniobra ---------- */
+function doClose(){
+  if(st.closed)return;
+  var c=conditions(),ang=c.angDeg;
+  if(!c.seq){
+    banner("Cierre con secuencia de fases invertida: cortocircuito trifásico franco. Protección de sobrecorriente disparada.","bad");
+    log("CIERRE RECHAZADO — secuencia invertida. Falla trifásica en bornes.","e-bad");shake();return;
+  }
+  if(ang>45){
+    banner("Cierre a "+ang.toFixed(0)+"°: corriente de choque severa y par de impacto sobre el cigüeñal. Daño probable en acoplamiento y devanados.","bad");
+    log("CIERRE FUERA DE SINCRONISMO a "+ang.toFixed(0)+"° — disparo por sobrecorriente 50/51.","e-bad");shake();return;
+  }
+  if(ang>10){
+    banner("Cerró a "+ang.toFixed(0)+"°. Entró en paralelo, pero con golpe de par y oscilación de rotor.","warn");
+    log("Cierre a "+ang.toFixed(0)+"° — fuera de ventana ±10°.","e-warn");shake();
+  }else if(!c.volt){
+    banner("Cerró dentro del ángulo, pero con ΔV de "+dV().toFixed(0)+" V: golpe de corriente reactiva.","warn");
+    log("Cierre con ΔV = "+dV().toFixed(0)+" V.","e-warn");
+  }else if(!c.freq){
+    banner("Cerró con deslizamiento de "+st.gov.toFixed(2)+" Hz. Revisa el gobernador antes de la próxima maniobra.","warn");
+    log("Cierre con Δf = "+st.gov.toFixed(2)+" Hz.","e-warn");
+  }else{
+    banner("Sincronizado. Ahora el gobernador reparte kW y la excitación reparte kVAr.","ok");
+    log("CIERRE CORRECTO a "+ang.toFixed(0)+"° · Δf "+st.gov.toFixed(2)+" Hz · ΔV "+dV().toFixed(0)+" V","e-ok");
+  }
+  st.closed=true;st.dDelta=st.gov*TAU*0.35;st.exc=clamp(st.exc,420,540);
+  $("bClose").disabled=true;$("bOpen").disabled=false;paint();
+}
+function doOpen(reason){
+  if(!st.closed)return;
+  st.closed=false;st.P=0;st.Q=0;st.dDelta=0;st.motorTimer=0;
+  $("bClose").disabled=false;$("bOpen").disabled=true;
+  if(reason)banner(reason,"bad");
+  else{banner("Interruptor 52 abierto. Generador fuera de paralelo.","warn");log("Apertura manual del interruptor 52.","");}
+  paint();
+}
+function shake(){var p=$("panelTop");p.classList.remove("shake");void p.offsetWidth;p.classList.add("shake");}
+
+/* ---------- bucle ---------- */
+var last=performance.now();
+function loop(now){
+  var dt=Math.min((now-last)/1000,0.05);last=now;
+  st.oscT+=dt*st.oscSpd;
+  if(!st.closed){
+    st.delta=wrapPi(st.delta+TAU*st.gov*dt);
+    if(st.auto){
+      var c=conditions(),adv=TAU*st.gov*0.08,d=wrapPi(st.delta);
+      if(c.seq&&c.volt&&c.freq&&Math.abs(st.gov)>0.01){
+        if((st.gov>0&&d>=-Math.abs(adv)-0.02&&d<0)||(st.gov<0&&d<=Math.abs(adv)+0.02&&d>0)){
+          log("Relé 25: orden de cierre con "+(Math.abs(adv)*R2D).toFixed(1)+"° de adelanto.","e-ok");
+          doClose();
+        }
+      }
+    }
+  }else{
+    var Pt=clamp(st.gov*P_NOM,-P_NOM*0.3,P_NOM);
+    var Qt=clamp((st.exc-V_RED)*25,-900,1100);
+    st.P+=(Pt-st.P)*Math.min(dt*1.6,1);
+    st.Q+=(Qt-st.Q)*Math.min(dt*1.6,1);
+    var target=Math.asin(clamp(st.P/(P_NOM*1.6),-1,1));
+    var acc=-14*(st.delta-target)-3.2*st.dDelta;
+    st.dDelta+=acc*dt;st.delta+=st.dDelta*dt;
+    if(st.P<-30){
+      st.motorTimer+=dt;
+      if(st.motorTimer>3){
+        doOpen("Disparo por potencia inversa (ANSI 32): el generador consumía "+Math.abs(st.P).toFixed(0)+" kW de la red.");
+        log("DISPARO 32 — potencia inversa.","e-bad");
+      }
+    }else st.motorTimer=0;
+  }
+  drawSyn();drawOsc();paint();
+  requestAnimationFrame(loop);
+}
+
+/* ---------- eventos ---------- */
+$("sGov").addEventListener("input",function(e){st.gov=parseFloat(e.target.value);});
+$("sExc").addEventListener("input",function(e){st.exc=parseFloat(e.target.value);});
+function pair(a,b,fn){
+  $(a).addEventListener("click",function(){$(a).setAttribute("aria-pressed","true");$(b).setAttribute("aria-pressed","false");fn(true);});
+  $(b).addEventListener("click",function(){$(b).setAttribute("aria-pressed","true");$(a).setAttribute("aria-pressed","false");fn(false);});
+}
+pair("bSeqA","bSeqB",function(v){st.seqOK=v;if(!v)log("Secuencia del generador invertida a A-C-B.","e-warn");});
+pair("bLampD","bLampR",function(v){st.lampDark=v;});
+pair("bMan","bAuto",function(v){st.auto=!v;if(!v)log("Modo automático: el relé 25 supervisa el cierre.","");});
+$("bClose").addEventListener("click",function(){doClose();});
+$("bOpen").addEventListener("click",function(){doOpen(null);});
+
+pair("oTri","oUni",function(v){st.tri=v;});
+var SPD=[["s1",1],["s4",0.25],["s10",0.1],["s0",0]];
+SPD.forEach(function(p){
+  $(p[0]).addEventListener("click",function(){
+    st.oscSpd=p[1];
+    SPD.forEach(function(q){$(q[0]).setAttribute("aria-pressed",String(q[0]===p[0]));});
+  });
+});
+
+/* ---------- adaptación de pantalla ---------- */
+var override=null;
+function applyView(){
+  var mv=(override===null)?window.matchMedia("(max-width: 900px)").matches:(override==="movil");
+  document.body.className=mv?"movil":"pc";
+  fit();
+}
+function vb(id,val){$(id).addEventListener("click",function(){
+  override=val;["vAuto","vPC","vMov"].forEach(function(x){$(x).setAttribute("aria-pressed",String(x===id));});
+  applyView();});}
+vb("vAuto",null);vb("vPC","pc");vb("vMov","movil");
+
+function sizeCanvas(cv,cssW,cssH){
+  var dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.width=Math.round(cssW*dpr);cv.height=Math.round(cssH*dpr);
+  cv.style.width=cssW+"px";cv.style.height=cssH+"px";
+  cv.getContext("2d").setTransform(dpr,0,0,dpr,0,0);
+  // el código de dibujo usa cv.width, así que se compensa
+  cv.getContext("2d").setTransform(1,0,0,1,0,0);
+}
+function fit(){
+  var movil=document.body.classList.contains("movil");
+  var boxW=synC.parentElement.clientWidth-16;
+  var lim=movil?Math.min(window.innerHeight*0.42,270):340;
+  var w=Math.max(200,Math.min(lim,boxW));
+  synC.width=w;synC.height=w;synC.style.width=w+"px";synC.style.height=w+"px";
+
+  var ow=Math.max(300,oscC.parentElement.clientWidth-16);
+  oscC.width=ow;oscC.height=Math.round(ow*(movil?0.38:0.26));
+  oscC.style.width="100%";oscC.style.height="auto";
+}
+window.addEventListener("resize",function(){override===null?applyView():fit();});
+window.addEventListener("orientationchange",function(){setTimeout(applyView,120);});
+
+applyView();
+log("Generador arrancado. Esperando condiciones de sincronismo.","");
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
