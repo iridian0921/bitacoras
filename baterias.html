@@ -419,7 +419,7 @@ function leer(nombre, txt){
   }
   // vacías después de la última captura: días que Gexia aún no captura; antes: días sin datos (monitoreo caído)
   const ult = nuevas.reduce((m, f) => f.t > m ? f.t : m, ""), pend = vacias.filter(t => t > ult).length, huecos = vacias.length - pend;
-  return {clave, nuevas, txt:`${nombreK(clave)} (${nuevas.length} días${ult ? `, hasta el ${fdia(ult)}` : ""}${huecos ? `; ${huecos} sin datos` : ""}${pend ? `; ${pend} sin capturar todavía` : ""})`};
+  return {clave, nuevas, ult, huecos, pend, txt:`${nombreK(clave)} (${nuevas.length} días${ult ? `, hasta el ${fdia(ult)}` : ""}${huecos ? `; ${huecos} sin datos` : ""}${pend ? `; ${pend} sin capturar todavía` : ""})`};
 }
 /* Cargadores: una fila por lectura (~cada 5 min por banco), con la columna del banco que la reporta. Se guarda por hora. */
 function leerCarg(nombre, rows, H){
@@ -443,7 +443,7 @@ function leerCarg(nombre, rows, H){
   }
   if (!agg.size) throw new Error("sin lecturas de cargadores");
   const nuevas = [...agg.values()].filter(agregarHora), hs = [...agg.values()].map(a => a.h).sort();
-  return {carg:true, lado, nuevas, txt:`Cargadores de la rama ${lado}: ${new Set([...agg.values()].map(a => a.clave)).size} bancos, ${agg.size} horas, del ${fdia(hs[0].slice(0,10))} al ${fdia(hs[hs.length-1].slice(0,10))}`};
+  return {carg:true, lado, nuevas, horas:agg.size, desde:hs[0], hasta:hs[hs.length-1], txt:`Cargadores de la rama ${lado}: ${new Set([...agg.values()].map(a => a.clave)).size} bancos, ${agg.size} horas, del ${fdia(hs[0].slice(0,10))} al ${fdia(hs[hs.length-1].slice(0,10))}`};
 }
 /* ================= análisis de un banco en un periodo (desde–hasta, días locales) ================= */
 const repDe = (clave, n, hasta) => reemplazos.filter(r => r.clave===clave && r.n===n && (!hasta || r.fecha <= hasta)).sort((a,b) => a.fecha.localeCompare(b.fecha)).pop() || null;
@@ -793,21 +793,38 @@ $("#lados").addEventListener("click", e => { const b = e.target.closest("[data-k
 $("#mes").onchange = () => { mes = $("#mes").value; renderEstado(); };
 
 async function cargarArchivos(files){
-  const out = [], nuevas = [], horas = [];
+  const out = [], nuevas = [], horas = [], det = [], oks = [];
   for (const f of files){
     try{
-      const r = leer(f.name, await f.text()); out.push(`✓ ${esc(f.name)} → ${esc(r.txt)}`);
+      const r = leer(f.name, await f.text()); det.push(`✓ ${esc(f.name)} → ${esc(r.txt)}`); oks.push(r);
       if (r.carg) horas.push(...r.nuevas); else { sel = r.clave; nuevas.push(...r.nuevas.map(x => [r.clave, x])); }
-    }catch(e){ out.push(`✕ ${esc(f.name)}: ${esc(e.message)}`); }
+    }catch(e){ det.push(`✕ ${esc(f.name)}: ${esc(e.message)}`); out.push(`✕ ${esc(f.name)}: ${esc(e.message)}`); }
   }
+  out.unshift(...resumenCarga(oks));
   if (db && (nuevas.length || horas.length)){
     try{
       if (nuevas.length) await tx("readwrite", s => { nuevas.forEach(([clave, f]) => s.put({clave, f}, `${clave}|${f.t}`)); });
       if (horas.length) await tx("readwrite", s => { horas.forEach(a => s.put(a, `${a.clave}|${a.h}`)); }, "carg");
     }catch{ out.push("✕ No se pudo guardar en el teléfono (¿almacenamiento lleno?)."); }
   } else if (!db && (nuevas.length || horas.length)) out.push("⚠ Este navegador no permite guardar la telemetría: se perderá al cerrar.");
-  $("#cargados").innerHTML = out.join("<br>");
+  $("#cargados").innerHTML = out.join("<br>") + (det.length > 1 ? `<details style="margin-top:4px"><summary class="muted">Ver los ${det.length} archivos</summary>${det.join("<br>")}</details>` : "");
   invalidar(); mes = null; actualizarResumenes(); renderAll();
+}
+/* Aviso corto de lo cargado: cargadores en una línea, bancos agrupados por mes y aparte los que tienen días sin datos. */
+function resumenCarga(oks){
+  const T = [], cg = oks.filter(r => r.carg), bs = oks.filter(r => !r.carg && r.ult);
+  const veces = a => { const m = new Map(); a.forEach(x => m.set(x, (m.get(x) || 0) + 1)); return [...m].sort((x, y) => y[1] - x[1]); };
+  if (cg.length) T.push(`✓ Cargadores de la rama ${[...new Set(cg.map(r => r.lado))].sort().join(" y ")}: del ${fdia(hFecha(cg.map(r => r.desde).sort()[0]))} al ${fdia(hFecha(cg.map(r => r.hasta).sort().pop()))}.`);
+  const porMes = new Map(); bs.forEach(r => { const m = dia(r.ult).slice(0,7); (porMes.get(m) || porMes.set(m, []).get(m)).push(r); });
+  [...porMes].sort((a, b) => b[0].localeCompare(a[0])).forEach(([m, rs]) => {
+    const hasta = veces(rs.map(r => dia(r.ult))), pend = Math.max(...rs.map(r => r.pend));
+    T.push(`✓ ${rs.length} banco(s) de ${mesTxt(m)}: datos hasta el ${hasta.map(([d, n]) => fdia(d) + (hasta.length > 1 ? ` (${n})` : "")).join(", ")}${pend ? `; ${pend} día(s) aún sin capturar` : ""}.`);
+    const hu = rs.filter(r => r.huecos).sort((a, b) => a.clave.localeCompare(b.clave));
+    if (hu.length) T.push(`⚠ Con días sin datos: ${hu.map(r => `${cortoK(r.clave)} (${r.huecos})`).join(", ")}. Ver «Salud del monitoreo».`);
+  });
+  const vacios = oks.filter(r => !r.carg && !r.ult);
+  if (vacios.length) T.push(`⚠ ${vacios.length} archivo(s) sin ningún día capturado: ${vacios.map(r => cortoK(r.clave)).join(", ")}.`);
+  return T;
 }
 $("#files").onchange = e => { cargarArchivos([...e.target.files]); e.target.value = ""; };
 const drop = $("#drop");
