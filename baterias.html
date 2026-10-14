@@ -351,8 +351,9 @@ function agregarFila(clave, f){
   const B = bancos.get(clave) || {lado, ups:+ups, banco, filas:new Map()};
   B.filas.set(f.t, f); bancos.set(clave, B); return B;
 }
-/* Gexia exporta todas las filas del mes en curso; las de los días que aún no captura (una por día, a las 23:00) vienen vacías. */
-const vacia = f => ![...Object.values(f.tot || {}), ...Object.values(f.con || {}), ...Object.values(f.bat || {}).flatMap(x => Object.values(x || {}))].some(v => v != null);
+/* Gexia exporta todas las filas del mes en curso. Un día que aún no captura (una fila por día, a las 23:00) viene vacío o
+   todo en 0: no cuenta como lectura. Un 0 en algunos sensores de un día ya capturado es un módulo sin comunicación (Sin lectura). */
+const vacia = f => ![...Object.values(f.tot || {}), ...Object.values(f.con || {}), ...Object.values(f.bat || {}).flatMap(x => Object.values(x || {}))].some(v => v != null && v !== 0);
 /* Un archivo nuevo reemplaza la hora si trae al menos tantas lecturas (las exportaciones se enciman en las horas de corte). */
 function agregarHora(a){
   const H = cargs.get(a.clave) || cargs.set(a.clave, new Map()).get(a.clave), x = H.get(a.h);
@@ -1049,7 +1050,7 @@ const REP_CSS = `
 .rep .est{display:inline-block;padding:3px 10px;border-radius:4px;font-weight:700;margin-top:6px}
 .rep .ok{background:#dcf1e3;color:#1b6b3d}.rep .bad{background:#fbe3d8;color:#a3330b}.rep .warn{background:#fff2c2;color:#6b5200}.rep .na{background:#e3e7ec;color:#4a5866}
 .rep .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
-.rep .kpi{border:1px solid #d7dee5;border-radius:6px;padding:8px}
+.rep .kpi{border:1px solid #d7dee5;border-radius:6px;padding:8px;background:#fff;color:#16202a}
 .rep .kpi .l{font-size:11px;color:#4a5866;text-transform:uppercase;letter-spacing:.3px}
 .rep .kpi .v{font:700 24px/1.1 "Roboto Condensed","Arial Narrow",sans-serif}
 .rep table{border-collapse:collapse;width:100%;font-size:11px;font-variant-numeric:tabular-nums}
