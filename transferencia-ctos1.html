@@ -159,8 +159,14 @@ body.scroll #log{height:calc(130px*var(--u));flex:none}
 body.scroll .flow{flex-basis:100%;min-width:0}
 body.scroll .msg{min-width:0;flex-basis:100%}
 body.scroll .ttl{white-space:normal;flex-wrap:wrap}
-.hintbar{display:none;font-size:calc(10px*var(--u));color:#9aa49b;padding:4px 2px}
-body.scroll .hintbar{display:block}
+/* en columna (teléfono) el unifilar va justo debajo del encabezado */
+body.scroll .midrow{display:contents}
+body.scroll .shell>.head{order:0}
+body.scroll .midrow>.card.grow:first-child{order:1}
+body.scroll .stripA{order:2}
+body.scroll #cSyn{order:3}
+body.scroll #cSeq{order:4}
+body.scroll .foot{order:5}
 </style>
 </head>
 <body class="scroll">
@@ -181,7 +187,6 @@ body.scroll .hintbar{display:block}
   <span class="aut">Iridian Jiménez Jiménez</span>
 </div>
 
-<div class="hintbar">La pantalla es angosta para la vista completa; se muestra en columna. Gira el equipo o ábrelo en una pantalla más grande.</div>
 
 <!-- ================= CUERPO ================= -->
 <!-- ================= BANDA DE INSTRUMENTOS ================= -->
