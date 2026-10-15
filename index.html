@@ -35,6 +35,16 @@
   <a class="app" href="sincronizacion.html"><span class="ic">🔄</span><div><h3>Sincronización generador–red</h3><div class="muted">Sincronoscopio, lámparas, relé 25 y reparto de kW/kVAr · 1500 kW, 480 V</div></div></a>
   <a class="app" href="transferencia-ctos1.html"><span class="ic">🔀</span><div><h3>Tablero de transferencia CTOS I</h3><div class="muted">Falla de CFE, arranque y paralelo de GE-01/GE-02, regreso sin corte desde el HMI</div></div></a>
 </div>
+<h2>Logo de los informes</h2>
+<div class="card">
+  <p class="muted" style="margin-top:0">Aparece arriba a la izquierda en los informes de todas las bitácoras (pantalla, PDF y HTML). Usa un PNG o JPG con fondo blanco o transparente; se reduce solo.</p>
+  <div class="row"><img id="logoVer" class="hidden" alt="Logo actual" style="max-height:56px;max-width:180px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:6px;padding:4px"></div>
+  <div class="row" style="margin-top:8px">
+    <label class="btn sec filebtn">Elegir logo<input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp"></label>
+    <button class="btn sec hidden" id="logoQuitar" type="button">Quitar logo</button>
+  </div>
+  <div class="status" id="logoSt"></div>
+</div>
 <h2>Estado del teléfono</h2>
 <div class="card"><div class="stt" id="stt"><span></span><span class="muted">Revisando…</span></div></div>
 <div class="row"><button class="btn sec" id="reparar" type="button">Reparar actualización</button></div>
@@ -112,6 +122,24 @@ $("#reparar").onclick = async () => {
     .map(u => fetch(u, {cache:"reload"}).catch(() => null)));
   location.replace("reparar.html?fase=2&t=" + Date.now());
 };
+})();
+
+/* Logo de los informes: se reduce a 400 × 160 px como máximo y se guarda en este teléfono para todas las bitácoras. */
+(() => {
+  const ver = () => { const l = Comun.logo(); Comun.$("#logoVer").src = l || ""; Comun.$("#logoVer").classList.toggle("hidden", !l); Comun.$("#logoQuitar").classList.toggle("hidden", !l); };
+  Comun.$("#logoFile").onchange = async ev => {
+    const f = ev.target.files[0]; ev.target.value = ""; if (!f) return;
+    const st = Comun.$("#logoSt");
+    try{
+      const img = await createImageBitmap(f), k = Math.min(1, 400 / img.width, 160 / img.height);
+      const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      const url = c.toDataURL(f.type === "image/jpeg" ? "image/jpeg" : "image/png", 0.9);
+      localStorage.setItem(Comun.LOGO, url); ver(); Comun.estado(st, "Logo guardado. Aparecerá en el próximo informe que generes.");
+    }catch{ Comun.estado(st, "No se pudo usar esa imagen. Prueba con un PNG o JPG.", true); }
+  };
+  Comun.$("#logoQuitar").onclick = () => { try{ localStorage.removeItem(Comun.LOGO); }catch{} ver(); Comun.estado(Comun.$("#logoSt"), "Logo quitado."); };
+  ver();
 })();
 </script>
 </body>

@@ -338,15 +338,19 @@ const TXT = {ok:"OK", warn:"Vigilar", bad:"Reemplazar / crítico", na:"Sin lectu
 const CORTO = {ok:"OK", warn:"Vigilar", bad:"Crítico", na:"Sin lectura"};
 
 /* ================= telemetría de Gexia (IndexedDB) =================
-   "dias": un registro por banco y día (baterías). "carg" (v2): la telemetría de los cargadores agrupada por hora. */
+   "dias": un registro por banco y día (baterías).
+   "cargDia" (v3): cargadores, un registro por banco y día con sus 24 horas en un Float32Array de 24 × 10 valores
+   (n, n0, nv, vS, vMin, vMax, ni, iS, iMin, iMax; n = 0 es una hora sin lecturas). Antes ("carg", v2) era un registro
+   por hora: con un año eran 280 mil registros y la app tardaba en abrir. Al abrir, lo que haya en "carg" se pasa a "cargDia". */
 const bancos = new Map();          // clave "A|1|01" → {lado, ups, banco, filas:Map(t → fila)}
-const cargs = new Map();           // clave → Map(hora "2026-10-01T05" → {clave, h, n, n0, nv, vS, vMin, vMax, ni, iS, iMin, iMax})
+const CAMPOS_H = ["n","n0","nv","vS","vMin","vMax","ni","iS","iMin","iMax"], NC = CAMPOS_H.length;
+const cargs = new Map();           // clave → Map(día "2026-10-01" → Float32Array(24 × NC))
 let db = null;
 function abrirDB(){
   return new Promise(res => {
     try{
-      const rq = indexedDB.open("bitacora-baterias", 2);
-      rq.onupgradeneeded = () => { const d = rq.result; if (!d.objectStoreNames.contains("dias")) d.createObjectStore("dias"); if (!d.objectStoreNames.contains("carg")) d.createObjectStore("carg"); };
+      const rq = indexedDB.open("bitacora-baterias", 3);
+      rq.onupgradeneeded = () => { const d = rq.result; for (const st of ["dias", "carg", "cargDia"]) if (!d.objectStoreNames.contains(st)) d.createObjectStore(st); };
       rq.onsuccess = () => res(rq.result); rq.onerror = () => res(null);
       setTimeout(() => res(null), 5000);
     }catch{ res(null); }
@@ -355,25 +359,72 @@ function abrirDB(){
 const tx = (modo, f, st = "dias") => new Promise((res, rej) => { const t = db.transaction(st, modo); const r = f(t.objectStore(st)); t.oncomplete = () => res(r?.result); t.onerror = () => rej(t.error); });
 const todos = st => new Promise(res => { if (!db) return res([]); try{ const t = db.transaction(st); const r = t.objectStore(st).getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => res([]); }catch{ res([]); } });
 const todosDias = () => todos("dias");
+/* En memoria cada fila lleva su hora en ms (ms) y la resistencia cruda (r0) de cada batería, para no recalcularlas en cada
+   análisis; el banco guarda sus filas ya ordenadas (ord) hasta que llegue otra. */
 function agregarFila(clave, f){
   const [lado, ups, banco] = clave.split("|");
   const B = bancos.get(clave) || {lado, ups:+ups, banco, filas:new Map()};
-  B.filas.set(f.t, f); bancos.set(clave, B); return B;
+  f.ms = Date.parse(f.t);
+  for (const i in f.bat){ const x = f.bat[i]; if (x) x.r0 = x.r; }
+  B.filas.set(f.t, f); B.ord = null; bancos.set(clave, B); return B;
 }
+const ordenadas = B => B.ord || (B.ord = [...B.filas.values()].sort((a, b) => a.t.localeCompare(b.t)));
 /* Gexia exporta todas las filas del mes en curso. Un día que aún no captura (una fila por día, a las 23:00) viene vacío o
    todo en 0: no cuenta como lectura. Un 0 en algunos sensores de un día ya capturado es un módulo sin comunicación (Sin lectura). */
-const vacia = f => ![...Object.values(f.tot || {}), ...Object.values(f.con || {}), ...Object.values(f.bat || {}).flatMap(x => Object.values(x || {}))].some(v => v != null && v !== 0);
+const hayValor = o => { for (const k in o){ const v = o[k]; if (v != null && v !== 0) return true; } return false; };
+const vacia = f => { if (hayValor(f.tot || {}) || hayValor(f.con || {})) return false; for (const i in f.bat || {}) if (f.bat[i] && hayValor(f.bat[i])) return false; return true; };
+/* Arreglo de 24 horas de un banco en un día (crear: lo agrega si no existe). */
+function diaCarg(clave, d, crear){
+  let M = cargs.get(clave);
+  if (!M){ if (!crear) return null; cargs.set(clave, M = new Map()); }
+  let a = M.get(d);
+  if (!a && crear) M.set(d, a = new Float32Array(24 * NC));
+  return a || null;
+}
+/* Una hora como objeto {clave, h, n, …} (h = "2026-10-01T05"), o null si no hay lecturas. */
+function horaDe(clave, h){
+  const a = diaCarg(clave, h.slice(0, 10)), o = +h.slice(11, 13) * NC;
+  if (!a || !a[o]) return null;
+  const x = {clave, h};
+  CAMPOS_H.forEach((c, j) => x[c] = a[o + j]);
+  if (!x.nv){ x.vMin = x.vMax = null; }
+  if (!x.ni){ x.iMin = x.iMax = null; }
+  return x;
+}
+/* Horas con lecturas de un banco entre dos días (incluidos), en orden. */
+function horasRango(clave, d0, d1){
+  const M = cargs.get(clave), out = [];
+  if (!M) return out;
+  for (const d of [...M.keys()].filter(d => d >= d0 && d <= d1).sort())
+    for (let h = 0; h < 24; h++){ const x = horaDe(clave, `${d}T${String(h).padStart(2, "0")}`); if (x) out.push(x); }
+  return out;
+}
 /* Un archivo nuevo reemplaza la hora si trae al menos tantas lecturas (las exportaciones se enciman en las horas de corte). */
 function agregarHora(a){
-  const H = cargs.get(a.clave) || cargs.set(a.clave, new Map()).get(a.clave), x = H.get(a.h);
-  if (x && x.n > a.n) return false;
-  H.set(a.h, a); return true;
+  const arr = diaCarg(a.clave, a.h.slice(0, 10), true), o = +a.h.slice(11, 13) * NC;
+  if (arr[o] > a.n) return false;
+  CAMPOS_H.forEach((c, j) => arr[o + j] = a[c] ?? 0);
+  return true;
 }
+const claveDiaCarg = a => `${a.clave}|${a.h.slice(0, 10)}`;
+/* Guarda en el teléfono los días de cargadores indicados ("clave|día"). */
+const guardarDiasCarg = claves => tx("readwrite", s => {
+  claves.forEach(k => { const i = k.lastIndexOf("|"), clave = k.slice(0, i), d = k.slice(i + 1), a = cargs.get(clave)?.get(d); if (a) s.put({clave, d, a}, k); });
+}, "cargDia");
 async function cargarDB(){
   const vacias = [];
   (await todosDias()).forEach(x => { if (vacia(x.f)) vacias.push(`${x.clave}|${x.f.t}`); else agregarFila(x.clave, x.f); });
   if (db && vacias.length) await tx("readwrite", s => { vacias.forEach(k => s.delete(k)); }).catch(() => {});
-  (await todos("carg")).forEach(agregarHora);
+  for (const x of await todos("cargDia")){
+    if (!x?.clave || !x.d || !x.a || x.a.length !== 24 * NC) continue;
+    (cargs.get(x.clave) || cargs.set(x.clave, new Map()).get(x.clave)).set(x.d, x.a instanceof Float32Array ? x.a : Float32Array.from(x.a, v => v ?? 0));
+  }
+  // formato anterior (un registro por hora): se pasa al nuevo una sola vez
+  const viejas = await todos("carg");
+  if (db && viejas.length){
+    viejas.forEach(a => { if (a?.clave && a.h) agregarHora(a); });
+    try{ await guardarDiasCarg(new Set(viejas.filter(a => a?.clave && a.h).map(claveDiaCarg))); await tx("readwrite", s => s.clear(), "carg"); }catch{}
+  }
 }
 function parseCSV(txt){
   const rows = []; let row = [], cur = "", q = false;
@@ -449,7 +500,15 @@ function leerCarg(nombre, rows, H){
 const repDe = (clave, n, hasta) => reemplazos.filter(r => r.clave===clave && r.n===n && (!hasta || r.fecha <= hasta)).sort((a,b) => a.fecha.localeCompare(b.fecha)).pop() || null;
 /* Resistencia llevada a 25 °C: R25 = R / (1 + k·(25 − T)), k en %/°C. r0 guarda la lectura cruda para saber cuándo midió Gexia. */
 const a25 = (r, t) => !L.rTc || !vivo(r) || !(t > 10 && t < 45) ? r : r / (1 + L.rTc/100 * (25 - t));
-const compensar = f => ({...f, bat:Object.fromEntries(Object.entries(f.bat).map(([i, x]) => [i, {...x, r0:x.r, r:a25(x.r, x.t)}]))});
+/* Sin compensación (rTc = 0) la fila ya trae r0 = r y se usa tal cual; con compensación, la copia se guarda hasta que cambien
+   los ajustes (invalidar limpia el caché). */
+let compCache = new WeakMap();
+const compensar = f => {
+  if (!L.rTc) return f;
+  let c = compCache.get(f);
+  if (!c){ c = {...f, bat:Object.fromEntries(Object.entries(f.bat).map(([i, x]) => [i, {...x, r0:x.r, r:a25(x.r, x.t)}]))}; compCache.set(f, c); }
+  return c;
+};
 function rangos(ns){
   const out = []; let a = null, b = null;
   for (const n of ns){ if (a == null){ a = b = n; } else if (n === b+1) b = n; else { out.push(a===b ? a : `${a}–${b}`); a = b = n; } }
@@ -457,8 +516,7 @@ function rangos(ns){
   return out.join(", ");
 }
 function analizar(B, ctx, d0, d1){
-  const todas = [...B.filas.values()].sort((a, b) => a.t.localeCompare(b.t));
-  const hist = todas.filter(f => dia(f.t) <= d1).map(compensar);
+  const hist = ordenadas(B).filter(f => dia(f.t) <= d1).map(compensar);
   const delMes = hist.filter(f => dia(f.t) >= d0);
   if (!delMes.length) return null;
   const u = delMes[delMes.length-1], p = delMes[0], hoy = dia(u.t);
@@ -469,11 +527,13 @@ function analizar(B, ctx, d0, d1){
   const V = [], R = [], T = [];
   for (let i = 1; i <= n; i++){ const x = u.bat[i] || {}; V.push(vivo(x.v) ? x.v : null); R.push(vivo(x.r) ? x.r : null); T.push(vivo(x.t) ? x.t : null); }
   const vMed = med(V), rMed = med(R.filter((r, i) => V[i] != null)), tProm = avg(T);
-  const refDia = hist.map(f => {
+  // mediana de cada día del historial: solo para las gráficas de una batería, así que se calcula al abrirla
+  let refDiaC = null;
+  const refDiaDe = () => refDiaC || (refDiaC = hist.map(f => {
     const vs = [], rs = [], tcs = [];
     for (let i = 1; i <= n; i++){ const x = f.bat[i] || {}; if (vivo(x.v)){ vs.push(x.v); if (vivo(x.r)) rs.push(x.r); } if (vivo(x.t)) tcs.push(x.t); }
     return {v:med(vs), r:med(rs), tc:avg(tcs)};
-  });
+  }));
   const bats = [];
   for (let i = 1; i <= n; i++){
     const v = V[i-1], t = T[i-1], m = [];
@@ -511,7 +571,9 @@ function analizar(B, ctx, d0, d1){
       const nivel = d => d > lr.b + EPS ? 2 : d > lr.w + EPS ? 1 : 0, umbral = [0, lr.w, lr.b], NOM = ["Normal", "Advertencia", "Falla"];
       const lim = x => contra === "su línea base" || contra === "la mediana del banco" ? `+${Math.round(x*100)} %` : `${fx(contraV*(1+x),2)} mΩ`;
       // medición anterior de Gexia (la última lectura cruda distinta de la actual, desde el reemplazo)
-      const cur0 = u.bat[i]?.r0, prev = propias.filter(f => vivo(f.bat[i]?.r0) && f.bat[i].r0 !== cur0 && f.t < u.t).pop();
+      const cur0 = u.bat[i]?.r0;
+      let prev = null;
+      for (let j = propias.length - 1; j >= 0 && !prev; j--){ const f = propias[j]; if (f.t < u.t && vivo(f.bat[i]?.r0) && f.bat[i].r0 !== cur0) prev = f; }
       let nv = nivel(dPeor), nota = "";
       if (prev){
         const nP = nivel(peorDe(prev.bat[i].r)[0]);
@@ -524,7 +586,8 @@ function analizar(B, ctx, d0, d1){
       if (nv === 2){ est = peor(est, sospechosa ? "na" : "bad"); m.push(`${txtR}${nota || ` (Falla arriba de ${lim(lr.b)})`}${sospechosa ? "; verificar sensor antes de reemplazar" : ""}`); }
       else if (nv === 1){ est = peor(est, sospechosa ? "na" : "warn"); m.push(`${txtR}${nota || ` (Advertencia arriba de ${lim(lr.w)})`}`); }
       // velocidad de subida: contra la medición de hace 30 días o más
-      const hace = propias.filter(f => new Date(f.t) <= new Date(u.t) - 30*DIA && vivo(f.bat[i]?.r)).pop();
+      const limHace = u.ms - 30*DIA; let hace = null;
+      for (let j = propias.length - 1; j >= 0 && !hace; j--){ const f = propias[j]; if (f.ms <= limHace && vivo(f.bat[i]?.r)) hace = f; }
       if (hace){ const s = r / hace.bat[i].r - 1; if (s >= L.rMes && dPeor <= lr.w + EPS){ est = peor(est, "warn"); m.push(`La resistencia subió ${pct(s)} desde el ${fdia(hace.t)}`); } }
     }
     if (t != null){
@@ -537,8 +600,10 @@ function analizar(B, ctx, d0, d1){
     const edad = desde ? (new Date(hoy) - new Date(desde)) / (365.25*DIA) : null;
     // IEEE 1188: planear el reemplazo al acercarse al fin de la vida de diseño
     if (rep && edad != null && F.vida && edad >= 0.8 * F.vida){ est = peor(est, "warn"); m.push(`Edad ${fx(edad,1)} años: ${edad >= F.vida ? "pasó" : "llega al 80 % de"} su vida de diseño (${F.vida} años); planear el reemplazo`); }
-    const serie = hist.map((f, j) => ({t:f.t, v:vivo(f.bat[i]?.v) ? f.bat[i].v : null, r:vivo(f.bat[i]?.r) ? f.bat[i].r : null, tc:vivo(f.bat[i]?.t) ? f.bat[i].t : null, ref:refDia[j]}));
-    bats.push({n:i, v, r, t, base, dBase, dMed, dRef, dV: v != null && vMed ? v - vMed : null, tend, est, m, serie, rep, edad, esperando,
+    // la serie de la batería (para sus gráficas) se arma solo cuando se abre
+    let serieC = null;
+    const serieDe = () => serieC || (serieC = hist.map((f, j) => ({t:f.t, v:vivo(f.bat[i]?.v) ? f.bat[i].v : null, r:vivo(f.bat[i]?.r) ? f.bat[i].r : null, tc:vivo(f.bat[i]?.t) ? f.bat[i].t : null, ref:refDiaDe()[j]})));
+    bats.push({n:i, v, r, t, base, dBase, dMed, dRef, dV: v != null && vMed ? v - vMed : null, tend, est, m, get serie(){ return serieDe(); }, rep, edad, esperando,
       score: NIVEL[est]*1000 + Math.max(dBase ?? 0, dMed ?? 0, dRef ?? 0)*100 + Math.abs(v != null && vMed ? v - vMed : 0)*50});
   }
   // conexiones
@@ -592,7 +657,7 @@ function analizar(B, ctx, d0, d1){
    anterior (la de agosto empieza el 31 de julio); ese día suelto queda en el historial pero no forma un mes propio. */
 function mesesLocales(){
   const s = new Map(), add = d => (s.get(d.slice(0,7)) || s.set(d.slice(0,7), new Set()).get(d.slice(0,7))).add(d);
-  bancos.forEach(B => B.filas.forEach(f => add(dia(f.t)))); cargs.forEach(M => M.forEach(a => add(hFecha(a.h))));
+  bancos.forEach(B => B.filas.forEach(f => add(dia(f.t)))); cargs.forEach(M => M.forEach((a, d) => add(d)));
   return [...s].filter(([m, d]) => d.size >= 5).map(([m]) => m).sort();
 }
 const mesesTodos = () => [...new Set([...mesesLocales(), ...resumenes.map(s => s.mes)])].sort();
@@ -611,7 +676,7 @@ function analizarRango(d0, d1){
   cacheMes.set(key, A); return A;
 }
 const analizarMes = mes => analizarRango(`${mes}-01`, finMes(mes));
-const invalidar = () => { cacheMes.clear(); cacheCarg.clear(); };
+const invalidar = () => { cacheMes.clear(); cacheCarg.clear(); compCache = new WeakMap(); };
 /* ================= cargadores: análisis de un periodo =================
    Descarga: varios bancos de la misma rama (descMin, 3) bajan de vDesc (2.15 V/celda) en la misma hora. Las horas de la descarga
    y las 3 siguientes (recarga) no cuentan para la flotación. Celdas del banco: 40 baterías × celdas del modelo. */
@@ -628,7 +693,7 @@ function analizarCarg(d0, d1){
   const key = `${d0}|${d1}`;
   if (cacheCarg.has(key)) return cacheCarg.get(key);
   const H = new Map();
-  cargs.forEach((M, k) => { const hs = [...M.values()].filter(a => hFecha(a.h) >= d0 && hFecha(a.h) <= d1).sort((a, b) => a.h.localeCompare(b.h)); if (hs.length) H.set(k, hs); });
+  cargs.forEach((M, k) => { const hs = horasRango(k, d0, d1); if (hs.length) H.set(k, hs); });
   // descargas por rama
   const eventos = [], enEvento = new Set();
   for (const lado of ["A", "B"]){
@@ -677,7 +742,7 @@ function analizarCarg(d0, d1){
   // recarga después de cada descarga: horas con corriente arriba del doble de la flotación del banco
   eventos.forEach(e => {
     e.recarga = Math.max(0, ...e.bancos.map(([k]) => { const r = R.get(k); if (!r?.iFlot) return 0; let n = 0;
-      for (let h = horaMas(e.fin, 1); n < 48; h = horaMas(h, 1)){ const a = cargs.get(k)?.get(h); if (!a?.ni || a.iS / a.ni <= Math.max(2 * r.iFlot, r.iFlot + 0.5)) break; n++; } return n; }));
+      for (let h = horaMas(e.fin, 1); n < 48; h = horaMas(h, 1)){ const a = horaDe(k, h); if (!a?.ni || a.iS / a.ni <= Math.max(2 * r.iFlot, r.iFlot + 0.5)) break; n++; } return n; }));
   });
   const out = {R, eventos}; cacheCarg.set(key, out); return out;
 }
@@ -804,7 +869,7 @@ async function cargarArchivos(files){
   if (db && (nuevas.length || horas.length)){
     try{
       if (nuevas.length) await tx("readwrite", s => { nuevas.forEach(([clave, f]) => s.put({clave, f}, `${clave}|${f.t}`)); });
-      if (horas.length) await tx("readwrite", s => { horas.forEach(a => s.put(a, `${a.clave}|${a.h}`)); }, "carg");
+      if (horas.length) await guardarDiasCarg(new Set(horas.map(claveDiaCarg)));
     }catch{ out.push("✕ No se pudo guardar en el teléfono (¿almacenamiento lleno?)."); }
   } else if (!db && (nuevas.length || horas.length)) out.push("⚠ Este navegador no permite guardar la telemetría: se perderá al cerrar.");
   $("#cargados").innerHTML = out.join("<br>") + (det.length > 1 ? `<details style="margin-top:4px"><summary class="muted">Ver los ${det.length} archivos</summary>${det.join("<br>")}</details>` : "");
@@ -1100,7 +1165,7 @@ const REP_CSS = `
 `;
 Comun.cssInforme(REP_CSS);
 /* último día con datos (baterías o cargadores) */
-const ultimoTodo = () => { let m = ultimoDia(); cargs.forEach(M => M.forEach(a => { if (hFecha(a.h) > m) m = hFecha(a.h); })); return m; };
+const ultimoTodo = () => { let m = ultimoDia(); cargs.forEach(M => M.forEach((a, d) => { if (d > m) m = d; })); return m; };
 const recorta = (d1, m) => m && d1 > m ? m : d1;
 function rangoRapido(r){
   const ult = ultimoTodo() || isoLocal().slice(0,10), ms = mesesTodos();
@@ -1258,9 +1323,14 @@ const sync = Comun.compartir({bitacora:"baterias", fotos,
   alCambiar(){ persist(); invalidar(); renderAll(); }});
 $("#bakBtn").onclick = async () => {
   const o = {app:"bitacora-baterias", version:1, exportado:new Date().toISOString(), cfg:P, lecturas:reemplazos, equipos:resumenes};
-  if ($("#bakDias").checked){ o.dias = await todosDias(); o.carg = await todos("carg"); }
+  let nh = 0;
+  if ($("#bakDias").checked){
+    o.dias = await todosDias();
+    // cargadores: un renglón por banco y día con las 24 horas como lista (JSON no guarda Float32Array)
+    o.cargDia = (await todos("cargDia")).map(x => { for (let h = 0; h < 24; h++) if (x.a[h * NC]) nh++; return {clave:x.clave, d:x.d, a:Array.from(x.a)}; });
+  }
   download(`respaldo_baterias_${stamp()}.json`, JSON.stringify(o), "application/json");
-  $("#bakStatus").textContent = `Respaldo descargado${o.dias ? ` con ${o.dias.length} días de Gexia y ${o.carg.length} horas de cargadores` : ""}. Guárdalo en Drive o en tu PC.`; bak.marcar();
+  $("#bakStatus").textContent = `Respaldo descargado${o.dias ? ` con ${o.dias.length} días de Gexia y ${nh} horas de cargadores` : ""}. Guárdalo en Drive o en tu PC.`; bak.marcar();
 };
 $("#restore").onchange = async ev => {
   const f = ev.target.files[0]; if (!f) return; const st = $("#bakStatus"); estado(st, "Restaurando…");
@@ -1277,11 +1347,15 @@ $("#restore").onchange = async ev => {
       if (db) await tx("readwrite", s => { ok.forEach(x => s.put(x, `${x.clave}|${x.f.t}`)); });
       nd = ok.length;
     }
-    if (Array.isArray(o.carg) && o.carg.length){
-      const ok = o.carg.filter(a => a?.clave && a.h && agregarHora(a));
-      if (db) await tx("readwrite", s => { ok.forEach(a => s.put(a, `${a.clave}|${a.h}`)); }, "carg");
-      nh = ok.length;
-    }
+    // cargadores: formato por día (cargDia) o el anterior por hora (carg)
+    const horasR = [];
+    (Array.isArray(o.cargDia) ? o.cargDia : []).forEach(x => {
+      if (!x?.clave || !x.d || !Array.isArray(x.a) || x.a.length !== 24 * NC) return;
+      for (let h = 0; h < 24; h++){ const b = h * NC; if (!x.a[b]) continue; const a = {clave:x.clave, h:`${x.d}T${String(h).padStart(2, "0")}`}; CAMPOS_H.forEach((c, j) => a[c] = x.a[b + j] ?? 0); horasR.push(a); }
+    });
+    (Array.isArray(o.carg) ? o.carg : []).forEach(a => { if (a?.clave && a.h) horasR.push(a); });
+    const okH = horasR.filter(agregarHora); nh = okH.length;
+    if (db && okH.length) await guardarDiasCarg(new Set(okH.map(claveDiaCarg)));
     if (o.cfg && confirm("¿Usar también los modelos, bancos, límites y referencias del respaldo?")) P = armarCfg({...o.cfg, lastBackup:P.lastBackup});
     L = P.L; persist(); invalidar(); actualizarResumenes(); renderCfg(); renderAll(); sync.sincronizar();
     st.textContent = `Respaldo restaurado: ${nl} reemplazo(s), ${ne} resumen(es) mensual(es)${nd ? `, ${nd} días de Gexia` : ""}${nh ? `, ${nh} horas de cargadores` : ""}.`;
@@ -1289,7 +1363,7 @@ $("#restore").onchange = async ev => {
   ev.target.value = "";
 };
 function renderUsage(){
-  let dias = 0, horas = 0; bancos.forEach(B => dias += B.filas.size); cargs.forEach(M => horas += M.size);
+  let dias = 0, horas = 0; bancos.forEach(B => dias += B.filas.size); cargs.forEach(M => M.forEach(a => { for (let h = 0; h < 24; h++) if (a[h * NC]) horas++; }));
   const ms = mesesLocales(), ult = ultimoDia();
   $("#guardado").textContent = bancos.size || cargs.size ? `${bancos.size} banco(s), ${dias} lecturas diarias${ult ? ` (hasta el ${fdia(ult)})` : ""}; cargadores de ${cargs.size} banco(s), ${horas} horas${ms.length ? `; de ${mesTxt(ms[0])} a ${mesTxt(ms[ms.length-1])}` : ""}.${db ? "" : " Este navegador no permite guardarlas: se pierden al cerrar."}` : "Sin datos de Gexia en este teléfono.";
   Comun.renderUso(`${reemplazos.length} reemplazo(s), ${resumenes.length} resumen(es) mensual(es), ${dias} día(s) de Gexia, ${horas} hora(s) de cargadores.`);
@@ -1297,7 +1371,7 @@ function renderUsage(){
 $("#borrar").onclick = async () => {
   if (!confirm("¿Borrar la telemetría de Gexia (bancos y cargadores) de este teléfono? Los reemplazos, resúmenes mensuales y ajustes se conservan.")) return;
   bancos.clear(); cargs.clear();
-  if (db){ await tx("readwrite", s => s.clear()).catch(() => {}); await tx("readwrite", s => s.clear(), "carg").catch(() => {}); }
+  if (db) for (const st of ["dias", "carg", "cargDia"]) await tx("readwrite", s => s.clear(), st).catch(() => {});
   invalidar(); renderAll();
 };
 

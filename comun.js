@@ -8,7 +8,8 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const num = v => (v === null || v === undefined || v === "" || isNaN(+v)) ? null : +v;
 const pct = (x,d=1) => x===null||x===undefined||!isFinite(x) ? "—" : (x*100).toFixed(d)+" %";
 const fx = (x,d=1) => x===null||x===undefined||!isFinite(x) ? "—" : (+x).toFixed(d);
-const fmtFecha = new Intl.DateTimeFormat("es-MX", {dateStyle:"short", timeStyle:"short"});
+/* Horas en formato de 24 h en todas las bitácoras (es-MX usa «p.m.» por omisión). */
+const fmtFecha = new Intl.DateTimeFormat("es-MX", {dateStyle:"short", timeStyle:"short", hourCycle:"h23"});
 const fdate = iso => { const d = new Date(iso); return isNaN(d) ? esc(iso) : fmtFecha.format(d); };
 /* "AAAA-MM-DDTHH:MM" en hora local, para inputs datetime-local y CSV. */
 const isoLocal = (d = new Date()) => new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
@@ -179,7 +180,7 @@ function pestanas(render){
    Por defecto la lectura toma la hora en que se toca Guardar (antes se llenaba al abrir el formulario y un
    borrador o la app abierta en segundo plano dejaban horas viejas). "Cambiar hora" permite ponerla a mano, p. ej.
    al pasar lecturas de papel; esas quedan marcadas con tsManual y siempre se guarda también la hora real (guardado). */
-const fmtHora = new Intl.DateTimeFormat("es-MX", {hour:"numeric", minute:"2-digit", second:"2-digit"});
+const fmtHora = new Intl.DateTimeFormat("es-MX", {hour:"2-digit", minute:"2-digit", second:"2-digit", hourCycle:"h23"});
 function horaCaptura(alCambiar){
   const inp = $("#ts"), caja = document.createElement("span");
   caja.className = "tsbox";
@@ -235,7 +236,7 @@ function svgGrafica(series, {lim = null, banda = null, fuera = null, fmt, min0 =
   const g = [];
   if (banda) g.push(`<rect x="${L}" width="${W-L-R}" y="${Y(banda[1])}" height="${Y(banda[0])-Y(banda[1])}" fill="${C.banda}"/>`);
   for (let i=0;i<=4;i++){ const v=v0+(v1-v0)*i/4; g.push(`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.line}"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end" font-size="12" fill="${C.muted}">${fmt(v)}</text>`); }
-  const corto = t1-t0 < 2*86400000, fmtT = corto ? new Intl.DateTimeFormat("es-MX", {hour:"numeric", minute:"2-digit"}) : fmtDia;
+  const corto = t1-t0 < 2*86400000, fmtT = corto ? new Intl.DateTimeFormat("es-MX", {hour:"2-digit", minute:"2-digit", hourCycle:"h23"}) : fmtDia;
   for (let i=0;i<=3;i++){ const t=t0+(t1-t0)*i/3; g.push(`<text x="${X(t)}" y="${H-10}" text-anchor="${i===0?"start":i===3?"end":"middle"}" font-size="12" fill="${C.muted}">${fmtT.format(t)}</text>`); }
   if (banda) for (const [v, txt] of [[banda[1],"Máx."],[banda[0],"Mín."]])
     g.push(`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.bad}" stroke-dasharray="6 5"/><text x="${W-R}" y="${Y(v)+(txt==="Máx."?-5:14)}" text-anchor="end" font-size="12" fill="${C.muted}">${txt} ${fmt(v)}</text>`);
@@ -286,6 +287,7 @@ function grafica(series, opts){
 /* Impresión común de los informes: sin recuadro, sin renglones partidos y valores fuera de límite en rojo. */
 const CSS_IMPRESION = `
 .rep .mal{color:#a3330b;font-weight:700}
+.rep .hd img.logo{max-height:56px;max-width:180px;object-fit:contain;align-self:center}
 @media print{.rep{border:0!important;padding:0!important;border-radius:0!important}.rep .tw{overflow:visible}
   .rep tr,.rep .bloque,.rep .kpi,.rep figure,.rep .firma{break-inside:avoid}.rep h2{break-after:avoid}}`;
 /* Pie de cada hoja impresa: nombre del informe y "Página X de Y" (márgenes de página de CSS). */
@@ -325,6 +327,10 @@ async function figurasInforme(fotos, lista){
   return lista.map((f, i) => urls[i] ? `<figure><img src="${urls[i]}" alt="${esc(f.alt)}"><figcaption>${esc(f.pie)}</figcaption></figure>` : "").join("");
 }
 /* Botones del informe. generar() devuelve {html, texto, doc} o null si no hay lecturas. */
+/* Logo de la empresa para los informes: se elige en la pantalla de inicio y lo usan todas las bitácoras. */
+const LOGO = "bitacoras-logo";
+const logo = () => { try{ return localStorage.getItem(LOGO) || ""; }catch{ return ""; } };
+const conLogo = html => { const l = logo(); return l ? html.replace('<div class="hd">', `<div class="hd"><img class="logo" src="${l}" alt="Logo">`) : html; };
 function accionesInforme({generar, guardarDatos, vacio, archivo, titulo}){
   let rep = null;
   $("#repGen").onclick = async () => {
@@ -334,6 +340,7 @@ function accionesInforme({generar, guardarDatos, vacio, archivo, titulo}){
       guardarDatos();
       fotosFaltantes = [];
       rep = await generar();
+      if (rep){ rep.html = conLogo(rep.html); rep.doc = conLogo(rep.doc); }
       if (!rep){ estado(st, typeof vacio==="function" ? vacio() : vacio, true); $("#rep").innerHTML=""; $("#repAcc").classList.add("hidden"); return; }
       $("#rep").innerHTML = rep.html; $("#repAcc").classList.remove("hidden");
       let pp = $("#repPagina"); if (!pp){ pp = document.createElement("style"); pp.id = "repPagina"; document.head.append(pp); }
@@ -657,7 +664,7 @@ function compartir(o){
     card.innerHTML = `<p class="muted" style="margin-top:0">Sube tus lecturas a la hoja de Google Sheets del equipo y recibe las de los demás. Sin señal se guardan aquí y se suben cuando vuelve. La configuración aplica a todas las bitácoras.</p>
       <div class="campos">
         <label for="syUrl">Dirección del script (termina en /exec)</label><input class="plain" id="syUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(c.url)}">
-        <label for="syClave">Tu clave personal (te la da la administradora)</label><input class="plain" id="syClave" type="password" autocomplete="off" value="${esc(c.clave)}">
+        <label for="syClave">Tu clave personal (te la da la administradora)</label><input class="plain clave" id="syClave" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" autocomplete="off" value="${esc(c.clave)}">
       </div>
       <p class="muted" id="syUsuario" style="margin:8px 0 0"></p>
       <div class="row" style="margin-top:12px">
@@ -713,7 +720,18 @@ function compartir(o){
   };
 }
 
-return {vigilarVersion, $, esc, num, pct, fx, fdate, isoLocal, nowLocal, stamp, download, descargarCSV, estado,
+/* Botón «Mostrar más» debajo de una tabla larga: dibujar miles de renglones de golpe traba el teléfono.
+   total: renglones que hay; mostrados: los que se dibujaron; mas(): dibuja otro bloque. */
+function verMas(tbl, total, mostrados, mas){
+  let b = tbl.nextElementSibling?.classList.contains("vermas") ? tbl.nextElementSibling : null;
+  if (total <= mostrados){ b?.remove(); return; }
+  if (!b){ b = document.createElement("button"); b.type = "button"; b.className = "linkbtn vermas"; b.style.marginTop = "8px"; tbl.after(b); }
+  b.textContent = `Mostrar ${Math.min(PAGINA, total - mostrados)} más (van ${mostrados} de ${total})`;
+  b.onclick = mas;
+}
+const PAGINA = 200;
+
+return {verMas, PAGINA, LOGO, logo, vigilarVersion, $, esc, num, pct, fx, fdate, isoLocal, nowLocal, stamp, download, descargarCSV, estado,
   fotosDB, capturaFoto, visorFotos, DRAFT_KEY, pestanas, grafica, svgGrafica, horaCaptura, marcaHora,
   cssInforme, docInforme, figurasInforme, accionesInforme,
   respaldo, renderUso, revisarEntorno, avisoBorrador, nuevoId, compartir, syncConfig};

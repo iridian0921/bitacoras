@@ -288,8 +288,8 @@ function load(){
   sortL();
 }
 /* Todo cambio de medidores, límites o lecturas pasa por aquí, así que también invalida los cálculos guardados. */
-function persist(){ calcCache = new WeakMap(); try{ localStorage.setItem(LS, JSON.stringify({equipos, lecturas, cfg:P})); return true; }catch{ return false; } }
-const sortL = () => lecturas.sort((a, b) => b.ts.localeCompare(a.ts) || String(b.id).localeCompare(String(a.id)));
+function persist(){ calcCache = new WeakMap(); idx = null; try{ localStorage.setItem(LS, JSON.stringify({equipos, lecturas, cfg:P})); return true; }catch{ return false; } }
+const sortL = () => { idx = null; calcCache = new WeakMap(); return lecturas.sort((a, b) => b.ts.localeCompare(a.ts) || String(b.id).localeCompare(String(a.id))); };
 const eqById = id => equipos.find(e => e.id === id) || null;
 const eqName = e => e ? `${e.tag}${e.desc ? " · " + e.desc : ""}` : "(medidor borrado)";
 const sortedEq = () => [...equipos].sort((a, b) => a.tag.localeCompare(b.tag, "es", {numeric:true}));
@@ -303,13 +303,33 @@ const avg = a => { const b = a.filter(x => x !== null && isFinite(x)); return b.
 const desb = a => { if (a.some(x => x === null)) return null; const m = avg(a); return m ? Math.max(...a.map(x => Math.abs(x - m))) / m : null; };
 const pctS = (x, d=1) => x === null || !isFinite(x) ? "—" : (x > 0 ? "+" : "") + (x*100).toFixed(d) + " %";
 const R3 = Math.sqrt(3);
+/* Índice por medidor: sus lecturas de la más reciente a la más vieja (con la hora en ms) y su mayor corriente.
+   Sin él, cada lectura recorría todas las demás tres veces y el Historial tardaba segundos con unos miles de lecturas.
+   Se rehace cuando cambian las lecturas (sortL y persist lo limpian). */
+let idx = null;
+const iDe = v => avg([numc(v?.iR), numc(v?.iS), numc(v?.iT)]) ?? numc(v?.res_i);
+function indice(){
+  if (idx) return idx;
+  const porEq = new Map(), maxI = new Map();
+  for (const r of lecturas){
+    let a = porEq.get(r.eq); if (!a) porEq.set(r.eq, a = []);
+    a.push({r, t:+new Date(r.ts)});
+    const i = iDe(r.v); if (i !== null) maxI.set(r.eq, Math.max(maxI.get(r.eq) ?? 0, i));
+  }
+  return idx = {porEq, maxI};
+}
+/* Primer índice de a (ordenado de más reciente a más vieja) con f(x) verdadero; f debe pasar de falso a verdadero una sola vez. */
+const buscar = (a, f) => { let lo = 0, hi = a.length; while (lo < hi){ const m = (lo + hi) >> 1; if (f(a[m])) hi = m; else lo = m + 1; } return lo; };
 /* Lectura anterior del mismo medidor con contador de energía (para el consumo entre capturas). */
-const anteriorE = (eq, ts) => lecturas.find(q => q.eq === eq && q.ts < ts && numc(q.v?.eP) !== null) || null;
+function anteriorE(eq, ts){
+  const a = indice().porEq.get(eq) || [];
+  for (let i = buscar(a, x => x.r.ts < ts); i < a.length; i++) if (numc(a[i].r.v?.eP) !== null) return a[i].r;
+  return null;
+}
 /* Isc/IL: Icc trifásica entre la demanda IL; sin IL, la mayor corriente registrada (o la de esta lectura). */
 function razonIsc(e, iAhora){
   if (!e?.icc) return null;
-  const hist = lecturas.filter(r => r.eq === e.id).map(r => avg([numc(r.v?.iR), numc(r.v?.iS), numc(r.v?.iT)]) ?? numc(r.v?.res_i)).filter(x => x !== null);
-  const il = e.il || Math.max(iAhora ?? 0, ...hist, 0);
+  const il = e.il || Math.max(iAhora ?? 0, indice().maxI.get(e.id) ?? 0, 0);
   return il > 0 ? {r:e.icc / il, il, est:!e.il} : null;
 }
 /* Tensión residual V0 (secuencia cero) con las seis tensiones: ubica el punto de referencia de los TP (tierra) dentro del
@@ -336,8 +356,12 @@ function compararBarra(m, ts, LN, LL){
   const otros = equipos.filter(o => o.id !== m.id && mismaBarra(o, m)); if (!otros.length) return null;
   const t = +new Date(ts), ven = P.cmpMin*60000, lst = [];
   for (const o of otros){
-    const r = lecturas.filter(q => q.eq === o.id && Math.abs(+new Date(q.ts) - t) <= ven && lnDe(q.v).every(x => x !== null))
-      .sort((a, b) => Math.abs(+new Date(a.ts) - t) - Math.abs(+new Date(b.ts) - t))[0];
+    // solo las lecturas de ese medidor dentro de la ventana (búsqueda binaria por hora), y de ellas la más cercana
+    const a = indice().porEq.get(o.id) || []; let r = null, dMin = Infinity;
+    for (let i = buscar(a, x => x.t <= t + ven); i < a.length && a[i].t >= t - ven; i++){
+      const d = Math.abs(a[i].t - t);
+      if (d < dMin && lnDe(a[i].r.v).every(x => x !== null)){ dMin = d; r = a[i].r; }
+    }
     if (r) lst.push({e:o, ln:lnDe(r.v), ll:llDe(r.v), ts:r.ts});
   }
   const nombres = l => l.map(x => x.e.tag).join(", ");
@@ -702,18 +726,22 @@ function renderChart(){
 }
 
 /* ================= historial ================= */
+/* Historial por bloques: los más recientes primero y «Mostrar más» para el resto. */
+let hisLim = Comun.PAGINA;
 function renderHis(){
   const se = $("#hisEq"); const cur = se.value || "all";
   se.innerHTML = `<option value="all">Todos los medidores</option>` + sortedEq().map(e => `<option value="${esc(e.id)}">${esc(eqName(e))}</option>`).join("");
   se.value = [...se.options].some(o => o.value === cur) ? cur : "all";
   const rows = lecturas.filter(r => se.value === "all" || r.eq === se.value);
-  if (!rows.length){ $("#hisTbl").innerHTML = `<tr><td class="muted">Sin lecturas guardadas.</td></tr>`; return; }
+  const ver = rows.slice(0, hisLim);
+  if (!rows.length){ $("#hisTbl").innerHTML = `<tr><td class="muted">Sin lecturas guardadas.</td></tr>`; Comun.verMas($("#hisTbl"), 0, 0); return; }
   $("#hisTbl").innerHTML = `<thead><tr><th>Fecha</th><th>Capturó</th><th>Medidor</th><th>V L-L</th><th>I prom</th><th>kW</th><th>FP</th><th>THD V</th><th>THD I</th><th>MWh/día</th><th>Estado</th><th>Foto</th><th></th></tr></thead><tbody>` +
-    rows.map(r => { const x = calc(r), c = x.c, e = eqById(r.eq);
+    ver.map(r => { const x = calc(r), c = x.c, e = eqById(r.eq);
       return `<tr><td>${fdate(r.ts)}${Comun.marcaHora(r)}</td><td>${esc(r.autor || "—")}</td><td>${esc(e?.tag || "—")}</td><td>${fx(c.vLL,0)}</td><td>${fx(c.iProm,1)}</td><td>${fx(c.kw,0)}</td><td>${fx(c.fp,3)}</td><td>${fx(c.thdV,1)}</td><td>${fx(c.thdI,1)}</td><td>${fx(c.mwhDia,2)}</td>
       <td><span class="pill ${x.est}" title="${esc(hallazgos(x).map(i => i.t).concat(x.rev).join(" "))}">${TXT[x.est]}</span>${x.rev.length ? ` <span title="${esc(x.rev.join(" "))}">⚠</span>` : ""}</td>
       <td>${r.foto ? `<button class="linkbtn" data-foto="${esc(r.id)}">Ver</button>` : ""}</td>
       <td><button class="btn danger" data-del="${esc(r.id)}">Borrar</button></td></tr>`; }).join("") + `</tbody>`;
+  Comun.verMas($("#hisTbl"), rows.length, ver.length, () => { hisLim += Comun.PAGINA; renderHis(); });
 }
 $("#hisTbl").addEventListener("click", async ev => {
   const b = ev.target.closest("[data-del]"); if (!b) return;
@@ -722,7 +750,7 @@ $("#hisTbl").addEventListener("click", async ev => {
   lecturas = lecturas.filter(q => q.id !== b.dataset.del); persist(); await fotos.del(b.dataset.del); renderAll(); sync.sincronizar();
 });
 Comun.visorFotos(fotos, $("#hisTbl"));
-$("#hisEq").onchange = renderHis;
+$("#hisEq").onchange = () => { hisLim = Comun.PAGINA; renderHis(); };
 $("#csvBtn").onclick = () => {
   const head = ["fecha","medidor","descripcion","v_nominal",...CAMPOS,"fp_real_ret_ade","fp_despl_ret_ade","v_ll_prom","desbalance_v","desplazamiento_n","i_prom","desbalance_i","carga","thd_v_max","thd_i_max","limite_thd_i","factor_k_max","fp_acumulado","mwh_dia","estado","hallazgos","revision_captura","nota","foto","capturo","hora_manual","guardado"];
   const filas = [...lecturas].reverse().map(r => { const x = calc(r), c = x.c, e = eqById(r.eq), v = r.v || {};
