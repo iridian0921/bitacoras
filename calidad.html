@@ -176,6 +176,7 @@
     <div class="row" style="margin-top:10px;gap:16px">
       <label><input type="checkbox" id="repFotos" checked> Incluir fotos</label>
       <label><input type="checkbox" id="repNotas" checked> Incluir notas</label>
+      <label><input type="checkbox" id="repAnexo"> Anexo con los datos capturados</label>
     </div>
     <div class="row" style="margin-top:12px"><button class="btn" id="repGen">Generar informe</button></div>
     <div class="row hidden" id="repAcc" style="margin-top:10px">
@@ -692,7 +693,7 @@ const METRICS = [
 $("#metric").innerHTML = METRICS.map(([k, l]) => `<option value="${k}">${l}</option>`).join("");
 $("#metric").onchange = renderChart; $("#tenEq").onchange = renderChart;
 $("#tenPer").addEventListener("click", ev => { const b = ev.target.closest("[data-d]"); if (!b) return; tenDias = +b.dataset.d; renderChart(); });
-Comun.visorFotos(fotos, $("#chartBox"));
+Comun.visorFotos(fotos, $("#chartBox").parentNode);   // también las fotos de la tabla de la serie resaltada
 function renderChart(){
   const sel = $("#tenEq"), cur = sel.value;
   sel.innerHTML = sortedEq().map(e => `<option value="${esc(e.id)}">${esc(eqName(e))}</option>`).join("");
@@ -751,13 +752,17 @@ $("#hisTbl").addEventListener("click", async ev => {
 });
 Comun.visorFotos(fotos, $("#hisTbl"));
 $("#hisEq").onchange = () => { hisLim = Comun.PAGINA; renderHis(); };
-$("#csvBtn").onclick = () => {
+/* Encabezados y renglones del CSV; también son el anexo de datos capturados del informe. */
+function datosCSV(lista){
   const head = ["fecha","medidor","descripcion","v_nominal",...CAMPOS,"fp_real_ret_ade","fp_despl_ret_ade","v_ll_prom","desbalance_v","desplazamiento_n","i_prom","desbalance_i","carga","thd_v_max","thd_i_max","limite_thd_i","factor_k_max","fp_acumulado","mwh_dia","estado","hallazgos","revision_captura","nota","foto","capturo","hora_manual","guardado"];
-  const filas = [...lecturas].reverse().map(r => { const x = calc(r), c = x.c, e = eqById(r.eq), v = r.v || {};
+  const filas = lista.map(r => { const x = calc(r), c = x.c, e = eqById(r.eq), v = r.v || {};
     return [isoLocal(new Date(r.ts)).replace("T"," "), e?.tag, e?.desc, e?.vn, ...CAMPOS.map(k => v[k]), v.fpRt, v.fpDt, c.vLL?.toFixed(0), c.desV?.toFixed(4), c.despN?.toFixed(4), c.iProm?.toFixed(1), c.desI?.toFixed(4), c.carga?.toFixed(4),
       c.thdV, c.thdI, c.lim, c.k, c.fpE?.toFixed(3), c.mwhDia?.toFixed(3), TXT[x.est], hallazgos(x).map(i => i.t).join(" "), x.rev.join(" "), r.nota, r.foto ? "sí" : "", r.autor, r.tsManual ? "sí" : "", r.guardado ? isoLocal(new Date(r.guardado)).replace("T"," ") : ""]; });
-  descargarCSV(`lecturas_calidad_${stamp()}.csv`, head, filas);
-};
+  return {head, filas};
+}
+$("#csvBtn").onclick = () => { const d = datosCSV([...lecturas].reverse()); descargarCSV(`lecturas_calidad_${stamp()}.csv`, d.head, d.filas); };
+const ANEXO = {ident:["fecha","medidor"], cols:[...CAMPOS,"fp_real_ret_ade","fp_despl_ret_ade","nota","capturo","hora_manual","guardado"],
+  etiquetas:{medidor:"Medidor",...NOMBRE,fp_real_ret_ade:"FP Real (ret/ade)",fp_despl_ret_ade:"FP Despl (ret/ade)",nota:"Nota",capturo:"Capturó",hora_manual:"Hora a mano",guardado:"Guardado",fecha:"Fecha"}};
 
 /* ================= informe ================= */
 const REP_CSS = `
@@ -899,9 +904,9 @@ async function generarInforme(){
   if (comp){ L.push(""); L.push(`*Periodo* (${comp.n} lecturas en ${comp.dias} día(s)):`); comp.texto.forEach(t => L.push(t)); }
   if (elab){ L.push(""); L.push(`Elaboró: ${elab}`); }
   const pie = `Informe de calidad de energía${sitio ? " · " + sitio : ""} · ${fdate(ahora)}`;
-  return {html, pie, texto:L.join("\n"), doc:Comun.docInforme(`Informe calidad de energía ${fdate(ahora)}`, REP_CSS, html, pie)};
+  return {html, pie, lecturas:enPeriodo, texto:L.join("\n"), doc:Comun.docInforme(`Informe calidad de energía ${fdate(ahora)}`, REP_CSS, html, pie)};
 }
-Comun.accionesInforme({generar:generarInforme, archivo:"informe_calidad", titulo:"Informe de calidad de energía",
+Comun.accionesInforme({generar:generarInforme, anexo:lista => ({...datosCSV(lista), ...ANEXO}), archivo:"informe_calidad", titulo:"Informe de calidad de energía",
   vacio:() => { const d = $("#repDesde").value, h = $("#repHasta").value;
     return !d && !h ? "No hay lecturas guardadas para generar el informe."
       : `No hay lecturas ${d === h ? "del " + fDia(d) : d && h ? `entre el ${fDia(d)} y el ${fDia(h)}` : d ? "desde el " + fDia(d) : "hasta el " + fDia(h)}. Elige otras fechas.`; },

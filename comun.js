@@ -223,43 +223,73 @@ const marcaHora = r => r.tsManual ? ` <span class="tsman" title="Hora corregida 
 const fmtDia = new Intl.DateTimeFormat("es-MX", {day:"2-digit", month:"short"});
 /* Gráfica de líneas en SVG. tema cambia los colores de la cuadrícula (el informe exportado no tiene las variables CSS). */
 /* ancho: el de la pantalla, para que los textos salgan a su tamaño real (sin él, 700 para el informe). */
-function svgGrafica(series, {lim = null, banda = null, fuera = null, fmt, min0 = false, label, tema = {}, ancho = 0}){
+/* foco: índice de la serie resaltada (las demás se atenúan) · ajustar: escala a los datos aunque el límite quede fuera. */
+function svgGrafica(series, {lim = null, banda = null, fuera = null, fmt, min0 = false, label, tema = {}, ancho = 0, foco = -1, ajustar = false}){
   const C = {line:"var(--line)", muted:"var(--muted)", bad:"var(--bad)", banda:"var(--okbg)", fondo:"var(--surface)", ...tema};
   let t0=Infinity, t1=-Infinity, v0=Infinity, v1=-Infinity;
-  for (const s of series) for (const p of s.pts){ if (p.t<t0) t0=p.t; if (p.t>t1) t1=p.t; if (p.v<v0) v0=p.v; if (p.v>v1) v1=p.v; }
+  for (const s of series) for (const p of s.pts){ if (p.t<t0) t0=p.t; if (p.t>t1) t1=p.t; }
+  // con escala ajustada y una serie resaltada, la escala sigue a esa serie
+  for (const s of (ajustar && series[foco] ? [series[foco]] : series)) for (const p of s.pts){ if (p.v<v0) v0=p.v; if (p.v>v1) v1=p.v; }
   if (t0===t1){ t0-=43200000; t1+=43200000; }
-  if (lim!==null){ v1=Math.max(v1,lim); v0=Math.min(v0,lim); }
-  if (banda){ v1=Math.max(v1,banda[1]); v0=Math.min(v0,banda[0]); }
-  const pad=(v1-v0)*0.12 || Math.abs(v1)*0.05 || 1; v0-=pad; v1+=pad; if (min0) v0=Math.max(0,v0);
+  if (!ajustar && lim!==null){ v1=Math.max(v1,lim); v0=Math.min(v0,lim); }
+  if (!ajustar && banda){ v1=Math.max(v1,banda[1]); v0=Math.min(v0,banda[0]); }
+  const pad=(v1-v0)*0.12 || Math.abs(v1)*0.05 || 1; v0-=pad; v1+=pad; if (min0 && !ajustar) v0=Math.max(0,v0);
+  const dentro = v => v>=v0 && v<=v1;
   const W = ancho ? Math.max(300, Math.round(ancho)) : 700, H = W < 500 ? 250 : W > 760 ? Math.min(420, Math.round(W*0.36)) : 320, L=52, R=10, T=14, B=34;
   const X=t=>L+(t-t0)/(t1-t0)*(W-L-R), Y=v=>T+(1-(v-v0)/(v1-v0))*(H-T-B);
-  const g = [];
-  if (banda) g.push(`<rect x="${L}" width="${W-L-R}" y="${Y(banda[1])}" height="${Y(banda[0])-Y(banda[1])}" fill="${C.banda}"/>`);
+  const g = [], afuera = [];
+  if (banda && dentro(banda[0]) && dentro(banda[1])) g.push(`<rect x="${L}" width="${W-L-R}" y="${Y(banda[1])}" height="${Y(banda[0])-Y(banda[1])}" fill="${C.banda}"/>`);
   for (let i=0;i<=4;i++){ const v=v0+(v1-v0)*i/4; g.push(`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.line}"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end" font-size="12" fill="${C.muted}">${fmt(v)}</text>`); }
   const corto = t1-t0 < 2*86400000, fmtT = corto ? new Intl.DateTimeFormat("es-MX", {hour:"2-digit", minute:"2-digit", hourCycle:"h23"}) : fmtDia;
   for (let i=0;i<=3;i++){ const t=t0+(t1-t0)*i/3; g.push(`<text x="${X(t)}" y="${H-10}" text-anchor="${i===0?"start":i===3?"end":"middle"}" font-size="12" fill="${C.muted}">${fmtT.format(t)}</text>`); }
   if (banda) for (const [v, txt] of [[banda[1],"Máx."],[banda[0],"Mín."]])
-    g.push(`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.bad}" stroke-dasharray="6 5"/><text x="${W-R}" y="${Y(v)+(txt==="Máx."?-5:14)}" text-anchor="end" font-size="12" fill="${C.muted}">${txt} ${fmt(v)}</text>`);
-  if (lim!==null) g.push(`<line x1="${L}" x2="${W-R}" y1="${Y(lim)}" y2="${Y(lim)}" stroke="${C.bad}" stroke-dasharray="6 5"/><text x="${W-R}" y="${Y(lim)-5}" text-anchor="end" font-size="12" fill="${C.muted}">Límite ${fmt(lim)}</text>`);
-  series.forEach((s, si) => {
-    const dash = s.dash ? ` stroke-dasharray="8 4"` : "";
-    if (s.pts.length>1) g.push(`<polyline fill="none" stroke="${s.color}" stroke-width="2"${dash} points="${s.pts.map(p=>X(p.t)+","+Y(p.v)).join(" ")}"/>`);
+    if (!dentro(v)) afuera.push(`${txt} ${fmt(v)} ${v>v1?"↑":"↓"}`); else g.push(`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="${C.bad}" stroke-dasharray="6 5"/><text x="${W-R}" y="${Y(v)+(txt==="Máx."?-5:14)}" text-anchor="end" font-size="12" fill="${C.muted}">${txt} ${fmt(v)}</text>`);
+  if (lim!==null && !dentro(lim)) afuera.push(`Límite ${fmt(lim)} ${lim>v1?"↑":"↓"}`);
+  else if (lim!==null) g.push(`<line x1="${L}" x2="${W-R}" y1="${Y(lim)}" y2="${Y(lim)}" stroke="${C.bad}" stroke-dasharray="6 5"/><text x="${W-R}" y="${Y(lim)-5}" text-anchor="end" font-size="12" fill="${C.muted}">Límite ${fmt(lim)}</text>`);
+  if (afuera.length) g.push(`<text x="${W-R}" y="${T+10}" text-anchor="end" font-size="12" fill="${C.bad}">${afuera.join(" · ")} (fuera de escala)</text>`);
+  // la serie resaltada se dibuja al final para quedar encima; las demás, tenues
+  const orden = series.map((s, si) => si).filter(si => si !== foco); if (series[foco]) orden.push(foco);
+  g.push(`<g clip-path="url(#areaG)">`);
+  for (const si of orden){
+    const s = series[si], tenue = foco >= 0 && si !== foco, fuerte = si === foco;
+    const dash = s.dash ? ` stroke-dasharray="8 4"` : "", op = tenue ? ` opacity=".18"` : "";
+    if (s.pts.length>1) g.push(`<polyline fill="none" stroke="${s.color}" stroke-width="${fuerte?3.5:2}"${dash}${op} points="${s.pts.map(p=>X(p.t)+","+Y(p.v)).join(" ")}"/>`);
     s.pts.forEach((p, i) => {
       const mal = fuera && fuera(p.v);
       // punto visible (rojo y más grande si sale de límite) y un área de toque más grande, invisible
-      g.push(`<circle cx="${X(p.t)}" cy="${Y(p.v)}" r="${mal?6:4}" fill="${mal?C.bad:s.color}" stroke="${C.fondo}" stroke-width="2"><title>${esc(s.name)}: ${fmt(p.v)} (${fdate(p.t)})</title></circle>`);
+      g.push(`<circle cx="${X(p.t)}" cy="${Y(p.v)}" r="${(mal?6:4)+(fuerte?1.5:0)}" fill="${mal?C.bad:s.color}" stroke="${C.fondo}" stroke-width="2"${op}><title>${esc(s.name)}: ${fmt(p.v)} (${fdate(p.t)})</title></circle>`);
       g.push(`<circle class="hit" data-s="${si}" data-i="${i}" cx="${X(p.t)}" cy="${Y(p.v)}" r="14" fill="transparent"/>`);
     });
-  });
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">${g.join("")}</svg>`;
+  }
+  g.push(`</g>`);
+  const clip = `<defs><clipPath id="areaG"><rect x="${L-8}" y="${T-8}" width="${W-L-R+16}" height="${H-T-B+16}"/></clipPath></defs>`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">${clip}${g.join("")}</svg>`;
 }
-/* Dibuja en #chartBox con su leyenda. Al tocar un punto muestra equipo, fecha y valor (y la foto si la lectura tiene). */
-let graficaActual = null;
+/* Dibuja en #chartBox con su leyenda. Al tocar un punto muestra equipo, fecha y valor (y la foto si la lectura tiene).
+   Al tocar un equipo de la leyenda (o uno de sus puntos) se resalta su línea, las demás se atenúan y abajo salen
+   todos sus datos. «Escala» ajusta el eje a los datos cuando el límite queda lejos y aplasta las líneas. */
+let graficaActual = null, focoNombre = null, escalaAjustada = false;
 function grafica(series, opts){
+  if (!series.some(s => s.name === focoNombre)) focoNombre = null;
   graficaActual = {series, opts};
-  const box = $("#chartBox");
-  box.innerHTML = svgGrafica(series, {...opts, ancho: box.clientWidth}) + `<div class="chart-tip hidden" id="chartTip" role="status"></div>`;
-  $("#legend").innerHTML = series.length > 1 ? series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.name)}${s.dash?" (punteada)":""}</span>`).join("") : "";
+  const box = $("#chartBox"), leg = $("#legend");
+  const foco = series.findIndex(s => s.name === focoNombre);
+  box.innerHTML = svgGrafica(series, {...opts, ancho: box.clientWidth, foco, ajustar: escalaAjustada}) + `<div class="chart-tip hidden" id="chartTip" role="status"></div>`;
+  const conEscala = opts.lim != null || !!opts.banda;
+  leg.innerHTML = (series.length > 1 ? series.map((s, i) => `<button type="button" class="leg${i === foco ? " on" : ""}${foco >= 0 && i !== foco ? " tenue" : ""}" data-n="${i}" aria-pressed="${i === foco}"><i style="background:${s.color}"></i>${esc(s.name)}${s.dash?" (punteada)":""}</button>`).join("") : "")
+    + (conEscala ? `<button type="button" class="leg esc" id="legEsc" aria-pressed="${escalaAjustada}" title="Ajustar el eje a los datos">${escalaAjustada ? "Escala: ajustada a los datos" : "Escala: con límite"}</button>` : "");
+  let det = $("#chartDet");
+  if (!det){ det = document.createElement("div"); det.id = "chartDet"; det.className = "chart-det"; leg.after(det); }
+  detalleSerie(det, series[foco], opts);
+  if (!leg.dataset.click){
+    leg.dataset.click = "1";
+    leg.addEventListener("click", ev => {
+      const b = ev.target.closest("button.leg"); if (!b || !graficaActual) return;
+      if (b.id === "legEsc") escalaAjustada = !escalaAjustada;
+      else { const n = graficaActual.series[+b.dataset.n]?.name; focoNombre = focoNombre === n ? null : n; }
+      grafica(graficaActual.series, graficaActual.opts);
+    });
+  }
   if (!box.dataset.tip){
     box.dataset.tip = "1";
     // en PC la ventana cambia de tamaño: se vuelve a dibujar al nuevo ancho
@@ -271,7 +301,13 @@ function grafica(series, opts){
       const tip = $("#chartTip"); if (!tip || ev.target.closest("#chartTip")) return;
       const h = ev.target.closest("circle.hit");
       if (!h){ tip.classList.add("hidden"); return; }
-      const {series, opts} = graficaActual, s = series[+h.dataset.s], p = s.pts[+h.dataset.i];
+      const {series, opts} = graficaActual, si = +h.dataset.s, s = series[si], p = s.pts[+h.dataset.i];
+      // tocar un punto de otra serie la resalta; se redibuja y el globo se muestra sobre el punto nuevo
+      if (series.length > 1 && focoNombre !== s.name){
+        focoNombre = s.name; grafica(series, opts);
+        const n = $(`#chartBox circle.hit[data-s="${si}"][data-i="${h.dataset.i}"]`); if (n) n.dispatchEvent(new MouseEvent("click", {bubbles:true}));
+        return;
+      }
       const mal = opts.fuera && opts.fuera(p.v);
       tip.innerHTML = `<b>${esc(s.name)}</b> · ${fdate(p.t)}<br><span class="v">${opts.fmt(p.v)}</span>${mal ? ` <span class="mal">⚠ fuera de límite</span>` : ""}${p.foto ? ` <button class="linkbtn" data-foto="${esc(p.id)}">Ver foto</button>` : ""}`;
       const r = box.getBoundingClientRect(), c = h.getBoundingClientRect();
@@ -279,14 +315,30 @@ function grafica(series, opts){
       const x = Math.min(Math.max(c.left + c.width/2 - r.left - tip.offsetWidth/2, 0), r.width - tip.offsetWidth);
       const yArriba = c.top - r.top - tip.offsetHeight - 4;
       tip.style.left = x + "px"; tip.style.top = (yArriba >= 0 ? yArriba : c.bottom - r.top + 4) + "px";
+      document.querySelectorAll(`#chartDet tr.sel`).forEach(x => x.classList.remove("sel"));
+      const fila = $(`#chartDet tr[data-i="${h.dataset.i}"]`); if (fila) fila.classList.add("sel");
     });
   }
+}
+/* Datos de la serie resaltada, del más reciente al más antiguo: fecha, valor y cambio contra el punto anterior. */
+function detalleSerie(det, s, opts, todos = false){
+  if (!s){ det.innerHTML = ""; return; }
+  const pts = s.pts.map((p, i) => ({...p, i})).reverse(), N = 30, ver = todos ? pts : pts.slice(0, N);
+  const vs = s.pts.map(p => p.v), prom = vs.reduce((a, b) => a + b, 0) / (vs.length || 1);
+  det.innerHTML = `<div class="det-hd"><b><i style="background:${s.color}"></i>${esc(s.name)}</b> · ${s.pts.length} punto(s) · mín. ${opts.fmt(Math.min(...vs))} · prom. ${opts.fmt(prom)} · máx. ${opts.fmt(Math.max(...vs))}</div>
+    <div class="tw"><table><thead><tr><th>Fecha</th><th>Valor</th><th>Cambio</th><th></th></tr></thead><tbody>${ver.map(p => {
+      const a = s.pts[p.i - 1], d = a ? p.v - a.v : null, mal = opts.fuera && opts.fuera(p.v);
+      return `<tr data-i="${p.i}"><td>${fdate(p.t)}</td><td${mal ? ' class="mal"' : ""}>${opts.fmt(p.v)}${mal ? " ⚠" : ""}</td><td class="muted">${d == null ? "—" : (d > 0 ? "+" : d < 0 ? "−" : "") + opts.fmt(Math.abs(d))}</td><td>${p.foto ? `<button class="linkbtn" data-foto="${esc(p.id)}">Foto</button>` : ""}</td></tr>`;
+    }).join("")}</tbody></table></div>${!todos && pts.length > N ? `<button type="button" class="linkbtn" id="detTodos">Ver los ${pts.length} puntos</button>` : ""}`;
+  const b = det.querySelector("#detTodos"); if (b) b.onclick = () => detalleSerie(det, s, opts, true);
 }
 
 /* ================= informe ================= */
 /* Impresión común de los informes: sin recuadro, sin renglones partidos y valores fuera de límite en rojo. */
 const CSS_IMPRESION = `
 .rep .mal{color:#a3330b;font-weight:700}
+.rep table.anexo{font-size:11px}.rep table.anexo td,.rep table.anexo th{white-space:nowrap;padding:3px 5px}
+.rep h2.anexo{break-before:page}
 .rep .hd img.logo{max-height:56px;max-width:180px;object-fit:contain;align-self:center}
 @media print{.rep{border:0!important;padding:0!important;border-radius:0!important}.rep .tw{overflow:visible}
   .rep tr,.rep .bloque,.rep .kpi,.rep figure,.rep .firma{break-inside:avoid}.rep h2{break-after:avoid}}`;
@@ -331,7 +383,26 @@ async function figurasInforme(fotos, lista){
 const LOGO = "bitacoras-logo";
 const logo = () => { try{ return localStorage.getItem(LOGO) || ""; }catch{ return ""; } };
 const conLogo = html => { const l = logo(); return l ? html.replace('<div class="hd">', `<div class="hd"><img class="logo" src="${l}" alt="Logo">`) : html; };
-function accionesInforme({generar, guardarDatos, vacio, archivo, titulo}){
+/* Anexo con los datos tal como se capturaron (sin cálculos ni redondeo), para quien pide los datos en bruto.
+   d = {head, filas} como el CSV; ident: columnas que se repiten en cada tabla (fecha, equipo…); cols: columnas
+   capturadas, en orden; etiquetas: nombre legible de cada columna. Las columnas vacías en todas las lecturas se omiten
+   y el resto se reparte en tablas angostas para que quepan en la hoja carta. */
+function anexoDatos(d, {ident, cols, etiquetas = {}, porTabla = 7}){
+  const ix = n => d.head.indexOf(n), et = n => etiquetas[n] || n;
+  const vacia = v => v == null || v === "";
+  const iId = ident.map(ix).filter(i => i >= 0);
+  const iCols = cols.map(ix).filter(i => i >= 0 && d.filas.some(f => !vacia(f[i])));
+  const val = v => vacia(v) ? "—" : esc(String(v));
+  let h = `<h2 class="anexo">Anexo: datos capturados</h2><p style="margin:4px 0;color:#6a7784;font-size:12px">${d.filas.length} lectura(s) tal como se capturaron, sin cálculos ni redondeo; «—» = campo sin captura. Los mismos datos, con los cálculos, salen en «Datos del informe (CSV)».</p>`;
+  for (let k = 0; k < iCols.length; k += porTabla){
+    const parte = iCols.slice(k, k + porTabla);
+    h += `<div class="tw"><table class="anexo"><tr>${[...iId, ...parte].map(i => `<th>${esc(et(d.head[i]))}</th>`).join("")}</tr>${d.filas.map(f => `<tr>${[...iId, ...parte].map(i => `<td>${val(f[i])}</td>`).join("")}</tr>`).join("")}</table></div>`;
+  }
+  return h;
+}
+/* anexo(lecturas) → {head, filas, ident, cols, etiquetas}: si la página lo da y generar() devuelve rep.lecturas,
+   la casilla #repAnexo agrega el anexo y aparece el botón «Datos del informe (CSV)». */
+function accionesInforme({generar, guardarDatos, vacio, archivo, titulo, anexo}){
   let rep = null;
   $("#repGen").onclick = async () => {
     const st = $("#repStatus"); estado(st, "Generando…");
@@ -340,6 +411,14 @@ function accionesInforme({generar, guardarDatos, vacio, archivo, titulo}){
       guardarDatos();
       fotosFaltantes = [];
       rep = await generar();
+      if (rep && anexo && rep.lecturas?.length){
+        const a = anexo([...rep.lecturas].sort((x, y) => new Date(x.ts) - new Date(y.ts)));
+        rep.csv = a;
+        if ($("#repAnexo")?.checked){
+          const ax = anexoDatos(a, a), viejo = rep.html, nuevo = viejo.replace(/<\/div>\s*$/, () => ax + "</div>");
+          rep.html = nuevo; rep.doc = rep.doc.replace(viejo, () => nuevo);
+        }
+      }
       if (rep){ rep.html = conLogo(rep.html); rep.doc = conLogo(rep.doc); }
       if (!rep){ estado(st, typeof vacio==="function" ? vacio() : vacio, true); $("#rep").innerHTML=""; $("#repAcc").classList.add("hidden"); return; }
       $("#rep").innerHTML = rep.html; $("#repAcc").classList.remove("hidden");
@@ -351,6 +430,11 @@ function accionesInforme({generar, guardarDatos, vacio, archivo, titulo}){
     }catch{ estado(st, "No se pudo generar el informe.", true); }
     finally{ $("#repGen").disabled = false; }
   };
+  if (anexo && !$("#repCsv")){
+    const b = document.createElement("button"); b.className = "btn"; b.id = "repCsv"; b.type = "button"; b.textContent = "Datos del informe (CSV)";
+    $("#repHtml").after(b);
+  }
+  if ($("#repCsv")) $("#repCsv").onclick = () => { if (rep?.csv) descargarCSV(`${archivo}_datos_${stamp()}_${horaArchivo()}.csv`, rep.csv.head, rep.csv.filas); };
   $("#repPrint").onclick = () => window.print();
   $("#repHtml").onclick = () => download(`${archivo}_${stamp()}_${horaArchivo()}.html`, rep.doc, "text/html;charset=utf-8");
   $("#repShare").onclick = async () => { try{ await navigator.share({title:titulo, text:rep.texto}); }catch{} };

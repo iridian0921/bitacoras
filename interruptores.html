@@ -199,6 +199,7 @@ input.plain{font:500 16px var(--fb);padding:9px;border:1px solid var(--line);bor
     <div class="row" style="margin-top:10px;gap:16px">
       <label><input type="checkbox" id="repFotos" checked> Incluir fotos</label>
       <label><input type="checkbox" id="repNotas" checked> Incluir notas</label>
+      <label><input type="checkbox" id="repAnexo"> Anexo con los datos capturados</label>
     </div>
     <div class="row" style="margin-top:12px"><button class="btn" id="repGen">Generar informe</button></div>
     <div class="row hidden" id="repAcc" style="margin-top:10px">
@@ -687,14 +688,19 @@ $("#hisTbl").addEventListener("click", async ev => {
 });
 Comun.visorFotos(fotos, $("#hisTbl"));
 $("#hisEq").onchange = () => { hisLim = Comun.PAGINA; renderHis(); };
-$("#csvBtn").onclick = () => {
+/* Encabezados y renglones del CSV; también son el anexo de datos capturados del informe. */
+function datosCSV(lista){
   const keys = SETS.flatMap(g=>g.items.map(i=>i.k));
   const head = ["fecha","interruptor","tablero","rama","in_A","i1","i2","i3","in_neutro","i_prom","pct_In","IR_A","pct_IR","desbalance","neutro_vs_prom",...keys,"Isd_A","Ii_A","Ig_disparo_A","Ig_alarma_A","funcion","disparador","serie",...IND.map(i=>i.k),"cambios_vs_base","estado","observaciones","nota","foto","capturo","hora_manual","guardado"];
-  const filas = [...lecturas].reverse().map(r => { const x=calc(r), e=eqById(r.eq), c=r.cur||{};
+  const filas = lista.map(r => { const x=calc(r), e=eqById(r.eq), c=r.cur||{};
     return [isoLocal(new Date(r.ts)).replace("T"," "),e?.tag,e?.tablero,e?.rama,e?.in,c.i1,c.i2,c.i3,c.in,x.avg?.toFixed(1),x.pctIn?.toFixed(4),x.irA,x.pctIR?.toFixed(4),x.desb?.toFixed(4),x.pctN?.toFixed(4),
       ...keys.map(k=>verVal(k, r.set?.[k])),x.isdA,x.iiA,x.gTripA,x.gAlarmA,FUNCIONES[e?.funcion]||"",e?.version||"",e?.serie||"",...IND.map(i=>r.ind?.[i.k]),x.cambios.map(cb=>`${SET_NAMES[cb.k]} ${verVal(cb.k,cb.de)}->${verVal(cb.k,cb.a)}`).join("; "),x.ok?"OK":"REVISAR",x.det.join("; "),r.nota,r.foto?"sí":"",r.autor,r.tsManual?"sí":"",r.guardado?isoLocal(new Date(r.guardado)).replace("T"," "):""]; });
-  descargarCSV(`lecturas_interruptores_${stamp()}.csv`, head, filas);
-};
+  return {head, filas};
+}
+$("#csvBtn").onclick = () => { const d = datosCSV([...lecturas].reverse()); descargarCSV(`lecturas_interruptores_${stamp()}.csv`, d.head, d.filas); };
+const anexoInt = () => { const keys = SETS.flatMap(g=>g.items.map(i=>i.k));
+  return {ident:["fecha","interruptor"], cols:["tablero","rama","i1","i2","i3","in_neutro",...keys,...IND.map(i=>i.k),"nota","capturo","hora_manual","guardado"],
+    etiquetas:{interruptor:"Interruptor",tablero:"Tablero",rama:"Rama",i1:"I1 (A)",i2:"I2 (A)",i3:"I3 (A)",in_neutro:"IN (A)",...SET_NAMES,...Object.fromEntries(IND.map(i=>[i.k,i.l])),nota:"Nota",capturo:"Capturó",hora_manual:"Hora a mano",guardado:"Guardado",fecha:"Fecha"}}; };
 
 /* ================= informe ================= */
 const REP_CSS = `
@@ -786,9 +792,9 @@ async function generarInforme(){
   if (sinBase.length) L.push(`Sin línea base: ${sinBase.join(", ")}`);
   if (elab){ L.push(""); L.push(`Elaboró: ${elab}`); }
   const pie = `Informe de interruptores${sitio?" · "+sitio:""} · ${alcance} · ${fdate(ahora)}`;
-  return {html, pie, texto:L.join("\n"), doc:Comun.docInforme(`Informe interruptores ${fdate(ahora)}`, REP_CSS, html, pie)};
+  return {html, pie, lecturas:con.map(u => u.r), texto:L.join("\n"), doc:Comun.docInforme(`Informe interruptores ${fdate(ahora)}`, REP_CSS, html, pie)};
 }
-Comun.accionesInforme({generar:generarInforme, archivo:"informe_interruptores", titulo:"Informe de interruptores",
+Comun.accionesInforme({generar:generarInforme, anexo:lista => ({...datosCSV(lista), ...anexoInt()}), archivo:"informe_interruptores", titulo:"Informe de interruptores",
   vacio:"No hay lecturas en este alcance.",
   guardarDatos(){ P.sitio = $("#repSitio").value.trim(); P.elaboro = $("#repElab").value.trim(); P.reviso = $("#repRevi").value.trim(); persist(); }});
 
