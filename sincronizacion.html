@@ -144,13 +144,19 @@ button:focus-visible,input:focus-visible{outline:2px solid #7fc1ff;outline-offse
 body.movil .actbar{position:sticky;bottom:calc(env(safe-area-inset-bottom,0px));z-index:15;
   background:linear-gradient(180deg,rgba(44,52,49,.92),rgba(35,42,39,.98));
   border:1px solid #11150f;border-radius:6px;padding:8px;margin-top:10px;
-  backdrop-filter:blur(3px);box-shadow:0 -6px 18px rgba(0,0,0,.5)}
+  box-shadow:0 -6px 18px rgba(0,0,0,.5)}
 body.pc .actbar{margin-top:10px}
 
 /* ---------- bitácora ---------- */
 #log{font-family:var(--mono);font-size:.76rem;line-height:1.45;background:#12100c;border:1px solid #000;
   border-radius:4px;padding:9px;height:132px;overflow-y:auto;overscroll-behavior:contain;color:#b7c2b6}
 #log p{margin:0 0 3px;word-break:break-word}
+/* en el teléfono la bitácora no tiene desplazamiento propio (atrapaba el dedo y la página no se movía):
+   muestra los últimos 8 mensajes y «Ver todo» la despliega completa */
+body.movil #log{height:auto;min-height:132px;overflow:visible;overscroll-behavior:auto}
+body.movil #log:not(.todo) p:nth-last-child(n+9){display:none}
+.lnk{background:none;border:0;color:#d9a441;font:inherit;font-size:.8rem;cursor:pointer;padding:2px 4px}
+body.pc .lnk{display:none}
 #log .t{color:#6f7a6e}
 .e-ok{color:#79c97f}.e-bad{color:#e06a5f}.e-warn{color:#e0b24c}
 
@@ -316,7 +322,7 @@ footer b{color:#d9a441;font-weight:600}
 
 <!-- BITÁCORA -->
 <section class="panel">
-  <span class="plate">Bitácora de maniobra</span>
+  <span class="plate">Bitácora de maniobra</span> <button id="logTodo" class="lnk">Ver todo</button>
   <div id="log"></div>
 </section>
 
@@ -383,7 +389,8 @@ function log(msg,cls){
   var p=document.createElement("p");
   p.innerHTML='<span class="t">'+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")+
     ":"+String(d.getSeconds()).padStart(2,"0")+'</span> <span class="'+(cls||"")+'">'+msg+"</span>";
-  var L=$("log");L.appendChild(p);L.scrollTop=L.scrollHeight;
+  var L=$("log"),fin=L.scrollHeight-L.scrollTop-L.clientHeight<24;  // solo baja si ya estaba al final
+  L.appendChild(p);if(fin)L.scrollTop=L.scrollHeight;
   while(L.childNodes.length>60)L.removeChild(L.firstChild);
 }
 function banner(msg,cls){var b=$("banner");b.textContent=msg;b.className="banner "+cls;}
@@ -499,35 +506,41 @@ function drawOsc(){
 }
 
 /* ---------- interfaz ---------- */
+/* Escribir en pantalla solo lo que cambió: reescribir lo mismo 60 veces por segundo obligaba al teléfono a
+   recalcular la página en cada cuadro y el deslizamiento se trababa. */
+function T(x,v){var e=$(x);v=String(v);if(e._t!==v){e._t=v;e.textContent=v;}}
+function H(x,v){var e=$(x);if(e._h!==v){e._h=v;e.innerHTML=v;}}
+function C(x,v){var e=$(x);if(e._c!==v){e._c=v;e.className=v;}}
+function St(e,k,v){var c=e._s||(e._s={});if(c[k]!==v){c[k]=v;e.style[k]=v;}}
 function paint(){
   var c=conditions();
-  $("vGen").innerHTML=vGen().toFixed(0)+"<small>V</small>";
-  $("fGen").innerHTML=fGen().toFixed(2)+"<small>Hz</small>";
-  $("vRed").innerHTML=V_RED+"<small>V</small>";
-  $("fRed").innerHTML=F_RED.toFixed(2)+"<small>Hz</small>";
-  $("sGen").textContent=st.seqOK?"A-B-C":"A-C-B";
-  $("sGen").className="val "+(st.seqOK?"gd":"hi");
+  H("vGen",vGen().toFixed(0)+"<small>V</small>");
+  H("fGen",fGen().toFixed(2)+"<small>Hz</small>");
+  H("vRed",V_RED+"<small>V</small>");
+  H("fRed",F_RED.toFixed(2)+"<small>Hz</small>");
+  T("sGen",st.seqOK?"A-B-C":"A-C-B");
+  C("sGen","val "+(st.seqOK?"gd":"hi"));
 
   var df=st.closed?0:st.gov;
-  $("dF").textContent=(df>0?"+":"")+df.toFixed(2);
-  $("dV").textContent=(dV()>0?"+":"")+dV().toFixed(0);
-  $("dA").textContent=(wrapPi(st.delta)*R2D).toFixed(0)+"°";
-  $("dF").className=c.freq?"gd":"hi";
-  $("dV").className=c.volt?"gd":"hi";
-  $("dA").className=c.ang?"gd":"hi";
+  T("dF",(df>0?"+":"")+df.toFixed(2));
+  T("dV",(dV()>0?"+":"")+dV().toFixed(0));
+  T("dA",(wrapPi(st.delta)*R2D).toFixed(0)+"°");
+  C("dF",c.freq?"gd":"hi");
+  C("dV",c.volt?"gd":"hi");
+  C("dA",c.ang?"gd":"hi");
 
   var ch=[["k1",c.seq],["k2",c.volt],["k3",c.freq],["k4",c.ang]];
-  for(var j=0;j<ch.length;j++)$(ch[j][0]).className="chip "+(st.closed?"ok":(ch[j][1]?"ok":"bad"));
+  for(var j=0;j<ch.length;j++)C(ch[j][0],"chip "+(st.closed?"ok":(ch[j][1]?"ok":"bad")));
 
   if(st.closed){
-    $("kw").innerHTML=st.P.toFixed(0)+"<small>kW</small>";
-    $("kvar").innerHTML=st.Q.toFixed(0)+"<small>kVAr</small>";
+    H("kw",st.P.toFixed(0)+"<small>kW</small>");
+    H("kvar",st.Q.toFixed(0)+"<small>kVAr</small>");
     var s=Math.sqrt(st.P*st.P+st.Q*st.Q);
-    $("fp").textContent=s>1?(Math.abs(st.P)/s).toFixed(3)+(st.Q<0?" cap":" ind"):"—";
-    $("kw").className="val "+(st.P<0?"hi":"gd");
+    T("fp",s>1?(Math.abs(st.P)/s).toFixed(3)+(st.Q<0?" cap":" ind"):"—");
+    C("kw","val "+(st.P<0?"hi":"gd"));
   }else{
-    $("kw").innerHTML='—<small>kW</small>';$("kw").className="val";
-    $("kvar").innerHTML='—<small>kVAr</small>';$("fp").textContent="—";
+    H("kw",'—<small>kW</small>');C("kw","val");
+    H("kvar",'—<small>kVAr</small>');T("fp","—");
   }
 
   var set=[["c1",c.seq,c.seq?"A-B-C":"invertida"],
@@ -535,8 +548,8 @@ function paint(){
            ["c3",c.freq,(df>0?"+":"")+df.toFixed(2)+" Hz"],
            ["c4",c.ang,c.angDeg.toFixed(0)+"°"]];
   for(var i=0;i<set.length;i++){
-    $(set[i][0]).className="dot "+(st.closed?"ok":(set[i][1]?"ok":"bad"));
-    $(set[i][0]+"v").textContent=set[i][2];
+    C(set[i][0],"dot "+(st.closed?"ok":(set[i][1]?"ok":"bad")));
+    T(set[i][0]+"v",set[i][2]);
   }
 
   var la=lampAngles();
@@ -544,15 +557,15 @@ function paint(){
     var b=st.closed?0:lampLevel(la[k]);
     var el=$("l"+(k+1));
     var r=Math.round(42+213*b),g2=Math.round(47+150*b),bl=Math.round(39+40*b);
-    el.style.background="rgb("+r+","+g2+","+bl+")";
-    el.style.boxShadow=b>0.25?("0 0 "+(b*26)+"px rgba(255,180,60,"+(b*0.85)+"), inset 0 2px 5px rgba(0,0,0,.5)")
-                             :"inset 0 2px 5px rgba(0,0,0,.8)";
+    St(el,"background","rgb("+r+","+g2+","+bl+")");
+    St(el,"boxShadow",b>0.25?("0 0 "+(b*26)+"px rgba(255,180,60,"+(b*0.85)+"), inset 0 2px 5px rgba(0,0,0,.5)")
+                             :"inset 0 2px 5px rgba(0,0,0,.8)");
   }
 
-  $("govVal").textContent=st.closed?(st.P.toFixed(0)+" kW"):((1800+st.gov*30).toFixed(0)+" rpm · "+fGen().toFixed(2)+" Hz");
-  $("excVal").textContent=st.closed?(st.Q.toFixed(0)+" kVAr"):(vGen().toFixed(0)+" V");
-  $("govLbl").textContent=st.closed?"Gobernador · reparto de kW":"Gobernador · velocidad";
-  $("excLbl").textContent=st.closed?"Excitación · reparto de kVAr":"Excitación · tensión";
+  T("govVal",st.closed?(st.P.toFixed(0)+" kW"):((1800+st.gov*30).toFixed(0)+" rpm · "+fGen().toFixed(2)+" Hz"));
+  T("excVal",st.closed?(st.Q.toFixed(0)+" kVAr"):(vGen().toFixed(0)+" V"));
+  T("govLbl",st.closed?"Gobernador · reparto de kW":"Gobernador · velocidad");
+  T("excLbl",st.closed?"Excitación · reparto de kVAr":"Excitación · tensión");
 }
 
 /* ---------- maniobra ---------- */
@@ -594,7 +607,7 @@ function doOpen(reason){
 function shake(){var p=$("panelTop");p.classList.remove("shake");void p.offsetWidth;p.classList.add("shake");}
 
 /* ---------- bucle ---------- */
-var last=performance.now();
+var last=performance.now(),tVis=1,tLec=1;
 function loop(now){
   var dt=Math.min((now-last)/1000,0.05);last=now;
   st.oscT+=dt*st.oscSpd;
@@ -625,11 +638,15 @@ function loop(now){
       }
     }else st.motorTimer=0;
   }
-  drawSyn();drawOsc();paint();
+  /* la simulación corre en cada cuadro; las gráficas se dibujan a 30 por segundo y las lecturas a 10 */
+  tVis+=dt;tLec+=dt;
+  if(tVis>=1/30){drawSyn();drawOsc();tVis=0;}
+  if(tLec>=0.1){paint();tLec=0;}
   requestAnimationFrame(loop);
 }
 
 /* ---------- eventos ---------- */
+$("logTodo").addEventListener("click",function(){var t=$("log").classList.toggle("todo");this.textContent=t?"Ver últimos":"Ver todo";});
 $("sGov").addEventListener("input",function(e){st.gov=parseFloat(e.target.value);});
 $("sExc").addEventListener("input",function(e){st.exc=parseFloat(e.target.value);});
 function pair(a,b,fn){

@@ -166,8 +166,15 @@ button:focus-visible,input:focus-visible{outline:2px solid #7fc1ff;outline-offse
   flex:1 1 0;height:0;min-height:0;overflow-y:auto;overflow-x:hidden;
   overscroll-behavior:contain;color:#b7c2b6}
 body.scroll #log{height:calc(130px*var(--u));flex:none}
-/* en el teléfono la secuencia tiene alto fijo: los mensajes cambian sin empujar el resto de la página */
-body.scroll ol.seq{height:calc(200px*var(--u));flex:none}
+/* en el teléfono la secuencia tiene alto mínimo para los 8 pasos: los mensajes cambian sin empujar la página,
+   y no es un recuadro con desplazamiento propio, así que deslizar encima mueve la página */
+body.scroll ol.seq{height:auto;min-height:calc(232px*var(--u));overflow:visible;flex:none}
+/* en el teléfono la bitácora no tiene desplazamiento propio (atrapaba el dedo y la página no se movía):
+   muestra los últimos 8 mensajes y «Ver todo» la despliega completa */
+body.scroll #log{height:auto;min-height:calc(112px*var(--u));overflow:visible;overscroll-behavior:auto}
+body.scroll #log:not(.todo) p:nth-last-child(n+9){display:none}
+.lnk{background:none;border:0;color:#d9a441;font-family:var(--cond);font-size:calc(9.5px*var(--u));cursor:pointer;padding:0 2px;letter-spacing:.04em}
+body.fit .lnk{display:none}
 #log p{margin:0 0 2px;word-break:break-word}#log .t{color:#6f7a6e}
 .e-ok{color:#79c97f}.e-bad{color:#e06a5f}.e-warn{color:#e0b24c}.e-inf{color:#8fb6d9}
 
@@ -178,6 +185,8 @@ body.scroll ol.seq{height:calc(200px*var(--u));flex:none}
 @keyframes gflash{0%{filter:none}25%{filter:drop-shadow(0 0 8px rgba(255,205,90,1))}100%{filter:none}}
 .gflash{animation:gflash 1.2s ease-out}
 .card.live{border-color:#7a6326}
+@keyframes flujo{to{stroke-dashoffset:-23}}
+.sld path.flujo{stroke-dasharray:14 9;animation:flujo .5s linear infinite}
 @media(prefers-reduced-motion:reduce){*{animation:none!important}}
 /* en pantalla angosta el encabezado se acomoda en renglones en lugar de salirse de la pantalla */
 .shell{grid-template-columns:minmax(0,1fr)}
@@ -471,7 +480,7 @@ body.scroll .foot{order:5}
   </div>
 
   <div class="card">
-    <p class="ttl">Bitácora</p>
+    <p class="ttl"><span>Bitácora</span> <button id="logTodo" class="lnk">Ver todo</button></p>
     <div id="log"></div>
   </div>
 </div>
@@ -513,7 +522,8 @@ function log(m,c){
   var d=new Date(),p=document.createElement("p");
   p.innerHTML='<span class="t">'+String(d.getMinutes()).padStart(2,"0")+":"+String(d.getSeconds()).padStart(2,"0")+
     '</span> <span class="'+(c||"e-inf")+'">'+m+"</span>";
-  var L=$("log");L.appendChild(p);L.scrollTop=L.scrollHeight;
+  var L=$("log"),fin=L.scrollHeight-L.scrollTop-L.clientHeight<24;  // solo baja si ya estaba al final
+  L.appendChild(p);if(fin)L.scrollTop=L.scrollHeight;
   while(L.childNodes.length>60)L.removeChild(L.firstChild);
 }
 function banner(m,c){var b=$("banner");b.textContent=m;b.className="msg "+c;}
@@ -840,8 +850,12 @@ function phys(dt){
 
 /* ---------- sincronoscopio ---------- */
 var sc=$("syn"),sx=sc.getContext("2d");
+var synK="";
 function drawSyn(){
   var c=activeCmp(),W=sc.width,H=sc.height,cx=W/2,cy=H/2,R=W*0.43;
+  var a0=c.valid?((c.mach==="Bus gen.")?wrapPi(S.delBus):wrapPi(S.g[c.mach==="GE-01"?0:1].del-S.delBus)):0;
+  var k=W+"|"+c.valid+"|"+c.ok+"|"+a0.toFixed(3);
+  if(k===synK)return;synK=k;     // aguja quieta: no se redibuja
   sx.clearRect(0,0,W,H);
   var g=sx.createRadialGradient(cx,cy-R*.3,R*.1,cx,cy,R);
   g.addColorStop(0,"#f2ecdc");g.addColorStop(1,"#cdc6b1");
@@ -869,17 +883,23 @@ function drawSyn(){
 }
 
 /* ---------- unifilar ---------- */
-var dash=0;
 var POS={NA:[130,1],NB:[690,-1],EA:[285,1],EB:[530,-1],G1:[350,1],G2:[440,-1]};
+/* ---------- escritura en pantalla solo cuando cambia ----------
+   Asignar textContent, className o un atributo, aunque sea el mismo valor, obliga al navegador a recalcular la página.
+   Con 60 cuadros por segundo eso saturaba el teléfono y el deslizamiento se trababa. */
+function el(x){return typeof x==="string"?$(x):x;}
+function T(x,v){var e=el(x);v=String(v);if(e._t!==v){e._t=v;e.textContent=v;}}
+function C(x,v){var e=el(x);if(e._c!==v){e._c=v;e.className=v;}}
+function A(x,k,v){var e=el(x),c=e._a||(e._a={});v=String(v);if(c[k]!==v){c[k]=v;e.setAttribute(k,v);}}
+function W(x,v){var e=el(x);if(e._w!==v){e._w=v;e.style.width=v;}}
+
 function paintSLD(dt){
-  dash-=dt*46;
   var gl=busGLive(),la=liveA(),lb=liveB();
   var cA=(S.b.NA&&S.uA)?(S.b.EA?"#7dbb6a":"#2f7fbf"):"#e0922b";
   var cB=(S.b.NB&&S.uB)?(S.b.EB?"#7dbb6a":"#2f7fbf"):"#e0922b";
   function w(id,on,col){
-    var e=$(id);e.setAttribute("stroke",on?col:"#3a443f");e.setAttribute("stroke-width",on?6:5);
-    if(on){e.setAttribute("stroke-dasharray","14 9");e.setAttribute("stroke-dashoffset",dash.toFixed(1));}
-    else e.removeAttribute("stroke-dasharray");
+    var e=$(id);A(e,"stroke",on?col:"#3a443f");A(e,"stroke-width",on?6:5);
+    A(e,"class",on?"flujo":"");
   }
   w("wNA",S.uA,"#2f7fbf");w("wNA2",S.b.NA&&S.uA,"#2f7fbf");
   w("wNB",S.uB,"#2f7fbf");w("wNB2",S.b.NB&&S.uB,"#2f7fbf");
@@ -888,51 +908,51 @@ function paintSLD(dt){
   w("wEA",gl&&S.b.EA,"#e0922b");w("wEA2",gl&&S.b.EA,"#e0922b");
   w("wEB",gl&&S.b.EB,"#e0922b");w("wEB2",gl&&S.b.EB,"#e0922b");
   w("wLA",la,cA);w("wLB",lb,cB);
-  $("busG").setAttribute("fill",gl?"#e0922b":"#3a443f");
-  $("busA").setAttribute("fill",la?cA:"#3a443f");
-  $("busB").setAttribute("fill",lb?cB:"#3a443f");
+  A("busG","fill",gl?"#e0922b":"#3a443f");
+  A("busA","fill",la?cA:"#3a443f");
+  A("busB","fill",lb?cB:"#3a443f");
 
   Object.keys(POS).forEach(function(k){
     var ln=$("k"+k).querySelector(".ct"),cld=S.b[k],x=POS[k][0],d=POS[k][1];
-    ln.setAttribute("x2",cld?x:(x+13*d));
-    ln.setAttribute("stroke",cld?"#4e9c53":"#8d968c");
-    var t=$("t"+k);t.textContent=cld?"cerrado":"abierto";t.setAttribute("fill",cld?"#79c97f":"#8d968c");
+    A(ln,"x2",cld?x:(x+13*d));
+    A(ln,"stroke",cld?"#4e9c53":"#8d968c");
+    var t=$("t"+k);T(t,cld?"cerrado":"abierto");A(t,"fill",cld?"#79c97f":"#8d968c");
   });
-  $("g1st").textContent=S.g[0].st;$("g2st").textContent=S.g[1].st;
-  $("g1st").setAttribute("fill",S.g[0].st==="marcha"?"#efb163":"#8d968c");
-  $("g2st").setAttribute("fill",S.g[1].st==="marcha"?"#efb163":"#8d968c");
-  $("txLA").textContent=(la?S.PA:0)+" kW";$("txLB").textContent=(lb?S.PB:0)+" kW";
+  T("g1st",S.g[0].st);T("g2st",S.g[1].st);
+  A("g1st","fill",S.g[0].st==="marcha"?"#efb163":"#8d968c");
+  A("g2st","fill",S.g[1].st==="marcha"?"#efb163":"#8d968c");
+  T("txLA",(la?S.PA:0)+" kW");T("txLB",(lb?S.PB:0)+" kW");
 
   var ok=okOf(cmpBus()),a=(S.ref==="TR-1"),b=(S.ref==="TR-2");
-  $("r25A").setAttribute("opacity",a?(ok?"1":"0.6"):"0.3");
-  $("r25B").setAttribute("opacity",b?(ok?"1":"0.6"):"0.3");
-  $("r25At").textContent=a?(ok?"permisivo":"vigilando"):"reposo";
-  $("r25Bt").textContent=b?(ok?"permisivo":"vigilando"):"reposo";
-  $("r25At").setAttribute("fill",a?(ok?"#79c97f":"#e0b24c"):"#8d968c");
-  $("r25Bt").setAttribute("fill",b?(ok?"#79c97f":"#e0b24c"):"#8d968c");
+  A("r25A","opacity",a?(ok?"1":"0.6"):"0.3");
+  A("r25B","opacity",b?(ok?"1":"0.6"):"0.3");
+  T("r25At",a?(ok?"permisivo":"vigilando"):"reposo");
+  T("r25Bt",b?(ok?"permisivo":"vigilando"):"reposo");
+  A("r25At","fill",a?(ok?"#79c97f":"#e0b24c"):"#8d968c");
+  A("r25Bt","fill",b?(ok?"#79c97f":"#e0b24c"):"#8d968c");
 }
 
 /* ---------- lecturas ---------- */
-function tag(el,txt,cls){el.textContent=txt;el.className="tag"+(cls?" "+cls:"");}
+function tag(e,txt,cls){T(e,txt);C(e,"tag"+(cls?" "+cls:""));}
 function paintGen(i){
   var g=S.g[i],n=i+1,cl=(S.b[gk(i)]&&g.st==="marcha");
   var est=g.st==="paro"?"Paro":(g.st==="falla"?"Falla arranque":(g.st==="disparo"?"Disparo":(g.st==="arrancando"?"Arrancando":(cl?"En paralelo":(g.excl?"Fuera: sin sincronía":"En vacío")))));
   tag($("e"+n),est,(g.st==="falla"||g.st==="disparo"||g.excl)?"hi":(g.st==="marcha"?(cl?"gd":"am"):""));
   $("cG"+n).classList.toggle("live",cl);
-  $("v"+n).textContent=g.v.toFixed(0);
-  $("f"+n).textContent=g.f.toFixed(2);
-  $("n"+n).textContent=(g.f*30).toFixed(0);
+  T("v"+n,g.v.toFixed(0));
+  T("f"+n,g.f.toFixed(2));
+  T("n"+n,(g.f*30).toFixed(0));
   var s=Math.sqrt(g.P*g.P+g.Q*g.Q);
-  $("i"+n).textContent=(s>5?(s*1000/(RT3*V_N)).toFixed(0):"0");
-  $("p"+n).textContent=g.P.toFixed(0);$("p"+n).className=g.P<-20?"hi":"";
-  $("q"+n).textContent=g.Q.toFixed(0);$("q"+n).className=g.Q<-150?"hi":"";
-  $("fp"+n).textContent=s>5?(Math.abs(g.P)/s).toFixed(2)+(g.Q<0?" c":" i"):"—";
-  $("pc"+n).textContent=(g.P/P_GEN*100).toFixed(0)+" %";$("pc"+n).className=g.P>P_GEN*1.01?"hi":"";
+  T("i"+n,(s>5?(s*1000/(RT3*V_N)).toFixed(0):"0"));
+  T("p"+n,g.P.toFixed(0));C("p"+n,g.P<-20?"hi":"");
+  T("q"+n,g.Q.toFixed(0));C("q"+n,g.Q<-150?"hi":"");
+  T("fp"+n,s>5?(Math.abs(g.P)/s).toFixed(2)+(g.Q<0?" c":" i"):"—");
+  T("pc"+n,(g.P/P_GEN*100).toFixed(0)+" %");C("pc"+n,g.P>P_GEN*1.01?"hi":"");
   var open=(g.st==="marcha"&&!S.b[gk(i)]);
-  $("l"+n+"gov").textContent=cl?"Gobernador · kW":"Gobernador · velocidad";
-  $("l"+n+"exc").textContent=cl?"Excitación · kVAr":"Excitación · tensión";
-  $("v"+n+"gov").textContent=cl?(g.P.toFixed(0)+" kW"):((F_U+g.gov).toFixed(2)+" Hz");
-  $("v"+n+"exc").textContent=cl?(g.Q.toFixed(0)+" kVAr"):(g.exc.toFixed(0)+" V");
+  T("l"+n+"gov",cl?"Gobernador · kW":"Gobernador · velocidad");
+  T("l"+n+"exc",cl?"Excitación · kVAr":"Excitación · tensión");
+  T("v"+n+"gov",cl?(g.P.toFixed(0)+" kW"):((F_U+g.gov).toFixed(2)+" Hz"));
+  T("v"+n+"exc",cl?(g.Q.toFixed(0)+" kVAr"):(g.exc.toFixed(0)+" V"));
   var en=(!S.auto)&&(open||cl);
   $("g"+n+"gov").disabled=!en;$("g"+n+"exc").disabled=!en;
 }
@@ -948,7 +968,7 @@ function paint(){
 
   var e=estado();
   document.querySelectorAll("#flow i").forEach(function(x){
-    x.className=(x.dataset.s===e)?(e==="falla"?"al":"on"):"";
+    C(x,(x.dataset.s===e)?(e==="falla"?"al":"on"):"");
   });
 
   var srcA=!liveA()?"Sin tensión":((S.b.NA&&S.uA)?(S.b.EA?"Paralelo":"TR-1"):"Generadores");
@@ -957,59 +977,59 @@ function paint(){
   tag($("srcB"),srcB,srcB==="Sin tensión"?"hi":(srcB==="TR-2"?"gd":"am"));
   $("cBusA").classList.toggle("live",srcA==="Paralelo");
   $("cBusB").classList.toggle("live",srcB==="Paralelo");
-  $("vA").textContent=(liveA()?(S.b.NA&&S.uA?V_N:S.vBus).toFixed(0):"0")+" V";
-  $("vB").textContent=(liveB()?(S.b.NB&&S.uB?V_N:S.vBus).toFixed(0):"0")+" V";
-  $("cutA").textContent=S.cutA.toFixed(0)+" ms";$("cutA").className=S.cutA>0?"hi":"gd";
-  $("cutB").textContent=S.cutB.toFixed(0)+" ms";$("cutB").className=S.cutB>0?"hi":"gd";
+  T("vA",(liveA()?(S.b.NA&&S.uA?V_N:S.vBus).toFixed(0):"0")+" V");
+  T("vB",(liveB()?(S.b.NB&&S.uB?V_N:S.vBus).toFixed(0):"0")+" V");
+  T("cutA",S.cutA.toFixed(0)+" ms");C("cutA",S.cutA>0?"hi":"gd");
+  T("cutB",S.cutB.toFixed(0)+" ms");C("cutB",S.cutB>0?"hi":"gd");
 
   var Pt=S.g[0].P+S.g[1].P,Qt=S.g[0].Q+S.g[1].Q,cap=closedGens().length*P_GEN;
-  $("vBus").textContent=S.vBus.toFixed(0);
-  $("fBus").textContent=busGLive()?S.fBus.toFixed(2):"—";
-  $("fBus").className=(busGLive()&&Math.abs(S.fBus-60)>0.6)?"hi":"gd";
-  $("pTot").textContent=Pt.toFixed(0);$("qTot").textContent=Qt.toFixed(0);
+  T("vBus",S.vBus.toFixed(0));
+  T("fBus",busGLive()?S.fBus.toFixed(2):"—");
+  C("fBus",(busGLive()&&Math.abs(S.fBus-60)>0.6)?"hi":"gd");
+  T("pTot",Pt.toFixed(0));T("qTot",Qt.toFixed(0));
   if(S.carga>1.01)tag($("tBusG"),"Sobrecarga "+(S.carga*100).toFixed(0)+" %","hi");
   else tag($("tBusG"),busGLive()?"Energizado":"Sin tensión",busGLive()?"am":"");
-  $("tOcup").textContent=(cap?(Pt/cap*100).toFixed(0):"0")+" % de capacidad";
-  $("barG1").style.width=clamp(S.g[0].P/(P_GEN*2)*100,0,100)+"%";
-  $("barG2").style.width=clamp(S.g[1].P/(P_GEN*2)*100,0,100)+"%";
-  $("rep").textContent=S.g[0].P.toFixed(0)+" / "+S.g[1].P.toFixed(0)+" kW";
-  $("uA").textContent=S.uA?"Presente":"Ausente";$("uA").className=S.uA?"gd":"hi";
-  $("uB").textContent=S.uB?"Presente":"Ausente";$("uB").className=S.uB?"gd":"hi";
+  T("tOcup",(cap?(Pt/cap*100).toFixed(0):"0")+" % de capacidad");
+  W("barG1",clamp(S.g[0].P/(P_GEN*2)*100,0,100)+"%");
+  W("barG2",clamp(S.g[1].P/(P_GEN*2)*100,0,100)+"%");
+  T("rep",S.g[0].P.toFixed(0)+" / "+S.g[1].P.toFixed(0)+" kW");
+  T("uA",S.uA?"Presente":"Ausente");C("uA",S.uA?"gd":"hi");
+  T("uB",S.uB?"Presente":"Ausente");C("uB",S.uB?"gd":"hi");
 
   var c=activeCmp();
-  $("sMach").textContent=c.valid?c.mach:"—";
-  $("sRef").textContent=c.valid?(c.dead?"Bus muerto":c.ref):"—";
+  T("sMach",c.valid?c.mach:"—");
+  T("sRef",c.valid?(c.dead?"Bus muerto":c.ref):"—");
   if(c.valid&&!c.dead){
-    $("dV").textContent=(c.dv>0?"+":"")+c.dv.toFixed(0)+" V";
-    $("dF").textContent=(c.df>0?"+":"")+c.df.toFixed(2);
-    $("dA").textContent=c.ang.toFixed(0)+"°";
-    $("dV").className=Math.abs(c.dv)<=V_N*0.05?"gd":"hi";
-    $("dF").className=(c.df>=-0.05&&c.df<=0.3)?"gd":"hi";
-    $("dA").className=c.ang<=10?"gd":"hi";
-  }else{$("dV").textContent="—";$("dF").textContent="—";$("dA").textContent="—";
-    $("dV").className=$("dF").className=$("dA").className="";}
-  $("pDot").className="dot "+(c.valid?(c.ok?"ok":"bad"):"");
-  $("pTxt").textContent=!c.valid?"Relé 25 en reposo":(c.dead?"Bus muerto: cierre directo":
-    (c.ok?"Relé 25: permisivo":"Relé 25: sin permisivo"));
+    T("dV",(c.dv>0?"+":"")+c.dv.toFixed(0)+" V");
+    T("dF",(c.df>0?"+":"")+c.df.toFixed(2));
+    T("dA",c.ang.toFixed(0)+"°");
+    C("dV",Math.abs(c.dv)<=V_N*0.05?"gd":"hi");
+    C("dF",(c.df>=-0.05&&c.df<=0.3)?"gd":"hi");
+    C("dA",c.ang<=10?"gd":"hi");
+  }else{T("dV","—");T("dF","—");T("dA","—");
+    C("dV","");C("dF","");C("dA","");}
+  C("pDot","dot "+(c.valid?(c.ok?"ok":"bad"):""));
+  T("pTxt",!c.valid?"Relé 25 en reposo":(c.dead?"Bus muerto: cierre directo":
+    (c.ok?"Relé 25: permisivo":"Relé 25: sin permisivo")));
   $("cSyn").classList.toggle("live",c.valid&&c.ok);
 
   var par=(S.b.NA&&S.b.EA&&S.uA)||(S.b.NB&&S.b.EB&&S.uB);
-  $("ovMs").textContent=par?(S.ovMs<1000?S.ovMs.toFixed(0)+" ms":(S.ovMs/1000).toFixed(1)+" s"):"0 ms";
-  $("ovMs").className=(par&&S.fast&&S.ovMs>100)?"hi":(par?"am":"");
+  T("ovMs",par?(S.ovMs<1000?S.ovMs.toFixed(0)+" ms":(S.ovMs/1000).toFixed(1)+" s"):"0 ms");
+  C("ovMs",(par&&S.fast&&S.ovMs>100)?"hi":(par?"am":""));
 
-  $("ttype").textContent=S.fast?"Rápida 100 ms":"Rampa suave";
-  var cp=capPl();$("cPl").textContent=cp?(S.carga*100).toFixed(0)+" % de "+cp+" kW":"—";
-  $("cPl").className=S.carga>1.01?"hi":(S.carga>0.9?"am":(cp?"gd":""));
-  $("vldA").textContent=S.PA+" kW";$("vldB").textContent=S.PB+" kW";
+  T("ttype",S.fast?"Rápida 100 ms":"Rampa suave");
+  var cp=capPl();T("cPl",cp?(S.carga*100).toFixed(0)+" % de "+cp+" kW":"—");
+  C("cPl",S.carga>1.01?"hi":(S.carga>0.9?"am":(cp?"gd":"")));
+  T("vldA",S.PA+" kW");T("vldB",S.PB+" kW");
   [0,1].forEach(function(i){var g=S.g[i],b=document.querySelector('.seg button[data-g="'+i+'"]');
-    b.textContent=(g.st==="marcha"||g.st==="arrancando"?"Parar":"Arrancar")+" GE-0"+(i+1);
+    T(b,(g.st==="marcha"||g.st==="arrancando"?"Parar":"Arrancar")+" GE-0"+(i+1));
     $("bT"+(i+1)).disabled=g.st!=="marcha";});
   var st=$("stabV");
-  if(S.uA&&S.uB&&S.stab>0){st.textContent=Math.ceil(S.stab)+" s";st.className="hi";}
-  else if(S.uA&&S.uB&&(S.b.EA||S.b.EB)){st.textContent="Cumplido";st.className="gd";}
-  else{st.textContent="—";st.className="";}
-  $("tScale").textContent="×"+(S.slow<1?(1/S.slow).toFixed(0):"1");
-  $("curBr").textContent=S.branch==="—"?"sin maniobra":"bus "+S.branch;
+  if(S.uA&&S.uB&&S.stab>0){T(st,Math.ceil(S.stab)+" s");C(st,"hi");}
+  else if(S.uA&&S.uB&&(S.b.EA||S.b.EB)){T(st,"Cumplido");C(st,"gd");}
+  else{T(st,"—");C(st,"");}
+  T("tScale","×"+(S.slow<1?(1/S.slow).toFixed(0):"1"));
+  T("curBr",S.branch==="—"?"sin maniobra":"bus "+S.branch);
 
   document.querySelectorAll('.seg button[data-b]').forEach(function(btn){
     btn.classList.toggle("cl",S.b[btn.dataset.b]);
@@ -1017,7 +1037,7 @@ function paint(){
 }
 
 /* ---------- bucle ---------- */
-var last=performance.now(),pstep=-1;
+var last=performance.now(),pstep=-1,tVis=1,tLec=1;
 function loop(now){
   var real=Math.min((now-last)/1000,0.05);last=now;
   if(S.stab>0){S.stab=Math.max(0,S.stab-real);
@@ -1025,7 +1045,12 @@ function loop(now){
   var dt=real*S.slow;
   if(S.seq){run(dt); if(S.step!==pstep){pstep=S.step;flash($("cSeq"));}}
   else pstep=-1;
-  phys(dt);paintSLD(real);drawSyn();paint();
+  phys(dt);
+  /* la física corre en cada cuadro; la pantalla se redibuja a 30 cuadros (unifilar y sincronoscopio)
+     y las lecturas a 10 por segundo, suficiente para leerlas y mucho más ligero para el teléfono */
+  tVis+=real;tLec+=real;
+  if(tVis>=1/30){paintSLD(tVis);drawSyn();tVis=0;}
+  if(tLec>=0.1){paint();tLec=0;}
   if(S.prac)tickPrac(real);
   requestAnimationFrame(loop);
 }
@@ -1244,6 +1269,7 @@ function finPrac(eval_){
   $("pResC").innerHTML=h+"</table>";$("pRes").hidden=false;
 }
 $("pGo").addEventListener("click",function(){if(S.prac)finPrac(true);else iniciarPrac(PR[+$("pSel").value]);});
+$("logTodo").addEventListener("click",function(){var L=$("log"),t=L.classList.toggle("todo");T(this,t?"Ver últimos":"Ver todo");});
 $("pResX").addEventListener("click",function(){$("pRes").hidden=true;});
 
 /* ---------- ajuste de pantalla ---------- */
