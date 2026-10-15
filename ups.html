@@ -581,18 +581,22 @@ function renderChart(){
 }
 
 /* ================= historial ================= */
+/* Historial por bloques: los más recientes primero y «Mostrar más» para el resto. */
+let hisLim = Comun.PAGINA;
 function renderHis(){
   const sr = $("#hisRama"), se = $("#hisEq"); const cr = sr.value || "all", ce = se.value || "all";
   sr.innerHTML = `<option value="all">Ambas ramas</option>` + RAMAS.map(r=>`<option value="${r}">Rama ${r}</option>`).join("");
   se.innerHTML = `<option value="all">Todos los equipos</option>` + equipos().map(e=>`<option value="${e}">${e}</option>`).join("");
   sr.value = [...sr.options].some(o=>o.value===cr) ? cr : "all"; se.value = [...se.options].some(o=>o.value===ce) ? ce : "all";
   const rows = readings.filter(r => (sr.value==="all" || r.rama===sr.value) && (se.value==="all" || r.equipo===se.value));
-  if (!rows.length){ $("#hisTbl").innerHTML = `<tr><td class="muted">Sin lecturas guardadas.</td></tr>`; return; }
+  const ver = rows.slice(0, hisLim);
+  if (!rows.length){ $("#hisTbl").innerHTML = `<tr><td class="muted">Sin lecturas guardadas.</td></tr>`; Comun.verMas($("#hisTbl"), 0, 0); return; }
   $("#hisTbl").innerHTML = `<thead><tr><th>Fecha</th><th>Capturó</th><th>Rama</th><th>Equipo</th><th>kW</th><th>kVA</th><th>% carga</th><th>Estado</th><th>Foto</th><th></th></tr></thead><tbody>` +
-    rows.map(r => { const c = calc(r); return `<tr><td>${fdate(r.ts)}${Comun.marcaHora(r)}</td><td>${esc(r.autor||"—")}</td><td>${esc(r.rama)}</td><td>${esc(r.equipo)}</td><td>${fx(r.load?.kw,0)}</td><td>${fx(r.load?.kva,0)}</td><td>${pct(c.pctKw)}</td>
+    ver.map(r => { const c = calc(r); return `<tr><td>${fdate(r.ts)}${Comun.marcaHora(r)}</td><td>${esc(r.autor||"—")}</td><td>${esc(r.rama)}</td><td>${esc(r.equipo)}</td><td>${fx(r.load?.kw,0)}</td><td>${fx(r.load?.kva,0)}</td><td>${pct(c.pctKw)}</td>
       <td><span class="pill ${c.ok?"ok":"bad"}" title="${esc(c.flags.join(", "))}">${c.ok?"OK":"Revisar"}</span></td>
       <td>${r.foto?`<button class="linkbtn" data-foto="${esc(r.id)}">Ver</button>`:""}</td>
       <td><button class="btn danger" data-del="${esc(r.id)}">Borrar</button></td></tr>`; }).join("") + `</tbody>`;
+  Comun.verMas($("#hisTbl"), rows.length, ver.length, () => { hisLim += Comun.PAGINA; renderHis(); });
 }
 $("#hisTbl").addEventListener("click", async e => {
   const b = e.target.closest("[data-del]"); if (!b) return;
@@ -601,7 +605,7 @@ $("#hisTbl").addEventListener("click", async e => {
   readings = readings.filter(x=>x.id!==b.dataset.del); persist(); await fotos.del(b.dataset.del); renderAll(); sync.sincronizar();
 });
 Comun.visorFotos(fotos, $("#hisTbl"));
-$("#hisRama").onchange = renderHis; $("#hisEq").onchange = renderHis;
+$("#hisRama").onchange = () => { hisLim = Comun.PAGINA; renderHis(); }; $("#hisEq").onchange = () => { hisLim = Comun.PAGINA; renderHis(); };
 $("#csvBtn").onclick = () => {
   const head = ["fecha","rama","equipo","in_vab","in_vbc","in_vca","in_ia","in_ib","in_ic","byp_vab","byp_vbc","byp_vca","out_vab","out_vbc","out_vca","hz","load_kva","load_kw","load_ia","load_ib","load_ic","bat_v","bat_a","ups_en_linea","fp","pct_carga","desb_i_carga","desb_i_entrada","v_celda","estado","observaciones","nota","foto","capturo","hora_manual","guardado"];
   const filas = [...readings].reverse().map(r => { const c=calc(r), i=r.in||{}, y=r.byp||{}, o=r.out||{}, l=r.load||{}, b=r.bat||{}, s=r.sys||{};

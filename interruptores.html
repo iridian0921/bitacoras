@@ -663,17 +663,21 @@ function renderChart(){
 }
 
 /* ================= historial ================= */
+/* Historial por bloques: los más recientes primero y «Mostrar más» para el resto. */
+let hisLim = Comun.PAGINA;
 function renderHis(){
   const se = $("#hisEq"); const c = se.value || "all";
   se.innerHTML = `<option value="all">Todos los interruptores</option>` + sortedEq().map(e=>`<option value="${esc(e.id)}">${esc(eqName(e))}</option>`).join("");
   se.value = [...se.options].some(o=>o.value===c) ? c : "all";
   const rows = lecturas.filter(r => se.value==="all" || r.eq===se.value);
-  if (!rows.length){ $("#hisTbl").innerHTML = `<tr><td class="muted">Sin lecturas guardadas.</td></tr>`; return; }
+  const ver = rows.slice(0, hisLim);
+  if (!rows.length){ $("#hisTbl").innerHTML = `<tr><td class="muted">Sin lecturas guardadas.</td></tr>`; Comun.verMas($("#hisTbl"), 0, 0); return; }
   $("#hisTbl").innerHTML = `<thead><tr><th>Fecha</th><th>Capturó</th><th>Interruptor</th><th>I prom</th><th>% IR</th><th>Ajustes</th><th>Estado</th><th>Foto</th><th></th></tr></thead><tbody>` +
-    rows.map(r => { const x = calc(r), e = eqById(r.eq); return `<tr><td>${fdate(r.ts)}${Comun.marcaHora(r)}</td><td>${esc(r.autor||"—")}</td><td>${esc(e?.tag||"—")}</td><td>${fx(x.avg,0)} A</td><td>${pct(x.pctIR)}</td><td>${esc(ajustesTxt(r.set,e))}</td>
+    ver.map(r => { const x = calc(r), e = eqById(r.eq); return `<tr><td>${fdate(r.ts)}${Comun.marcaHora(r)}</td><td>${esc(r.autor||"—")}</td><td>${esc(e?.tag||"—")}</td><td>${fx(x.avg,0)} A</td><td>${pct(x.pctIR)}</td><td>${esc(ajustesTxt(r.set,e))}</td>
       <td><span class="pill ${x.ok?"ok":"bad"}" title="${esc(x.det.join("; "))}">${x.ok?"OK":"Revisar"}</span></td>
       <td>${r.foto?`<button class="linkbtn" data-foto="${esc(r.id)}">Ver</button>`:""}</td>
       <td><button class="btn danger" data-del="${esc(r.id)}">Borrar</button></td></tr>`; }).join("") + `</tbody>`;
+  Comun.verMas($("#hisTbl"), rows.length, ver.length, () => { hisLim += Comun.PAGINA; renderHis(); });
 }
 $("#hisTbl").addEventListener("click", async ev => {
   const b = ev.target.closest("[data-del]"); if (!b) return;
@@ -682,7 +686,7 @@ $("#hisTbl").addEventListener("click", async ev => {
   lecturas = lecturas.filter(q=>q.id!==b.dataset.del); persist(); await fotos.del(b.dataset.del); renderAll(); sync.sincronizar();
 });
 Comun.visorFotos(fotos, $("#hisTbl"));
-$("#hisEq").onchange = renderHis;
+$("#hisEq").onchange = () => { hisLim = Comun.PAGINA; renderHis(); };
 $("#csvBtn").onclick = () => {
   const keys = SETS.flatMap(g=>g.items.map(i=>i.k));
   const head = ["fecha","interruptor","tablero","rama","in_A","i1","i2","i3","in_neutro","i_prom","pct_In","IR_A","pct_IR","desbalance","neutro_vs_prom",...keys,"Isd_A","Ii_A","Ig_disparo_A","Ig_alarma_A","funcion","disparador","serie",...IND.map(i=>i.k),"cambios_vs_base","estado","observaciones","nota","foto","capturo","hora_manual","guardado"];

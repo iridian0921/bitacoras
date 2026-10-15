@@ -713,7 +713,18 @@ function compartir(o){
   };
 }
 
-return {vigilarVersion, $, esc, num, pct, fx, fdate, isoLocal, nowLocal, stamp, download, descargarCSV, estado,
+/* Botón «Mostrar más» debajo de una tabla larga: dibujar miles de renglones de golpe traba el teléfono.
+   total: renglones que hay; mostrados: los que se dibujaron; mas(): dibuja otro bloque. */
+function verMas(tbl, total, mostrados, mas){
+  let b = tbl.nextElementSibling?.classList.contains("vermas") ? tbl.nextElementSibling : null;
+  if (total <= mostrados){ b?.remove(); return; }
+  if (!b){ b = document.createElement("button"); b.type = "button"; b.className = "linkbtn vermas"; b.style.marginTop = "8px"; tbl.after(b); }
+  b.textContent = `Mostrar ${Math.min(PAGINA, total - mostrados)} más (van ${mostrados} de ${total})`;
+  b.onclick = mas;
+}
+const PAGINA = 200;
+
+return {verMas, PAGINA, vigilarVersion, $, esc, num, pct, fx, fdate, isoLocal, nowLocal, stamp, download, descargarCSV, estado,
   fotosDB, capturaFoto, visorFotos, DRAFT_KEY, pestanas, grafica, svgGrafica, horaCaptura, marcaHora,
   cssInforme, docInforme, figurasInforme, accionesInforme,
   respaldo, renderUso, revisarEntorno, avisoBorrador, nuevoId, compartir, syncConfig};
