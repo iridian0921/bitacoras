@@ -136,6 +136,24 @@ body.scroll .foot{grid-template-columns:minmax(0,1fr)}
 .seg.c3{grid-template-columns:repeat(3,1fr)}
 .seg button.cl{background:#27442b;border-color:#14401a;color:#b6e6b9}
 .seg button:disabled{opacity:.32;cursor:not-allowed}
+.seg.one{grid-template-columns:1fr}
+.prac{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:calc(4px*var(--u));margin-top:calc(6px*var(--u))}
+.prac select,.prac button{background:#232a26;color:#e9e3d3;border:1px solid #0d100e;border-radius:3px;
+  padding:calc(6px*var(--u)) calc(5px*var(--u));font-family:var(--cond);font-size:calc(10.5px*var(--u));min-width:0}
+.prac button{background:#2a5f88;color:#e9f4ff;border-color:#183a53;cursor:pointer}
+.prac button.on{background:#7e241c;border-color:#4d120c}
+.pdesc{font-size:calc(9.6px*var(--u));color:#c9d1c8;margin:0 0 4px;line-height:1.3}
+ol.seq li.pd{color:#c9d1c8;font-weight:400;margin-bottom:3px}ol.seq li.pd::before{display:none}
+ol.seq li.bad{color:#efa79f}ol.seq li.bad::before{background:var(--bad);color:#fff}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.62);display:flex;align-items:center;justify-content:center;z-index:9;padding:16px}
+.modal[hidden]{display:none}
+.mbox{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid #11150f;border-radius:6px;
+  padding:14px 16px;max-width:460px;width:100%;max-height:90vh;overflow:auto;color:#e6ebe4;font-size:14px}
+.mbox h2{margin:0 0 4px;font-size:18px}.mbox .nota{font-size:34px;font-weight:700;font-family:var(--mono)}
+.mbox table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px}
+.mbox td{padding:4px 2px;border-bottom:1px solid rgba(255,255,255,.08);vertical-align:top}
+.mbox td:last-child{text-align:right;font-family:var(--mono);white-space:nowrap}
+.mbox button{background:#d9a441;color:#1b1f1c;border:0;border-radius:3px;padding:8px 16px;font-weight:700;cursor:pointer;font-family:var(--cond)}
 button:focus-visible,input:focus-visible{outline:2px solid #7fc1ff;outline-offset:1px}
 
 #log{font-family:var(--mono);font-size:calc(9.5px*var(--u));line-height:1.4;background:#12100c;
@@ -239,6 +257,10 @@ body.scroll .foot{order:5}
         <div><span>Tensión</span><b id="vA">480 V</b></div>
         <div><span>Corte</span><b id="cutA" class="gd">0 ms</b></div>
       </div>
+      <div class="sl">
+        <label for="ldA"><span>Carga TGS 01</span><b id="vldA">1100 kW</b></label>
+        <input type="range" id="ldA" min="0" max="2000" step="50" value="1100">
+      </div>
     </div>
 
     <div class="card" id="cBusB">
@@ -246,6 +268,10 @@ body.scroll .foot{order:5}
       <div class="rd one">
         <div><span>Tensión</span><b id="vB">480 V</b></div>
         <div><span>Corte</span><b id="cutB" class="gd">0 ms</b></div>
+      </div>
+      <div class="sl">
+        <label for="ldB"><span>Carga TGS 02</span><b id="vldB">1100 kW</b></label>
+        <input type="range" id="ldB" min="0" max="2000" step="50" value="1100">
       </div>
     </div>
 
@@ -262,7 +288,9 @@ body.scroll .foot{order:5}
       <div class="rd one">
         <div><span>Estabilidad</span><b id="stabV">—</b></div>
         <div><span>Transferencia</span><b id="ttype">Rampa suave</b></div>
+        <div><span>Carga planta</span><b id="cPl">—</b></div>
       </div>
+      <div class="seg one"><button id="bDesl" title="Qué bus se desconecta primero si la planta se sobrecarga">Deslastre: bus 02 primero</button></div>
     </div>
 </div>
 
@@ -383,7 +411,7 @@ body.scroll .foot{order:5}
     </div>
 
     <div class="card grow" id="cSeq">
-      <p class="ttl">Secuencia <span class="tag" id="curBr">—</span></p>
+      <p class="ttl"><span id="seqT">Secuencia</span> <span class="tag" id="curBr">—</span></p>
       <ol class="seq" id="seqList"></ol>
     </div>
 </div>
@@ -401,6 +429,12 @@ body.scroll .foot{order:5}
       <button class="ret" id="bR2" disabled>HMI · regreso TR-02</button>
       <button id="bStop" disabled>Enfriar y parar</button>
       <button id="bDip">Escalón de carga</button>
+      <button class="fail" id="bT1" disabled>Disparo GE-01</button>
+      <button class="fail" id="bT2" disabled>Disparo GE-02</button>
+    </div>
+    <div class="prac">
+      <select id="pSel" aria-label="Práctica"></select>
+      <button id="pGo">Iniciar práctica</button>
     </div>
   </div>
 
@@ -417,8 +451,18 @@ body.scroll .foot{order:5}
       <button data-b="EA">TRANSF TR-01</button><button data-b="G2">GEN GE-02</button><button data-b="EB">TRANSF TR-02</button>
     </div>
     <div class="seg">
-      <button id="kF1" aria-pressed="false">GE-01 no arranca</button>
-      <button id="kF2" aria-pressed="false">GE-02 no arranca</button>
+      <button data-g="0">Arrancar GE-01</button><button data-g="1">Arrancar GE-02</button>
+    </div>
+    <p class="ttl" style="margin-top:6px">Fallas a simular</p>
+    <div class="seg c3">
+      <button data-cfe="AB" aria-pressed="true">CFE: ambas</button><button data-cfe="A" aria-pressed="false">Solo TR-01</button><button data-cfe="B" aria-pressed="false">Solo TR-02</button>
+    </div>
+    <div class="seg">
+      <button data-fx="f0" aria-pressed="false">GE-01 no arranca</button>
+      <button data-fx="f1" aria-pressed="false">GE-02 no arranca</button>
+      <button data-fx="s1" aria-pressed="false">GE-02 no sincroniza</button>
+      <button data-fx="na" aria-pressed="false">ACOM TR-01 no abre</button>
+      <button data-fx="eb" aria-pressed="false">TRANSF TR-02 no cierra</button>
     </div>
   </div>
 
@@ -429,6 +473,8 @@ body.scroll .foot{order:5}
 </div>
 
 </div>
+
+<div id="pRes" class="modal" hidden><div class="mbox"><div id="pResC"></div><button id="pResX">Cerrar</button></div></div>
 
 <script>
 /* Vista de operación CTOS I — autor: Iridian Jiménez Jiménez
@@ -443,11 +489,13 @@ var NM={NA:"INT. ACOMETIDA TR-01",NB:"INT. ACOMETIDA TR-02",
         G1:"INT. GENERADOR GE-01",G2:"INT. GENERADOR GE-02"};
 var CARD={NA:"cBusA",EA:"cBusA",NB:"cBusB",EB:"cBusB",G1:"cG1",G2:"cG2"};
 
+function nuevoGen(d){return {st:"paro",c:0,f:0,v:0,del:d,gov:0,exc:480,avr:0,P:0,Q:0,fail:false,excl:false};}
 var S={
   uA:true,uB:true,
   b:{NA:true,NB:true,EA:false,EB:false,G1:false,G2:false},
-  g:[{st:"paro",c:0,f:0,v:0,del:Math.PI*0.65,gov:0,exc:480,P:0,Q:0,fail:false},
-     {st:"paro",c:0,f:0,v:0,del:-Math.PI*0.35,gov:0,exc:480,P:0,Q:0,fail:false}],
+  g:[nuevoGen(Math.PI*0.65),nuevoGen(-Math.PI*0.35)],
+  PA:P_A,PB:P_B,desl:"B",cfe:"AB",fA:false,fB:false,plan:null,
+  fx:{na:false,eb:false},carga:0,sag:0,tOv:0,prac:null,
   fBus:0,vBus:0,delBus:Math.PI*0.65,dip:0,
   shA:0,shB:0,
   seq:null,step:0,tStep:0,branch:"—",ref:null,refMode:"auto",
@@ -496,14 +544,15 @@ function activeCmp(){
 }
 
 /* ---------- secuencias según la placa ---------- */
-var SQ_F=["Falla de red CFE confirmada por más de 3 s",
-  "Apertura automática de los interruptores de acometida TR-01 y TR-02",
-  "Arranque de las plantas GE-01 y GE-02",
-  "Primer generador sincroniza al bus y cierra",
-  "Segundo generador sincroniza al bus y cierra",
-  "Sincronía a bus muerto y cierre de transferencia TR-01",
-  "Sincronía a bus muerto y cierre de transferencia TR-02",
-  "Carga de ambas ramas en una o ambas plantas"];
+function sqF(){var a=S.fA,b=S.fB,t=a&&b?"TR-01 y TR-02":(a?"TR-01":"TR-02");
+  return ["Falla de red CFE ("+t+") confirmada por más de 3 s",
+    (a&&b?"Apertura automática de los interruptores de acometida ":"Apertura automática del interruptor de acometida ")+t,
+    "Arranque de las plantas GE-01 y GE-02",
+    "Primer generador cierra a bus muerto",
+    "Segundo generador sincroniza al bus y cierra (máx. 20 s)",
+    a?"Revisión de capacidad y cierre de transferencia TR-01 a bus muerto":"Transferencia TR-01: no aplica, TR-1 presente",
+    b?"Cierre de transferencia TR-02 a bus muerto":"Transferencia TR-02: no aplica, TR-2 presente",
+    "Carga de las ramas en la planta"];}
 var SQ_R1=["Ventana de regreso de TR-01 activa en el HMI",
   "Sincronía entre generadores y acometida TR-01",
   "Cierre del interruptor de acometida TR-01",
@@ -518,25 +567,28 @@ var SQ_R2=["Ventana de regreso de TR-02 activa en el HMI",
   "Apertura de los interruptores de generador GE-01 y GE-02"];
 var SQ_ST=["Verificación de generadores en vacío","Enfriamiento del motor",
   "Apertura de los interruptores de generador","Paro de G1 y G2"];
-function names(){return S.seq==="falla"?SQ_F:(S.seq==="r1"?SQ_R1:(S.seq==="r2"?SQ_R2:(S.seq==="stop"?SQ_ST:[])));}
+function names(){return S.seq==="falla"?sqF():(S.seq==="r1"?SQ_R1:(S.seq==="r2"?SQ_R2:(S.seq==="stop"?SQ_ST:[])));}
 function drawSeq(){
+  if(S.prac){drawPrac();return;}
+  $("seqT").textContent="Secuencia";
   var L=$("seqList"),n=names();
   if(!n.length){L.innerHTML='<li style="color:#7e8880">Sin secuencia en curso. El sistema espera órdenes.</li>';return;}
   var h="";for(var i=0;i<n.length;i++){h+='<li class="'+(i<S.step?"done":(i===S.step?"now":""))+'">'+n[i]+"</li>";}
   L.innerHTML=h;
   var cur=L.querySelector("li.now");if(cur)cur.scrollIntoView({block:"nearest"});
 }
-function startSeq(k){if(S.seq)return;S.seq=k;S.step=0;S.tStep=0;drawSeq();refreshBtns();}
+function startSeq(k){if(S.seq)return;S.seq=k;S.step=0;S.tStep=0;S.plan=null;drawSeq();refreshBtns();}
 function endSeq(m,c){S.seq=null;S.step=0;S.branch="—";S.ref=null;drawSeq();banner(m,c);refreshBtns();}
 function refreshBtns(){
-  var busy=!!S.seq;
-  $("bFail").disabled=busy||(!S.uA&&!S.uB);
-  $("bRest").disabled=busy||(S.uA&&S.uB);
-  $("bSkip").disabled=!(S.stab>0);
-  $("bR1").disabled=busy||S.stab>0||!S.uA||!S.b.EA||!genRunning();
-  $("bR2").disabled=busy||S.stab>0||!S.r1done||!S.uB||!S.b.EB||!genRunning();
-  $("bStop").disabled=busy||S.b.EA||S.b.EB||(S.g[0].st==="paro"&&S.g[1].st==="paro");
-  document.querySelectorAll('.seg button[data-b]').forEach(function(x){x.disabled=S.auto||busy;});
+  var busy=!!S.seq,pr=!!S.prac;
+  $("bFail").disabled=pr||busy||!S.uA||!S.uB;
+  $("bRest").disabled=pr||busy||(S.uA&&S.uB);
+  $("bSkip").disabled=pr||!(S.stab>0);
+  $("bR1").disabled=pr||busy||S.stab>0||!S.uA||!S.b.EA||!genRunning();
+  $("bR2").disabled=pr||busy||S.stab>0||!(S.r1done||!S.b.EA)||!S.uB||!S.b.EB||!genRunning();
+  $("bStop").disabled=pr||busy||S.b.EA||S.b.EB||(S.g[0].st!=="marcha"&&S.g[1].st!=="marcha");
+  $("mAuto").disabled=pr;
+  document.querySelectorAll('.seg button[data-b],.seg button[data-g]').forEach(function(x){x.disabled=S.auto||busy;});
 }
 
 function run(dt){
@@ -546,8 +598,14 @@ function run(dt){
   if(S.seq==="falla"){
     switch(S.step){
       case 0: if(S.tStep>3.0){log("Falla de red CFE confirmada: más de 3 s sin acometida.","e-bad");nx();} break;
-      case 1: setB("NA",false);setB("NB",false);
-        log("Abiertos automáticamente "+NM.NA+" y "+NM.NB+".","e-bad");nx(); break;
+      case 1:
+        [["A","NA"],["B","NB"]].forEach(function(x){
+          if(!S["f"+x[0]])return;
+          if(x[1]==="NA"&&S.fx.na){S.blqA=true;flash($("kNA"));
+            log(NM.NA+" NO ABRIÓ (falla de mecanismo). Bloqueo: el bus 01 no se transfiere para no retroalimentar a CFE.","e-bad");
+            banner(NM.NA+" no abrió. El bus 01 queda sin tensión hasta abrirlo en sitio (modo manual).","bad");return;}
+          setB(x[1],false);log("Abierto automáticamente "+NM[x[1]]+".","e-bad");});
+        nx(); break;
       case 2:
         if(S.g[0].st==="paro"){S.g[0].st="arrancando";S.g[0].c=0;S.g[0].gov=0;S.g[0].exc=480;}
         if(S.g[1].st==="paro"){S.g[1].st="arrancando";S.g[1].c=0;S.g[1].gov=0;S.g[1].exc=480;}
@@ -560,25 +618,41 @@ function run(dt){
         else if(S.g[1].st==="marcha"&&!S.b.G2){setB("G2",true);log(NM.G2+" cierra al bus con bus muerto.","e-ok");nx();}
         break;
       case 4: {
-        var pi=(!S.b.G1&&S.g[0].st==="marcha")?0:((!S.b.G2&&S.g[1].st==="marcha")?1:-1);
+        var pend=function(i){return !S.b[gk(i)]&&S.g[i].st==="marcha"&&!S.g[i].excl;};
+        var pi=pend(0)?0:(pend(1)?1:-1);
         if(pi<0){
           if(S.g[0].st==="arrancando"||S.g[1].st==="arrancando")break;
-          if(S.g[0].st==="falla"||S.g[1].st==="falla")
-            log("Una planta no arrancó. El tablero soporta ambas ramas con un solo generador.","e-warn");
+          if(closedGens().length<2)
+            log("Solo un generador en el bus: capacidad "+P_GEN+" kW.","e-warn");
           nx();break;
         }
+        if(S.tStep>20){S.g[pi].excl=true;S.g[pi].gov=0;
+          var cx=cmpGen(pi);
+          log("GE-0"+(pi+1)+" no logró sincronía en 20 s (ΔV "+cx.dv.toFixed(0)+" V · Δf "+cx.df.toFixed(2)+" Hz). Queda fuera; la secuencia sigue con un generador.","e-bad");
+          flash($("cG"+(pi+1)));S.tStep=0;break;}
         S.refMode="auto";S.g[pi].gov=0.15;
         var c=cmpGen(pi);
         if(okOf(c)){setB(gk(pi),true);S.g[pi].gov=0;
           log(NM[gk(pi)]+" sincronizado y cerrado · δ "+c.ang.toFixed(0)+"° · ΔV "+c.dv.toFixed(0)+" V","e-ok");nx();}
         break;
       }
-      case 5: if(S.tStep>0.8){setB("EA",true);S.shA=1;S.dip=-1.6;
-        log(NM.EA+" cierra a bus muerto. Bus 01 restablecido tras "+S.cutA.toFixed(0)+" ms.","e-warn");nx();} break;
-      case 6: if(S.tStep>1.6){setB("EB",true);S.shB=1;S.dip=-1.6;
-        log(NM.EB+" cierra a bus muerto. Bus 02 restablecido tras "+S.cutB.toFixed(0)+" ms.","e-warn");nx();} break;
-      case 7: log("Carga de ambas ramas en la planta: "+(P_A+P_B)+" kW.","e-ok");
-        endSeq("Ambas ramas alimentadas por las plantas. El regreso lo ordena el operador desde el HMI.","warn");break;
+      case 5:
+        if(!S.plan)S.plan=planCarga();
+        if(!S.plan.A){nx();break;}
+        if(S.tStep>0.8){cierraTransf("A");nx();} break;
+      case 6:
+        if(!S.plan.B){nx();break;}
+        if(S.tStep>1.6){cierraTransf("B");nx();} break;
+      case 7: {
+        var en=[],sin=[];
+        (S.b.EA?en:sin).push("01");(S.b.EB?en:sin).push("02");
+        var kw=(S.b.EA?S.PA:0)+(S.b.EB?S.PB:0);
+        if(en.length)log("Carga en la planta: "+kw+" kW (bus "+en.join(" y ")+").","e-ok");
+        var caidos=sin.filter(function(n){return n==="01"?!liveA():!liveB();});
+        if(!en.length)endSeq("Ningún bus quedó en la planta. Revisa la bitácora.","bad");
+        else if(caidos.length)endSeq("Bus "+en.join(" y ")+" en la planta. Bus "+caidos.join(" y ")+" sin tensión. El regreso lo ordena el operador desde el HMI.","bad");
+        else endSeq("Las ramas afectadas quedaron en la planta. El regreso lo ordena el operador desde el HMI.","warn");
+        break;}
     }
   }
 
@@ -617,7 +691,10 @@ function run(dt){
         else log(NM[EK]+" abierto tras "+(S.ovMs/1000).toFixed(1)+" s, con el bus ya descargado.","e-ok");
         S.ovMs=0;nx();break;
       case 5:
-        if(one){ if(S.tStep>2.5){
+        if(one&&!S.b.EB){ if(S.tStep>1.5){setB("G1",false);setB("G2",false);
+            log("Sin buses en la planta: se abren "+NM.G1+" y "+NM.G2+".","e-ok");
+            endSeq("Regreso completo sin corte de carga. Interruptores de generador abiertos; procede el enfriamiento.","ok");}
+        }else if(one){ if(S.tStep>2.5){
             S.r1done=true;
             log("Carga entre generadores estable (dif. "+Math.abs(S.g[0].P-S.g[1].P).toFixed(0)+" kW). Se autoriza la segunda transferencia.","e-ok");
             endSeq("Bus 01 de vuelta en TR-1 sin corte. Verifica estabilidad y activa el regreso de TR-02.","ok");}
@@ -641,6 +718,48 @@ function run(dt){
   }
 }
 
+/* ---------- capacidad, deslastre y protección ---------- */
+function capPl(){return closedGens().length*P_GEN;}
+function planCarga(){
+  var p={A:S.fA&&!S.blqA,B:S.fB&&!S.blqB},c=capPl(),need=(p.A?S.PA:0)+(p.B?S.PB:0);
+  if(p.A&&p.B&&need>c){
+    if(S.desl==="off")log("Carga de "+need+" kW mayor que la capacidad disponible ("+c+" kW). Deslastre desactivado: se transfieren los dos buses.","e-warn");
+    else{var x=S.desl==="B"?"B":"A";p[x]=false;if(x==="A")S.shedA=true;else S.shedB=true;
+      log("Capacidad disponible "+c+" kW < carga "+need+" kW. Deslastre: el bus "+(x==="A"?"01":"02")+" no se transfiere.","e-bad");}
+  }
+  return p;
+}
+function cierraTransf(x){
+  var k="E"+x,n=x==="A"?"01":"02";
+  if(k==="EB"&&S.fx.eb){flash($("kEB"));
+    log(NM.EB+" NO CERRÓ (falla de cierre: bobina o resorte sin cargar). El bus 02 sigue sin tensión.","e-bad");return;}
+  setB(k,true);S["sh"+x]=1;S.dip=-1.6;
+  log(NM[k]+" cierra a bus muerto. Bus "+n+" restablecido tras "+S["cut"+x].toFixed(0)+" ms.","e-warn");
+}
+function enPlanta(x){return S.b["E"+x]&&!(S.b["N"+x]&&S["u"+x]);}
+function proteger(dt,Ptot){
+  var c=capPl();S.carga=c?Ptot/c:0;
+  S.sag+=(Math.max(0,S.carga-1)*6-S.sag)*Math.min(dt*2,1);
+  if(S.prac&&S.carga>1.01)S.prac.ovT+=dt;
+  if(S.carga<=1.01){S.tOv=Math.max(0,S.tOv-dt);return;}
+  if(S.tOv===0){log("SOBRECARGA de la planta: "+(S.carga*100).toFixed(0)+" % ("+Ptot.toFixed(0)+" de "+c+" kW).","e-bad");flash($("cBusG"));}
+  S.tOv+=dt;
+  var ord=S.desl==="A"?["A","B"]:["B","A"];
+  if(S.desl!=="off"&&S.tOv>2){
+    for(var i=0;i<2;i++){var x=ord[i];
+      if(enPlanta(x)){setB("E"+x,false);S["shed"+x]=true;S.tOv=0;
+        log("Deslastre automático: abre "+NM["E"+x]+" para proteger la planta. Bus "+(x==="A"?"01":"02")+" sin tensión.","e-bad");
+        banner("Deslastre por sobrecarga: bus "+(x==="A"?"01":"02")+" desconectado.","bad");return;}}
+  }
+  if(S.tOv>(S.carga>1.25?2:6)){
+    var cl=closedGens(),gi=cl[cl.length-1];
+    S.g[gi].st="disparo";setB(gk(gi),false);S.tOv=0;flash($("cG"+(gi+1)));
+    if(S.prac)S.prac.trip++;
+    log("Protección 51 por sobrecarga dispara GE-0"+(gi+1)+".","e-bad");
+    banner("GE-0"+(gi+1)+" disparado por sobrecarga"+(closedGens().length?": el otro generador toma toda la carga.":". Los buses de la planta quedan sin tensión."),"bad");
+  }
+}
+
 function setB(k,v){
   if(S.b[k]===v)return;
   S.b[k]=v;flash($("k"+k));flash($(CARD[k]));
@@ -659,15 +778,15 @@ function phys(dt){
       var k=clamp(g.c/(i===0?3.0:3.8),0,1);
       g.f=k*(F_U+g.gov);g.v=clamp((g.c-0.6)/2.4,0,1)*g.exc;
       if(k>=1){g.st="marcha";log("G"+(i+1)+" en marcha: "+g.v.toFixed(0)+" V · "+g.f.toFixed(2)+" Hz","e-ok");}
-    }else if(g.st==="paro"||g.st==="falla"){g.f=0;g.v=0;g.P=0;g.Q=0;}
+    }else if(g.st==="paro"||g.st==="falla"||g.st==="disparo"){g.f=0;g.v=0;g.P=0;g.Q=0;}
   }
 
   var cl=closedGens();
   if(tied()){S.fBus=F_U;S.vBus=V_N;S.delBus+=(0-S.delBus)*Math.min(dt*6,1);}
   else if(cl.length){
     var sg=0,sv=0;
-    for(i=0;i<cl.length;i++){sg+=S.g[cl[i]].gov;sv+=S.g[cl[i]].exc;}
-    S.fBus=F_U+sg/cl.length+S.dip;S.vBus=sv/cl.length;
+    for(i=0;i<cl.length;i++){sg+=S.g[cl[i]].gov;sv+=S.g[cl[i]].exc+S.g[cl[i]].avr;}
+    S.fBus=F_U+sg/cl.length+S.dip-S.sag;S.vBus=sv/cl.length;
     S.delBus=wrapPi(S.delBus+TAU*(S.fBus-F_U)*dt);
   }else{S.fBus=0;S.vBus=0;}
   S.dip+=(0-S.dip)*Math.min(dt*1.2,1);
@@ -676,7 +795,7 @@ function phys(dt){
     g=S.g[i];
     if(g.st!=="marcha")continue;
     if(S.b[gk(i)]&&cl.indexOf(i)>=0){g.f=S.fBus;g.v=S.vBus;g.del=S.delBus;}
-    else{g.f=F_U+g.gov;g.v=g.exc;g.del=wrapPi(g.del+TAU*(g.f-F_U)*dt);}
+    else{g.f=F_U+g.gov;g.v=g.exc+g.avr;g.del=wrapPi(g.del+TAU*(g.f-F_U)*dt);}
   }
 
   if(!S.b.EA)S.shA=0;
@@ -686,10 +805,10 @@ function phys(dt){
   if(S.b.EA&&S.b.NA&&S.fast&&S.seq==="r1")S.shA=Math.max(S.shA-dt*1.2,0.04);
   if(S.b.EB&&S.b.NB&&S.fast&&S.seq==="r2")S.shB=Math.max(S.shB-dt*1.2,0.04);
 
-  var Ptot=P_A*S.shA+P_B*S.shB,Qtot=Ptot*TAN_PHI,tP=[0,0],tQ=[0,0];
+  var Ptot=S.PA*S.shA+S.PB*S.shB,Qtot=Ptot*TAN_PHI,tP=[0,0],tQ=[0,0];
   if(cl.length===2){
     var dP=(S.g[0].gov-S.g[1].gov)/2*900,dQ=(S.g[0].exc-S.g[1].exc)/2*22;
-    tP[0]=clamp(Ptot/2+dP,-P_GEN*0.25,P_GEN);tP[1]=Ptot-tP[0];
+    tP[0]=clamp(Ptot/2+dP,-P_GEN*0.25,Math.max(P_GEN,Ptot/2));tP[1]=Ptot-tP[0];
     tQ[0]=Qtot/2+dQ;tQ[1]=Qtot-tQ[0];
   }else if(cl.length===1){tP[cl[0]]=Ptot;tQ[cl[0]]=Qtot;}
   for(i=0;i<2;i++){
@@ -697,6 +816,8 @@ function phys(dt){
     var aP=(cl.indexOf(i)>=0)?tP[i]:0,aQ=(cl.indexOf(i)>=0)?tQ[i]:0;
     g.P+=(aP-g.P)*Math.min(dt*5,1);g.Q+=(aQ-g.Q)*Math.min(dt*5,1);
   }
+
+  proteger(dt,cl.length?Ptot:0);
 
   if(!liveA()){S.dA=true;S.cutA+=dt*1000;}
   else if(S.dA){S.dA=false;log("Bus 01 con tensión. Corte acumulado "+S.cutA.toFixed(0)+" ms.",S.cutA>0?"e-bad":"e-ok");}
@@ -769,7 +890,7 @@ function paintSLD(dt){
   $("g1st").textContent=S.g[0].st;$("g2st").textContent=S.g[1].st;
   $("g1st").setAttribute("fill",S.g[0].st==="marcha"?"#efb163":"#8d968c");
   $("g2st").setAttribute("fill",S.g[1].st==="marcha"?"#efb163":"#8d968c");
-  $("txLA").textContent=(la?P_A:0)+" kW";$("txLB").textContent=(lb?P_B:0)+" kW";
+  $("txLA").textContent=(la?S.PA:0)+" kW";$("txLB").textContent=(lb?S.PB:0)+" kW";
 
   var ok=okOf(cmpBus()),a=(S.ref==="TR-1"),b=(S.ref==="TR-2");
   $("r25A").setAttribute("opacity",a?(ok?"1":"0.6"):"0.3");
@@ -784,8 +905,8 @@ function paintSLD(dt){
 function tag(el,txt,cls){el.textContent=txt;el.className="tag"+(cls?" "+cls:"");}
 function paintGen(i){
   var g=S.g[i],n=i+1,cl=(S.b[gk(i)]&&g.st==="marcha");
-  var est=g.st==="paro"?"Paro":(g.st==="falla"?"Falla arranque":(g.st==="arrancando"?"Arrancando":(cl?"En paralelo":"En vacío")));
-  tag($("e"+n),est,g.st==="falla"?"hi":(g.st==="marcha"?(cl?"gd":"am"):""));
+  var est=g.st==="paro"?"Paro":(g.st==="falla"?"Falla arranque":(g.st==="disparo"?"Disparo":(g.st==="arrancando"?"Arrancando":(cl?"En paralelo":(g.excl?"Fuera: sin sincronía":"En vacío")))));
+  tag($("e"+n),est,(g.st==="falla"||g.st==="disparo"||g.excl)?"hi":(g.st==="marcha"?(cl?"gd":"am"):""));
   $("cG"+n).classList.toggle("live",cl);
   $("v"+n).textContent=g.v.toFixed(0);
   $("f"+n).textContent=g.f.toFixed(2);
@@ -795,7 +916,7 @@ function paintGen(i){
   $("p"+n).textContent=g.P.toFixed(0);$("p"+n).className=g.P<-20?"hi":"";
   $("q"+n).textContent=g.Q.toFixed(0);$("q"+n).className=g.Q<-150?"hi":"";
   $("fp"+n).textContent=s>5?(Math.abs(g.P)/s).toFixed(2)+(g.Q<0?" c":" i"):"—";
-  $("pc"+n).textContent=(g.P/P_GEN*100).toFixed(0)+" %";
+  $("pc"+n).textContent=(g.P/P_GEN*100).toFixed(0)+" %";$("pc"+n).className=g.P>P_GEN*1.01?"hi":"";
   var open=(g.st==="marcha"&&!S.b[gk(i)]);
   $("l"+n+"gov").textContent=cl?"Gobernador · kW":"Gobernador · velocidad";
   $("l"+n+"exc").textContent=cl?"Excitación · kVAr":"Excitación · tensión";
@@ -808,7 +929,7 @@ function estado(){
   if(S.seq==="r1"||S.seq==="r2")return "regreso";
   if(tied())return "paralelo";
   if(genRunning()&&(S.b.EA||S.b.EB))return "planta";
-  if(!S.uA&&!S.uB)return "falla";
+  if(!S.uA||!S.uB)return "falla";
   return "normal";
 }
 function paint(){
@@ -835,7 +956,8 @@ function paint(){
   $("fBus").textContent=busGLive()?S.fBus.toFixed(2):"—";
   $("fBus").className=(busGLive()&&Math.abs(S.fBus-60)>0.6)?"hi":"gd";
   $("pTot").textContent=Pt.toFixed(0);$("qTot").textContent=Qt.toFixed(0);
-  tag($("tBusG"),busGLive()?"Energizado":"Sin tensión",busGLive()?"am":"");
+  if(S.carga>1.01)tag($("tBusG"),"Sobrecarga "+(S.carga*100).toFixed(0)+" %","hi");
+  else tag($("tBusG"),busGLive()?"Energizado":"Sin tensión",busGLive()?"am":"");
   $("tOcup").textContent=(cap?(Pt/cap*100).toFixed(0):"0")+" % de capacidad";
   $("barG1").style.width=clamp(S.g[0].P/(P_GEN*2)*100,0,100)+"%";
   $("barG2").style.width=clamp(S.g[1].P/(P_GEN*2)*100,0,100)+"%";
@@ -865,6 +987,12 @@ function paint(){
   $("ovMs").className=(par&&S.fast&&S.ovMs>100)?"hi":(par?"am":"");
 
   $("ttype").textContent=S.fast?"Rápida 100 ms":"Rampa suave";
+  var cp=capPl();$("cPl").textContent=cp?(S.carga*100).toFixed(0)+" % de "+cp+" kW":"—";
+  $("cPl").className=S.carga>1.01?"hi":(S.carga>0.9?"am":(cp?"gd":""));
+  $("vldA").textContent=S.PA+" kW";$("vldB").textContent=S.PB+" kW";
+  [0,1].forEach(function(i){var g=S.g[i],b=document.querySelector('.seg button[data-g="'+i+'"]');
+    b.textContent=(g.st==="marcha"||g.st==="arrancando"?"Parar":"Arrancar")+" GE-0"+(i+1);
+    $("bT"+(i+1)).disabled=g.st!=="marcha";});
   var st=$("stabV");
   if(S.uA&&S.uB&&S.stab>0){st.textContent=Math.ceil(S.stab)+" s";st.className="hi";}
   else if(S.uA&&S.uB&&(S.b.EA||S.b.EB)){st.textContent="Cumplido";st.className="gd";}
@@ -882,11 +1010,12 @@ var last=performance.now(),pstep=-1;
 function loop(now){
   var real=Math.min((now-last)/1000,0.05);last=now;
   if(S.stab>0){S.stab=Math.max(0,S.stab-real);
-    if(S.stab===0){log("Retardo de estabilidad cumplido. El HMI habilita el regreso de TR-01.","e-ok");refreshBtns();}}
+    if(S.stab===0){log("Retardo de estabilidad cumplido. El HMI habilita el regreso"+(S.b.EA?" de TR-01.":(S.b.EB?" de TR-02.":".")),"e-ok");refreshBtns();}}
   var dt=real*S.slow;
   if(S.seq){run(dt); if(S.step!==pstep){pstep=S.step;flash($("cSeq"));}}
   else pstep=-1;
   phys(dt);paintSLD(real);drawSyn();paint();
+  if(S.prac)tickPrac(real);
   requestAnimationFrame(loop);
 }
 
@@ -907,13 +1036,19 @@ RB.forEach(function(p){$(p[0]).addEventListener("click",function(){
   $("g"+n+"exc").addEventListener("input",function(e){S.g[i].exc=parseFloat(e.target.value);});});
 
 $("bFail").addEventListener("click",function(){
-  S.uA=false;S.uB=false;S.cutA=0;S.cutB=0;S.stab=0;S.r1done=false;
-  log("FALLA DE RED CFE. Temporizador de confirmación de 3 s en curso.","e-bad");
-  banner("Falla de red CFE. Tras 3 s abren los interruptores de acometida y arrancan las plantas.","bad");
+  S.fA=S.cfe!=="B";S.fB=S.cfe!=="A";S.blqA=S.blqB=S.shedA=S.shedB=false;
+  if(S.fA)S.uA=false;if(S.fB)S.uB=false;S.cutA=0;S.cutB=0;S.stab=0;S.r1done=false;
+  S.g.forEach(function(g){g.excl=false;});
+  var t=S.fA&&S.fB?"TR-1 y TR-2":(S.fA?"TR-1":"TR-2");
+  log("FALLA DE RED CFE en "+t+". Temporizador de confirmación de 3 s en curso.","e-bad");
+  banner("Falla de red CFE en "+t+". Tras 3 s "+(S.fA&&S.fB?"abren los interruptores":"abre el interruptor")+" de acometida y arrancan las plantas.","bad");
   flash($("cUtil"));startSeq("falla");});
 $("bRest").addEventListener("click",function(){
   S.uA=true;S.uB=true;S.stab=180;S.r1done=false;refreshBtns();flash($("cUtil"));
   log("Red CFE restablecida. Retardo de estabilidad de 180 s.","e-inf");
+  [["A","01"],["B","02"]].forEach(function(x){var X=x[0];
+    if(!S.b["E"+X]&&!S.b["N"+X]&&!(X==="A"?liveA():liveB())){setB("N"+X,true);
+      log("Bus "+x[1]+" sin tensión: "+NM["N"+X]+" cierra a bus muerto al volver la red.","e-ok");}});
   banner("Red restablecida. Durante 180 s el control bloquea el regreso; después lo activa el operador.","inf");});
 $("bSkip").addEventListener("click",function(){if(S.stab>0){S.stab=3;log("Retardo de estabilidad acelerado para la práctica.","e-warn");}});
 $("bR1").addEventListener("click",function(){log("HMI: el operador activa el regreso de TR-01.","e-inf");
@@ -921,48 +1056,184 @@ $("bR1").addEventListener("click",function(){log("HMI: el operador activa el reg
 $("bR2").addEventListener("click",function(){log("HMI: el operador activa el regreso de TR-02.","e-inf");
   banner("Regreso de TR-02: al abrir su transferencia se abren también los interruptores de generador.","inf");startSeq("r2");});
 $("bStop").addEventListener("click",function(){log("Orden del operador: enfriamiento y paro.","e-inf");startSeq("stop");});
+[0,1].forEach(function(i){$("bT"+(i+1)).addEventListener("click",function(){
+  var g=S.g[i];if(g.st!=="marcha")return;
+  var tenia=S.b[gk(i)];g.st="disparo";setB(gk(i),false);flash($("cG"+(i+1)));
+  log("DISPARO de GE-0"+(i+1)+" en marcha (protección del motor)."+(tenia?" Abre "+NM[gk(i)]+".":""),"e-bad");
+  if(tenia)banner("GE-0"+(i+1)+" disparado. "+(closedGens().length?"El otro generador toma toda la carga.":"La planta se queda sin generadores."),"bad");
+  refreshBtns();});});
 $("bDip").addEventListener("click",function(){
   if(!genRunning()){log("No hay generadores en marcha.","e-bad");return;}
   S.dip=-1.9;log("Escalón de carga aplicado: observa el hundimiento de frecuencia.","e-warn");flash($("cBusG"));});
-$("bReset").addEventListener("click",function(){
+function reiniciar(){
+  if(S.prac)finPrac(false);
   S.seq=null;S.step=0;S.uA=true;S.uB=true;S.branch="—";S.ref=null;S.slow=1;S.refMode="auto";S.stab=0;S.r1done=false;
   S.b={NA:true,NB:true,EA:false,EB:false,G1:false,G2:false};
-  S.g[0]={st:"paro",c:0,f:0,v:0,del:Math.PI*0.65,gov:0,exc:480,P:0,Q:0,fail:false};
-  S.g[1]={st:"paro",c:0,f:0,v:0,del:-Math.PI*0.35,gov:0,exc:480,P:0,Q:0,fail:false};
+  S.g=[nuevoGen(Math.PI*0.65),nuevoGen(-Math.PI*0.35)];
   S.shA=0;S.shB=0;S.cutA=0;S.cutB=0;S.ovMs=0;S.dip=0;S.delBus=Math.PI*0.65;S.fBus=0;S.vBus=0;
-  ["kF1","kF2"].forEach(function(x){$(x).setAttribute("aria-pressed","false");});
+  S.fx={na:false,eb:false};S.carga=0;S.sag=0;S.tOv=0;S.plan=null;S.fA=S.fB=false;
+  S.blqA=S.blqB=S.shedA=S.shedB=false;
+  document.querySelectorAll(".seg button[data-fx]").forEach(function(x){x.setAttribute("aria-pressed","false");});
   ["g1gov","g2gov"].forEach(function(x){$(x).value=0;});
   ["g1exc","g2exc"].forEach(function(x){$(x).value=480;});
   RB.forEach(function(q){$(q[0]).setAttribute("aria-pressed",String(q[1]==="auto"));});
   drawSeq();refreshBtns();
   banner("Operación normal: TR-1 alimenta el bus de carga 01 y TR-2 el bus de carga 02.","ok");
-  log("Sistema reiniciado a operación normal.","");});
-[["kF1",0],["kF2",1]].forEach(function(p){$(p[0]).addEventListener("click",function(){
-  var on=$(p[0]).getAttribute("aria-pressed")!=="true";
-  $(p[0]).setAttribute("aria-pressed",String(on));S.g[p[1]].fail=on;
-  log("GE-0"+(p[1]+1)+(on?": se simulará falla al arranque.":": falla al arranque cancelada."),on?"e-warn":"");});});
+}
+$("bReset").addEventListener("click",function(){reiniciar();log("Sistema reiniciado a operación normal.","");});
+var FX={f0:"GE-01 no arranca",f1:"GE-02 no arranca",s1:"GE-02 no sincroniza: regulador de tensión desajustado (+35 V)",
+  na:"INT. ACOMETIDA TR-01 no abre",eb:"INT. TRANSFERENCIA TR-02 no cierra"};
+function setFx(k,on){
+  var b=document.querySelector('.seg button[data-fx="'+k+'"]');b.setAttribute("aria-pressed",String(on));
+  if(k==="f0")S.g[0].fail=on;else if(k==="f1")S.g[1].fail=on;else if(k==="s1")S.g[1].avr=on?35:0;else S.fx[k]=on;
+}
+document.querySelectorAll(".seg button[data-fx]").forEach(function(b){b.addEventListener("click",function(){
+  var k=b.dataset.fx,on=b.getAttribute("aria-pressed")!=="true";setFx(k,on);
+  log((on?"Se simulará: ":"Cancelada: ")+FX[k]+".",on?"e-warn":"");});});
+document.querySelectorAll(".seg button[data-cfe]").forEach(function(b){b.addEventListener("click",function(){
+  S.cfe=b.dataset.cfe;document.querySelectorAll(".seg button[data-cfe]").forEach(function(x){x.setAttribute("aria-pressed",String(x===b));});});});
+var DESL={B:"Deslastre: bus 02 primero",A:"Deslastre: bus 01 primero",off:"Deslastre: desactivado"};
+function setDesl(v){S.desl=v;$("bDesl").textContent=DESL[v];$("bDesl").setAttribute("aria-pressed",String(v==="off"));}
+$("bDesl").addEventListener("click",function(){setDesl(S.desl==="B"?"A":(S.desl==="A"?"off":"B"));
+  log(DESL[S.desl]+".",S.desl==="off"?"e-warn":"");});
+function setCarga(x,v){S["P"+x]=v;$("ld"+x).value=v;}
+["A","B"].forEach(function(x){$("ld"+x).addEventListener("input",function(e){S["P"+x]=parseInt(e.target.value,10);});
+  $("ld"+x).addEventListener("change",function(){log("Carga TGS 0"+(x==="A"?1:2)+": "+S["P"+x]+" kW.","");});});
+document.querySelectorAll(".seg button[data-g]").forEach(function(b){b.addEventListener("click",function(){
+  var i=+b.dataset.g,g=S.g[i];
+  if(g.st==="marcha"||g.st==="arrancando"){
+    if(S.b[gk(i)]){log("Abre primero "+NM[gk(i)]+" para parar GE-0"+(i+1)+".","e-bad");return;}
+    g.st="paro";g.c=0;log("GE-0"+(i+1)+" parado por el operador.","");
+  }else{g.st="arrancando";g.c=0;g.excl=false;log("Arranque manual de GE-0"+(i+1)+".","e-inf");}
+  refreshBtns();});});
 
 document.querySelectorAll('.seg button[data-b]').forEach(function(btn){
   btn.addEventListener("click",function(){
-    var k=btn.dataset.b;
+    var k=btn.dataset.b,P=S.prac;
     if(S.b[k]){
+      if(k==="NA"&&S.fx.na){S.fx.na=false;setFx("na",false);log("Disparo mecánico local de "+NM.NA+": abre en sitio.","e-warn");}
       if((k==="EA"&&!S.b.NA&&liveA())||(k==="EB"&&!S.b.NB&&liveB()))
         log("Apertura de "+NM[k]+" sin fuente alterna: el bus queda sin tensión.","e-bad");
       setB(k,false);log(NM[k]+" abierto por maniobra manual.","");
     }else{
+      if((k==="EA"&&S.b.NA&&!S.uA)||(k==="EB"&&S.b.NB&&!S.uB)||(k==="NA"&&S.b.EA&&!S.uA&&busGLive())||(k==="NB"&&S.b.EB&&!S.uB&&busGLive())){
+        if(P)P.encl++;
+        log("Enclavamiento: no cierra "+NM[k]+". Con la acometida cerrada y sin red CFE la planta retroalimentaría al transformador.","e-bad");
+        banner("Enclavamiento: abre primero el interruptor de acometida.","bad");return;}
+      if(k==="EB"&&S.fx.eb){log(NM.EB+" no cierra (falla de cierre).","e-bad");return;}
+      if((k==="G1"&&S.g[0].st!=="marcha")||(k==="G2"&&S.g[1].st!=="marcha")){log("GE-0"+k[1]+" no está en marcha.","e-bad");return;}
       var c=null;
       if(k==="G1"&&busGLive())c=cmpGen(0);
       else if(k==="G2"&&busGLive())c=cmpGen(1);
       else if((k==="NA"&&S.b.EA&&genRunning())||(k==="NB"&&S.b.EB&&genRunning())||
               (k==="EA"&&genRunning()&&S.b.NA&&S.uA)||(k==="EB"&&genRunning()&&S.b.NB&&S.uB))c=cmpBus();
       if(c&&!okOf(c)){
+        if(P)P.b25++;
         log("Relé 25 bloquea el cierre de "+NM[k]+" · δ "+c.ang.toFixed(0)+"° · ΔV "+c.dv.toFixed(0)+" V","e-bad");
         banner("Sin permisivo de sincronismo para "+NM[k]+".","bad");return;}
       setB(k,true);log(NM[k]+" cerrado por maniobra manual.","e-ok");
+      if(P&&(k==="NA"||k==="NB")&&!P.first)P.first=k;
       if(k==="EA")S.shA=(S.b.NA&&S.uA)?0.5:1;
       if(k==="EB")S.shB=(S.b.NB&&S.uB)?0.5:1;
     }
     refreshBtns();});});
+
+/* ---------- modo práctica ---------- */
+function mmss(t){t=Math.floor(t);return Math.floor(t/60)+":"+String(t%60).padStart(2,"0");}
+function fmtS(t){return t<10?t.toFixed(1)+" s":t.toFixed(0)+" s";}
+function modoManual(){S.auto=false;$("mMan").setAttribute("aria-pressed","true");$("mAuto").setAttribute("aria-pressed","false");}
+function caeRed(){S.uA=S.uB=false;S.fA=S.fB=true;flash($("cUtil"));
+  log("PRÁCTICA: falla de red CFE en TR-1 y TR-2. El PLC no ejecuta la secuencia: todo es manual.","e-bad");}
+var OBJ_TOTAL=[
+  ["Abrir INT. ACOMETIDA TR-01 y TR-02",function(){return !S.b.NA&&!S.b.NB;}],
+  ["GE-01 y GE-02 en marcha",function(){return S.g[0].st==="marcha"&&S.g[1].st==="marcha";}],
+  ["GE-01 y GE-02 cerrados al bus",function(){return closedGens().length===2;}],
+  ["Bus 01 y bus 02 con tensión desde la planta",function(){return enPlanta("A")&&enPlanta("B")&&liveA()&&liveB();}]];
+var PR=[
+  {t:"Falla total: transferencia manual",
+   d:"Falla la red en las dos acometidas y el PLC no hace la secuencia. Abre las acometidas, arranca las plantas, cierra el primer generador a bus muerto, sincroniza el segundo y pasa los dos buses a la planta. Meta: menos de 45 s de corte por bus.",
+   ini:function(){caeRed();},obj:OBJ_TOTAL,corte:45,buses:["A","B"]},
+  {t:"Regreso manual sin corte",
+   d:"La red ya regresó y los dos buses están en la planta. Regresa primero el bus 01 y después el 02 sin cortar la carga: con el gobernador haz girar despacio el sincronoscopio, cierra la acometida dentro de ±10° y luego abre la transferencia. Al final abre los interruptores de generador. Meta: 0 ms de corte y menos de 60 s en paralelo con CFE.",
+   ini:function(){
+     S.b={NA:false,NB:false,EA:true,EB:true,G1:true,G2:true};
+     S.g.forEach(function(g){g.st="marcha";g.c=9;g.f=F_U;g.v=V_N;g.del=0.9;});
+     S.delBus=0.9;S.fBus=F_U;S.vBus=V_N;S.shA=S.shB=1;
+     log("PRÁCTICA: los dos buses en la planta y la red CFE presente. Haz el regreso manual.","e-inf");},
+   obj:[["Bus 01 en TR-1",function(){return S.b.NA&&!S.b.EA&&liveA();}],
+        ["Bus 02 en TR-2",function(){return S.b.NB&&!S.b.EB&&liveB();}],
+        ["Interruptores de generador abiertos",function(){return !S.b.G1&&!S.b.G2;}]],
+   corte:0,par:60,orden:true},
+  {t:"Un solo generador y 2400 kW",
+   d:"Falla total de CFE con GE-02 averiado. La carga es 1300 kW en el bus 01 (prioritario) y 1100 kW en el bus 02, pero GE-01 da 2000 kW y el deslastre automático está desactivado. Alimenta el bus prioritario sin sobrecargar la planta. Meta: menos de 45 s de corte en el bus 01.",
+   ini:function(){setCarga("A",1300);setCarga("B",1100);setDesl("off");setFx("f1",true);caeRed();},
+   obj:[["Abrir INT. ACOMETIDA TR-01",function(){return !S.b.NA;}],
+        ["GE-01 en marcha y cerrado al bus",function(){return closedGens().indexOf(0)>=0;}],
+        ["Bus 01 con tensión desde la planta",function(){return enPlanta("A")&&liveA();}],
+        ["Planta sin sobrecarga",function(){return S.carga<=1.01&&!S.prac.trip;}]],
+   corte:45,buses:["A"]},
+  {t:"GE-02 no sincroniza",
+   d:"Falla total de CFE. El regulador de tensión de GE-02 quedó desajustado (+35 V) y el relé 25 no le da permisivo. Cierra GE-01 a bus muerto, baja la excitación de GE-02 hasta igualar la tensión del bus, sincroniza y pasa los dos buses a la planta. Meta: menos de 60 s de corte por bus.",
+   ini:function(){setFx("s1",true);caeRed();},obj:OBJ_TOTAL,corte:60,buses:["A","B"]}];
+PR.forEach(function(d,i){var o=document.createElement("option");o.value=i;o.textContent=(i+1)+". "+d.t;$("pSel").appendChild(o);});
+
+function iniciarPrac(d){
+  reiniciar();
+  var prev={PA:S.PA,PB:S.PB,desl:S.desl};
+  modoManual();d.ini();S.cutA=S.cutB=0;S.ovMs=0;
+  S.prac={def:d,prev:prev,t:0,b25:0,encl:0,trip:0,ovT:0,first:null,parCur:0,parMax:0,okT:0,dr:0};
+  $("pGo").textContent="Terminar práctica";$("pGo").classList.add("on");$("pSel").disabled=true;
+  banner("Práctica: "+d.t+". Sigue los objetivos del panel.","inf");
+  drawSeq();refreshBtns();
+}
+function drawPrac(){
+  var P=S.prac,L=$("seqList");
+  $("seqT").textContent="Práctica · "+mmss(P.t);
+  var h='<li class="pd">'+P.def.d+"</li>";
+  P.def.obj.forEach(function(o){h+='<li class="'+(o[1]()?"done":"now")+'">'+o[0]+"</li>";});
+  L.innerHTML=h;
+}
+function tickPrac(real){
+  var P=S.prac;P.t+=real;
+  var par=(S.b.NA&&S.b.EA&&S.uA)||(S.b.NB&&S.b.EB&&S.uB);
+  P.parCur=par?P.parCur+real:0;P.parMax=Math.max(P.parMax,P.parCur);
+  var ok=P.def.obj.every(function(o){return o[1]();});
+  P.okT=ok?P.okT+real:0;
+  P.dr-=real;if(P.dr<=0){P.dr=0.25;drawPrac();}
+  if(P.okT>1.5)finPrac(true);
+}
+function evaluar(P){
+  var d=P.def,rows=[],pts=100;
+  function r(t,v,m){rows.push([t,v,m]);pts-=m;}
+  d.obj.forEach(function(o){var ok=o[1]();r(o[0],ok?"Cumplido":"No cumplido",ok?0:30);});
+  if(d.corte>0)d.buses.forEach(function(x){var t=S["cut"+x]/1000,over=t-d.corte;
+    r("Corte del bus "+(x==="A"?"01":"02")+" (meta "+d.corte+" s)",fmtS(t),over>0?Math.min(25,Math.ceil(over/3)):0);});
+  else{var c=S.cutA+S.cutB;r("Corte de carga (meta 0 ms)",c.toFixed(0)+" ms",c>0?30:0);}
+  if(d.par)r("Mayor tiempo en paralelo con CFE (meta "+d.par+" s)",fmtS(P.parMax),P.parMax>d.par?10:0);
+  if(d.orden)r("Regresó primero TR-01",P.first==="NA"?"Sí":(P.first?"No":"—"),P.first&&P.first!=="NA"?10:0);
+  r("Cierres bloqueados por el relé 25",String(P.b25),Math.min(20,P.b25*5));
+  r("Intentos contra el enclavamiento",String(P.encl),Math.min(30,P.encl*10));
+  r("Tiempo de la planta en sobrecarga",fmtS(P.ovT),!P.trip&&P.ovT>0.5?10:0);
+  r("Disparos por sobrecarga",String(P.trip),P.trip?40:0);
+  return {pts:Math.max(0,pts),rows:rows};
+}
+function finPrac(eval_){
+  var P=S.prac;if(!P)return;
+  var ev=eval_?evaluar(P):null;
+  S.prac=null;setCarga("A",P.prev.PA);setCarga("B",P.prev.PB);setDesl(P.prev.desl);
+  $("pGo").textContent="Iniciar práctica";$("pGo").classList.remove("on");$("pSel").disabled=false;
+  drawSeq();refreshBtns();
+  if(!ev)return;
+  var nota=ev.pts>=90?"Excelente":(ev.pts>=75?"Aprobada":"Repetir");
+  log("Práctica «"+P.def.t+"»: "+ev.pts+"/100 ("+nota+") en "+mmss(P.t)+".",ev.pts>=75?"e-ok":"e-bad");
+  banner("Práctica terminada: "+ev.pts+"/100 · "+nota+".",ev.pts>=75?"ok":"bad");
+  var h="<h2>"+P.def.t+'</h2><div class="nota" style="color:'+(ev.pts>=75?"#8fd894":"#ef9d93")+'">'+ev.pts+"/100 · "+nota+"</div>"+
+    "<div>Duración "+mmss(P.t)+"</div><table>";
+  ev.rows.forEach(function(x){h+="<tr><td>"+x[0]+"<br><b>"+x[1]+"</b></td><td>"+(x[2]?"−"+x[2]:"✔")+"</td></tr>";});
+  $("pResC").innerHTML=h+"</table>";$("pRes").hidden=false;
+}
+$("pGo").addEventListener("click",function(){if(S.prac)finPrac(true);else iniciarPrac(PR[+$("pSel").value]);});
+$("pResX").addEventListener("click",function(){$("pRes").hidden=true;});
 
 /* ---------- ajuste de pantalla ---------- */
 var u=1;
