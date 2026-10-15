@@ -163,3 +163,5 @@ i.sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:
 .solo-lectura #saveBtn,.solo-lectura #eqSave{display:none}
 .solo-lectura .nota-lectura{display:inline-block}
 table.usuarios td,table.usuarios th{white-space:nowrap;padding:6px 8px;text-align:left}
+/* clave personal: se escribe oculta sin ser campo de contraseña (así Chrome no ofrece guardarla en cada captura) */
+input.clave{-webkit-text-security:disc;text-security:disc}
