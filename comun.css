@@ -87,6 +87,20 @@ th{font-weight:600;color:var(--muted)}
 .chart{width:100%;height:auto;display:block}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:14px;margin-top:6px}
 .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+/* leyenda que se toca: resalta la línea de ese equipo; «Escala» ajusta el eje a los datos */
+.legend{gap:6px}
+.legend button.leg{font:inherit;font-size:14px;color:var(--ink);background:transparent;border:1px solid transparent;border-radius:999px;padding:5px 10px;cursor:pointer;min-height:36px}
+.legend button.leg.on{border-color:var(--ink);background:var(--surface);font-weight:700}
+.legend button.leg.tenue{opacity:.45}
+.legend button.leg.esc{border-color:var(--line);color:var(--muted);margin-left:auto}
+.legend button.leg.esc[aria-pressed=true]{color:var(--ink);border-color:var(--ink)}
+.chart-det{margin-top:8px}
+.chart-det:empty{display:none}
+.chart-det .det-hd{font-size:13px;margin-bottom:4px}
+.chart-det .det-hd i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px}
+.chart-det table{font-size:13px}
+.chart-det .mal{color:var(--bad);font-weight:600}
+.chart-det tr.sel td{background:var(--okbg)}
 .cfg{display:grid;grid-template-columns:1fr 110px;gap:8px;align-items:center;font-size:15px}
 .cfg input{width:100%}
 .note{background:var(--warnbg);padding:8px 10px;border-radius:6px;font-size:14px;margin:8px 0}
