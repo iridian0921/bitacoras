@@ -30,7 +30,7 @@ body.fit{overflow:hidden}
   grid-template-rows:auto auto minmax(0,1fr) auto}
 body.scroll .shell{height:auto;grid-template-rows:none}
 .stripA{display:grid;gap:calc(7px*var(--u));
-  grid-template-columns:1.18fr 1.18fr .96fr .84fr .84fr .74fr .86fr}
+  grid-template-columns:minmax(0,1.18fr) minmax(0,1.18fr) minmax(0,.96fr) minmax(0,.84fr) minmax(0,.84fr) minmax(0,1.1fr)}
 .midrow{display:grid;gap:calc(7px*var(--u));
   grid-template-columns:minmax(0,1fr) calc(206px*var(--u)) calc(248px*var(--u));min-height:0}
 body.scroll .stripA{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -44,6 +44,7 @@ body.scroll .midrow{grid-template-columns:minmax(0,1fr)}
 .ttl{font-size:calc(8.8px*var(--u));letter-spacing:.1em;text-transform:uppercase;color:#9aa49b;
   margin:0 0 calc(4px*var(--u));display:flex;justify-content:space-between;align-items:center;gap:4px;
   white-space:nowrap;overflow:hidden}
+.ttl>span:first-child:not(.tag){overflow:hidden;text-overflow:ellipsis;min-width:0}
 .ttl b{font-family:var(--mono);font-size:calc(9.5px*var(--u));letter-spacing:0}
 .tag{background:#11150f;border-radius:2px;padding:1px 4px;color:#d7dcd4;font-size:calc(8.4px*var(--u));
   letter-spacing:.04em;flex:0 0 auto}
@@ -78,14 +79,18 @@ body.scroll .strip{grid-template-columns:repeat(2,minmax(0,1fr))}
 .b-g2{background:linear-gradient(180deg,#d98b57,#c4713a)}
 
 /* --- sincronoscopio --- */
-#syn{display:block;margin:0 auto;width:calc(126px*var(--u));height:calc(126px*var(--u))}
+#syn{display:block;margin:0 auto;width:126px;height:126px;flex:0 0 auto}
+.synB{flex:1;min-height:0;display:flex;flex-direction:column;gap:calc(5px*var(--u))}
+.synL{flex:1 1 0;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
+body.scroll .synB{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:10px}
+body.scroll .synL{flex:none}
 .perm{display:flex;align-items:center;gap:5px;justify-content:center;margin-top:3px;font-size:calc(9.4px*var(--u));text-align:center}
 .dot{width:calc(9px*var(--u));height:calc(9px*var(--u));border-radius:50%;background:#5a635d;flex:0 0 auto}
 .dot.ok{background:var(--ok);box-shadow:0 0 7px var(--ok)}
 .dot.bad{background:var(--bad);box-shadow:0 0 7px var(--bad)}
 
 /* --- secuencia --- */
-ol.seq{list-style:none;margin:0;padding:0;counter-reset:s;overflow-y:auto;flex:1;min-height:0}
+ol.seq{list-style:none;margin:0;padding:0;counter-reset:s;overflow-y:auto;flex:1;min-height:0;position:relative;overscroll-behavior:contain}
 ol.seq li{display:flex;gap:5px;align-items:flex-start;padding:calc(2px*var(--u)) 0;
   font-size:calc(9.6px*var(--u));color:#7e8880;line-height:1.22}
 ol.seq li::before{counter-increment:s;content:counter(s);flex:0 0 calc(14px*var(--u));height:calc(14px*var(--u));
@@ -161,6 +166,8 @@ button:focus-visible,input:focus-visible{outline:2px solid #7fc1ff;outline-offse
   flex:1 1 0;height:0;min-height:0;overflow-y:auto;overflow-x:hidden;
   overscroll-behavior:contain;color:#b7c2b6}
 body.scroll #log{height:calc(130px*var(--u));flex:none}
+/* en el teléfono la secuencia tiene alto fijo: los mensajes cambian sin empujar el resto de la página */
+body.scroll ol.seq{height:calc(200px*var(--u));flex:none}
 #log p{margin:0 0 2px;word-break:break-word}#log .t{color:#6f7a6e}
 .e-ok{color:#79c97f}.e-bad{color:#e06a5f}.e-warn{color:#e0b24c}.e-inf{color:#8fb6d9}
 
@@ -210,7 +217,7 @@ body.scroll .foot{order:5}
 <!-- ================= BANDA DE INSTRUMENTOS ================= -->
 <div class="stripA">
     <div class="card" id="cG1">
-      <p class="ttl">Generador GE-01 · 2000 kW <span class="tag" id="e1">Paro</span></p>
+      <p class="ttl"><span>GE-01 · 2000 kW</span> <span class="tag" id="e1">Paro</span></p>
       <div class="rd">
         <div><span>V</span><b id="v1">0</b></div><div><span>Hz</span><b id="f1">0.00</b></div>
         <div><span>rpm</span><b id="n1">0</b></div><div><span>A</span><b id="i1">0</b></div>
@@ -226,7 +233,7 @@ body.scroll .foot{order:5}
     </div>
 
     <div class="card" id="cG2">
-      <p class="ttl">Generador GE-02 · 2000 kW <span class="tag" id="e2">Paro</span></p>
+      <p class="ttl"><span>GE-02 · 2000 kW</span> <span class="tag" id="e2">Paro</span></p>
       <div class="rd">
         <div><span>V</span><b id="v2">0</b></div><div><span>Hz</span><b id="f2">0.00</b></div>
         <div><span>rpm</span><b id="n2">0</b></div><div><span>A</span><b id="i2">0</b></div>
@@ -276,16 +283,10 @@ body.scroll .foot{order:5}
     </div>
 
     <div class="card" id="cUtil">
-      <p class="ttl">Acometidas CFE</p>
+      <p class="ttl"><span>CFE y maniobra</span></p>
       <div class="rd one">
-        <div><span>TR-1</span><b id="uA" class="gd">Presente</b></div>
-        <div><span>TR-2</span><b id="uB" class="gd">Presente</b></div>
-      </div>
-    </div>
-
-    <div class="card" id="cMan">
-      <p class="ttl">Maniobra</p>
-      <div class="rd one">
+        <div><span>Acometida TR-1</span><b id="uA" class="gd">Presente</b></div>
+        <div><span>Acometida TR-2</span><b id="uB" class="gd">Presente</b></div>
         <div><span>Estabilidad</span><b id="stabV">—</b></div>
         <div><span>Transferencia</span><b id="ttype">Rampa suave</b></div>
         <div><span>Carga planta</span><b id="cPl">—</b></div>
@@ -395,9 +396,11 @@ body.scroll .foot{order:5}
 
     <div class="card" id="cSyn">
       <p class="ttl">Sincronoscopio <span class="tag" id="tScale">×1</span></p>
+      <div class="synB"><div class="synL" id="synL">
       <canvas id="syn" width="150" height="150"></canvas>
       <div class="perm"><i class="dot" id="pDot"></i><span id="pTxt">Relé 25 en reposo</span></div>
-      <div class="rd" style="margin-top:5px">
+      </div><div class="synR">
+      <div class="rd">
         <div><span>Máquina</span><b id="sMach">—</b></div><div><span>Ref.</span><b id="sRef">—</b></div>
         <div><span>ΔV</span><b id="dV">—</b></div><div><span>Δf</span><b id="dF">—</b></div>
         <div><span>δ</span><b id="dA">—</b></div><div><span>Traslape</span><b id="ovMs">0 ms</b></div>
@@ -408,6 +411,7 @@ body.scroll .foot{order:5}
         <button id="rG2" aria-pressed="false">GE-02</button>
         <button id="rBus" aria-pressed="false">Bus/red</button>
       </div>
+      </div></div>
     </div>
 
     <div class="card grow" id="cSeq">
@@ -575,7 +579,9 @@ function drawSeq(){
   if(!n.length){L.innerHTML='<li style="color:#7e8880">Sin secuencia en curso. El sistema espera órdenes.</li>';return;}
   var h="";for(var i=0;i<n.length;i++){h+='<li class="'+(i<S.step?"done":(i===S.step?"now":""))+'">'+n[i]+"</li>";}
   L.innerHTML=h;
-  var cur=L.querySelector("li.now");if(cur)cur.scrollIntoView({block:"nearest"});
+  var cur=L.querySelector("li.now");
+  if(cur){var t=cur.offsetTop,b=t+cur.offsetHeight;
+    if(t<L.scrollTop)L.scrollTop=t;else if(b>L.scrollTop+L.clientHeight)L.scrollTop=b-L.clientHeight;}
 }
 function startSeq(k){if(S.seq)return;S.seq=k;S.step=0;S.tStep=0;S.plan=null;drawSeq();refreshBtns();}
 function endSeq(m,c){S.seq=null;S.step=0;S.branch="—";S.ref=null;drawSeq();banner(m,c);refreshBtns();}
@@ -693,14 +699,14 @@ function run(dt){
       case 5:
         if(one&&!S.b.EB){ if(S.tStep>1.5){setB("G1",false);setB("G2",false);
             log("Sin buses en la planta: se abren "+NM.G1+" y "+NM.G2+".","e-ok");
-            endSeq("Regreso completo sin corte de carga. Interruptores de generador abiertos; procede el enfriamiento.","ok");}
+            regresoCompleto();}
         }else if(one){ if(S.tStep>2.5){
             S.r1done=true;
             log("Carga entre generadores estable (dif. "+Math.abs(S.g[0].P-S.g[1].P).toFixed(0)+" kW). Se autoriza la segunda transferencia.","e-ok");
             endSeq("Bus 01 de vuelta en TR-1 sin corte. Verifica estabilidad y activa el regreso de TR-02.","ok");}
         }else{ setB("G1",false);setB("G2",false);
           log("Al abrir "+NM.EB+" se abren también "+NM.G1+" y "+NM.G2+".","e-ok");
-          endSeq("Regreso completo sin corte de carga. Interruptores de generador abiertos; procede el enfriamiento.","ok");}
+          regresoCompleto();}
         break;
     }
   }
@@ -760,6 +766,11 @@ function proteger(dt,Ptot){
   }
 }
 
+function regresoCompleto(){
+  endSeq("Regreso completo sin corte de carga. Generadores en enfriamiento automático.","ok");
+  log("Las ramas ya están en CFE: inicia el enfriamiento y paro automático de GE-01 y GE-02.","e-inf");
+  startSeq("stop");
+}
 function setB(k,v){
   if(S.b[k]===v)return;
   S.b[k]=v;flash($("k"+k));flash($(CARD[k]));
@@ -1246,10 +1257,21 @@ function checkFit(){
   var w=Math.min(document.documentElement.clientWidth||window.innerWidth,(window.screen&&screen.width)||Infinity),h=window.innerHeight;
   var ok=(w>=1080&&h>=600);
   document.body.className=ok?"fit":"scroll";
-  var s=Math.round(126*u);
-  sc.width=s;sc.height=s;sc.style.width=s+"px";sc.style.height=s+"px";
+  sizeSyn();
+}
+/* El sincronoscopio ocupa el espacio libre de su tarjeta: en PC crece a lo alto; en el teléfono va a un lado de las lecturas. */
+var synS=0;
+function sizeSyn(){
+  var L=$("synL"),s;
+  if(document.body.className==="fit")s=Math.min(L.clientWidth,L.clientHeight-$("pDot").parentNode.offsetHeight-4);
+  else s=Math.min(190,Math.max(110,$("cSyn").clientWidth*0.42));
+  s=Math.max(90,Math.floor(s));
+  if(Math.abs(s-synS)<2)return;
+  synS=s;var d=window.devicePixelRatio||1;
+  sc.width=Math.round(s*d);sc.height=Math.round(s*d);sc.style.width=s+"px";sc.style.height=s+"px";
 }
 window.addEventListener("resize",checkFit);
+if(window.ResizeObserver)new ResizeObserver(function(){sizeSyn();}).observe($("synL"));
 // ajuste automático inicial para pantallas cortas
 (function(){
   var h=window.innerHeight;
