@@ -56,6 +56,51 @@ svg.sp{width:100%;max-width:520px;height:auto;display:block}
 #tBancos select,#tBancos input{font-size:14px;padding:5px}
 .crit td{white-space:normal;vertical-align:top}.crit td:first-child{font-weight:600;white-space:nowrap}
 .formg{display:grid;grid-template-columns:120px minmax(0,1fr);gap:8px;align-items:center}
+/* resumen en palabras, arriba de todo */
+.resumen h2{margin:0 0 6px;font-size:20px}
+.resumen ul{margin:0;padding:0;list-style:none}.resumen li{display:flex;gap:8px;align-items:flex-start;margin:6px 0;line-height:1.35}
+.resumen li .ic{flex:0 0 auto;margin-top:1px}.resumen a{color:var(--accent);font-weight:600;white-space:nowrap}
+.resumen.bad{border-left:5px solid var(--bad)}.resumen.warn{border-left:5px solid var(--warn)}.resumen.ok{border-left:5px solid var(--ok)}
+/* carga de CSV compacta cuando ya hay datos */
+.drop.compacta{padding:8px;text-align:left;border-style:solid}.drop.compacta .dropTxt{display:none}
+/* ayuda y secciones plegables */
+details.ayuda{margin:10px 0;border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:var(--surface)}
+details.ayuda summary{cursor:pointer;font-weight:600;color:var(--accent)}
+details.ayuda dl{margin:8px 0 0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 10px;font-size:14px}
+details.ayuda dt{font-weight:700}details.ayuda dd{margin:0}
+@media (max-width:480px){details.ayuda dl{grid-template-columns:minmax(0,1fr)}details.ayuda dd{margin:0 0 6px}}
+details.sec{margin-top:14px}details.sec>summary{cursor:pointer;list-style:none;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding:6px 0}
+details.sec>summary::-webkit-details-marker{display:none}
+details.sec>summary::before{content:"▸";color:var(--muted);transition:transform .15s}details.sec[open]>summary::before{transform:rotate(90deg)}
+details.sec>summary .st{font:700 20px/1.2 var(--fc)}details.card.sec>summary .st{font-size:17px}details.sec>summary .sr{font-size:14px;color:var(--muted)}
+details.card.sec{margin-top:12px}
+/* mapa de bancos compacto: renglón por UPS, columna por banco */
+.bgrid{display:grid;grid-template-columns:auto repeat(4,minmax(0,1fr));gap:5px;align-items:stretch}
+.bgrid .hd{font-size:12px;color:var(--muted);text-align:center;align-self:end}.bgrid .ul{font-size:13px;color:var(--muted);align-self:center;padding-right:4px;white-space:nowrap}
+.btile{border:0;border-radius:8px;padding:6px 2px;font:700 13px var(--fb);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;min-height:48px;color:var(--ink)}
+.btile .mt{font-size:10px;font-weight:700;opacity:.7}
+.btile.ok{background:var(--okbg);color:var(--ok)}.btile.warn{background:var(--warnbg);color:var(--warn)}.btile.bad{background:var(--badbg);color:var(--bad)}.btile.na,.btile.vacio{background:var(--nabg);color:var(--na)}
+.btile.vacio{cursor:default;opacity:.6}.btile[aria-pressed="true"]{outline:3px solid var(--ink);outline-offset:1px}
+/* pronóstico */
+.horiz{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:8px}
+.horiz div{border:1px solid var(--line);border-radius:8px;padding:6px 10px}.horiz b{display:block;font:700 22px/1.1 var(--fc)}.horiz span{font-size:12px;color:var(--muted)}
+.horiz .bad{border-color:var(--bad)}.horiz .warn{border-color:var(--warn)}
+.conf{font-size:12px;color:var(--muted)}
+.txtwarn{color:var(--warn);font-weight:700}
+/* En el teléfono las tablas principales se apilan como tarjetas: cada dato con su etiqueta, sin columnas escondidas. */
+@media (max-width:600px){
+  table.apila thead{display:none}
+  table.apila,table.apila tbody{display:block}
+  table.apila tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;padding:9px 2px;border-bottom:1px solid var(--line);align-items:center}
+  table.apila td{border:0;padding:0;white-space:normal;min-width:0}
+  table.apila td.wrapc{min-width:0}
+  table.apila td[data-l]::before{content:attr(data-l) ": ";color:var(--muted);font-size:12px}
+  table.apila td.full{grid-column:1/-1}
+  table.apila td.nx{display:none}
+  table.apila td.d2{text-align:right}
+}
+.pronb{border-left:4px solid var(--line);padding:6px 10px;margin:8px 0;font-size:14px;background:var(--bg);border-radius:0 8px 8px 0}
+.pronb.bad{border-color:var(--bad)}.pronb.warn{border-color:var(--warn)}.pronb.ok{border-color:var(--ok)}
 .formg input,.formg select{width:100%;min-width:0}
 input.plain{font:500 16px var(--fb);padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);max-width:100%}
 .cmpm td.peor{color:var(--bad);font-weight:700}.cmpm td.mejor{color:var(--ok);font-weight:600}
@@ -82,37 +127,56 @@ input.plain{font:500 16px var(--fb);padding:9px;border:1px solid var(--line);bor
 <button type="button" id="syncBar" class="sync-bar noprint hidden"></button>
 
 <section id="est" class="on">
-  <div class="card noprint">
+  <div class="card noprint" id="cargaCard">
     <div class="drop" id="drop">
-      <p style="margin:0 0 10px">Carga uno o varios CSV de Gexia: los de los bancos (puedes elegir los 32 de una vez, de uno o varios meses) y los de los cargadores (CARGADORES_LADO_A y _B)</p>
-      <label class="btn filebtn">Elegir archivos CSV<input type="file" id="files" accept=".csv,text/csv" multiple></label>
-      <p class="muted" style="margin:10px 0 0;font-size:13px">Se guardan en este teléfono para formar el historial. Cargar el mismo mes otra vez no duplica nada. Al equipo solo se comparte el resumen mensual de cada banco.</p>
+      <p class="dropTxt" style="margin:0 0 10px">Carga uno o varios CSV de Gexia: los de los bancos (puedes elegir los 32 de una vez, de uno o varios meses) y los de los cargadores (CARGADORES_LADO_A y _B)</p>
+      <label class="btn filebtn"><span id="filesTxt">Elegir archivos CSV</span><input type="file" id="files" accept=".csv,text/csv" multiple></label>
+      <p class="muted dropTxt" style="margin:10px 0 0;font-size:13px">Se guardan en este teléfono para formar el historial. Cargar el mismo mes otra vez no duplica nada. Al equipo solo se comparte el resumen mensual de cada banco.</p>
     </div>
     <div class="small" id="cargados" style="margin-top:8px"></div>
   </div>
   <div id="vacio" class="card muted">Todavía no hay datos. Carga los CSV de Gexia para ver el estado de los bancos.</div>
   <div id="res" class="hidden">
     <div class="row"><label for="mes" class="muted">Mes evaluado</label><select id="mes"></select></div>
-    <h2>Estado general</h2>
+    <div class="card resumen" id="resumen"></div>
     <div class="kpis" id="kGlobal"></div>
-    <div class="leyenda">
-      <span class="tag t-ok">✓ OK</span><span class="tag t-warn">! Vigilar</span><span class="tag t-bad">✕ Reemplazar / crítico</span><span class="tag t-na">? Sin lectura del monitoreo</span><span class="tag t-na">☁ Resumen del equipo</span>
-    </div>
-    <div class="lados" id="lados"></div>
-    <h2>Prioridades de reemplazo y revisión</h2>
-    <p class="muted">Baterías que requieren atención en los bancos con CSV cargado, de la más urgente a la menos. Toca una fila para abrirla.</p>
+    <details class="ayuda">
+      <summary>¿Cómo se lee esta pantalla?</summary>
+      <dl>
+        <dt><span class="tag t-ok">✓ OK</span></dt><dd>Dentro de todos los límites. No requiere nada.</dd>
+        <dt><span class="tag t-warn">! Vigilar</span></dt><dd>Algo se sale de lo normal sin llegar a falla (resistencia +30 %, voltaje o temperatura fuera de rango). Revisar en la siguiente ronda.</dd>
+        <dt><span class="tag t-bad">✕ Reemplazar / crítico</span></dt><dd>Resistencia arriba del límite de Falla (+40 %) confirmada en dos mediciones, o voltaje o temperatura críticos. Programar el reemplazo y una prueba de capacidad.</dd>
+        <dt><span class="tag t-na">? Sin lectura</span></dt><dd>El monitoreo no reporta esa batería. Es una falla del sensor o de Gexia, no de la batería.</dd>
+        <dt><span class="tag t-na">☁ Del equipo</span></dt><dd>Resumen mensual que subió otra persona; en este teléfono no está el CSV de ese banco.</dd>
+        <dt>Resistencia (mΩ)</dt><dd>El mejor indicador del envejecimiento: sube conforme la batería pierde capacidad. Se compara contra la ficha del fabricante, contra la primera medición de la propia batería (su «línea base») y contra la mediana del banco; manda la peor.</dd>
+        <dt>Pronóstico</dt><dd>A qué ritmo sube la resistencia de cada batería y cuándo llegaría a Falla si sigue igual. Sirve para pedir refacciones a tiempo; no cambia el estado de la batería.</dd>
+        <dt>Vida esperada</dt><dd>Años que dura el modelo según su ficha, corregidos por la temperatura real del cuarto: cada <span class="lvT">8.3</span> °C arriba de 25 °C la reducen a la mitad.</dd>
+      </dl>
+    </details>
+    <h2 id="sPrio">Qué atender primero</h2>
+    <p class="muted">Baterías en Reemplazar o Vigilar, de la más urgente a la menos. Toca una fila para abrir la batería.</p>
     <div class="card tbl-wrap"><table id="prio"></table><div class="row" style="margin-top:8px"><button class="linkbtn hidden" id="prioMas">Mostrar todas</button></div></div>
-    <h2>Salud del monitoreo Gexia</h2>
-    <p class="muted">Fallas del sistema de monitoreo, separadas de las fallas de baterías.</p>
-    <div class="card tbl-wrap"><table id="mon"></table></div>
-    <div id="cargSec" class="hidden">
-      <h2>Cargadores</h2>
+    <h2 id="sPron">Pronóstico de reemplazos</h2>
+    <p class="muted">Con la tendencia de la resistencia de cada batería en el último año: cuándo llegaría a Falla si sigue al mismo ritmo.</p>
+    <div class="card" id="pron"></div>
+    <h2 id="sVida">Temperatura y vida de las baterías</h2>
+    <p class="muted">La temperatura del cuarto acorta la vida de las baterías aunque hoy midan bien.</p>
+    <div class="card" id="vidaT"></div>
+    <h2 id="sMapa">Mapa de bancos</h2>
+    <p class="muted">Color: estado del banco. Números: baterías en Reemplazar (✕) y Vigilar (!). Toca un banco para abrirlo.</p>
+    <div class="lados" id="lados"></div>
+    <details class="sec" id="dMon"><summary><span class="st">Salud del monitoreo Gexia</span><span class="sr" id="monRes"></span></summary>
+      <p class="muted">Fallas del sistema de monitoreo, separadas de las fallas de baterías.</p>
+      <div class="card tbl-wrap"><table id="mon"></table><div class="row" style="margin-top:8px"><button class="linkbtn hidden" id="monMas"></button></div></div>
+    </details>
+    <details class="sec hidden" id="cargSec"><summary><span class="st">Cargadores</span><span class="sr" id="cargRes"></span></summary>
       <p class="muted">Telemetría de los cargadores del mes (lecturas cada ~5 min agrupadas por hora). Toca una fila para abrir el banco.</p>
       <div class="card" id="cargEv"></div>
       <div class="card tbl-wrap"><table id="cargTbl"></table><div class="row" style="margin-top:8px"><button class="linkbtn hidden" id="cargMas"></button></div></div>
-    </div>
-    <h2>Hallazgos de todos los bancos</h2>
-    <div class="card" id="hallTodos"></div>
+    </details>
+    <details class="sec" id="dHall"><summary><span class="st">Todos los hallazgos, banco por banco</span><span class="sr" id="hallRes"></span></summary>
+      <div class="card" id="hallTodos"></div>
+    </details>
   </div>
 </section>
 
@@ -123,14 +187,16 @@ input.plain{font:500 16px var(--fb);padding:9px;border:1px solid var(--line);bor
     <h2 id="detT"></h2>
     <div class="muted" id="detSub"></div>
     <div class="kpis" id="kBanco" style="margin-top:8px"></div>
+    <div class="card"><h3 style="margin-top:0">Qué revisar en este banco</h3><div id="hall"></div></div>
     <div class="card">
       <h3 style="margin-top:0">Mapa del banco <span class="muted">(toca una batería)</span></h3>
       <div class="map" id="map"></div>
       <div id="bat" class="card" style="margin-bottom:0"></div>
     </div>
-    <div class="card noprint" id="repCard">
-      <h3 style="margin-top:0">Registrar reemplazo <span class="muted" id="repBat"></span></h3>
-      <div class="formg">
+    <div class="card tbl-wrap"><h3 style="margin-top:0">Detalle por batería <span class="muted" id="tablaCuenta"></span></h3><table id="tabla" class="apila"></table>
+      <div class="row" style="margin-top:8px"><button class="linkbtn" id="tablaTodas"></button></div></div>
+    <details class="card sec noprint" id="repCard"><summary><span class="st">Registrar reemplazo</span><span class="sr" id="repBat"></span></summary>
+      <div class="formg" style="margin-top:8px">
         <label for="rN">Batería</label><select id="rN"></select>
         <label for="rFecha">Fecha</label><input class="plain" type="date" id="rFecha">
         <label for="rModelo">Modelo</label><select id="rModelo"></select>
@@ -146,10 +212,8 @@ input.plain{font:500 16px var(--fb);padding:9px;border:1px solid var(--line);bor
       <button class="linkbtn hidden" id="photoDel">Quitar foto</button>
       <div class="row" style="margin-top:10px"><button class="btn" id="saveBtn">Registrar reemplazo</button></div>
       <div class="status" id="rStatus"></div>
-    </div>
-    <div class="card"><h3 style="margin-top:0">Hallazgos del banco</h3><div id="hall"></div></div>
-    <div class="card noprint"><h3 style="margin-top:0">Referencia de resistencia del banco</h3><div id="refB"></div></div>
-    <div class="card tbl-wrap"><h3 style="margin-top:0">Detalle por batería</h3><table id="tabla"></table></div>
+    </details>
+    <details class="card sec noprint"><summary><span class="st">Referencia de resistencia del banco</span><span class="sr" id="refRes"></span></summary><div id="refB" style="margin-top:8px"></div></details>
   </div>
   <div class="card hidden" id="cargBan"></div>
 </section>
@@ -292,7 +356,8 @@ const ASIGN_DEF = (() => {
   ["B|3|01","B|3|02","B|4|02"].forEach(k => a[k] = "M3");
   return a;
 })();
-const DEF_L = {rWarn:0.30, rBad:0.40, rMes:0.10, rHist:2, rTc:0, vWarn:0.25, vBad:0.60, tWarn:30, tDelta:3, tBad:35, cWarn:0.20, cBad:0.50, iFact:2, rizPct:0.5, rDias:45, sumaPct:2, vDesc:2.15, descMin:3};
+const DEF_L = {rWarn:0.30, rBad:0.40, rMes:0.10, rHist:2, rTc:0, vWarn:0.25, vBad:0.60, tWarn:30, tDelta:3, tBad:35, cWarn:0.20, cBad:0.50, iFact:2, rizPct:0.5, rDias:45, sumaPct:2, vDesc:2.15, descMin:3,
+  vidaT:8.3, vidaRed:0.25, pronMeses:6};
 const CAMPOS = [
   ["rMes","Resistencia: subida en 30 días para Vigilar (fracción)"],
   ["rHist","Resistencia: histéresis para salir de una alarma (puntos de %)"],["rTc","Resistencia: compensación por temperatura (% por °C abajo de 25 °C; 0 = sin compensar)"],
@@ -301,7 +366,9 @@ const CAMPOS = [
   ["cWarn","Conexiones: Vigilar desde (fracción)"],["cBad","Conexiones: Crítico desde (fracción)"],
   ["iFact","Corriente de flotación: Vigilar si es N veces la mediana de bancos del mismo modelo"],["rizPct","Rizado: Vigilar arriba de (% del voltaje del banco)"],
   ["rDias","Monitoreo: resistencia sin actualizar más de (días)"],["sumaPct","Monitoreo: suma de voltajes vs banco, diferencia máx. (%)"],
-  ["vDesc","Cargadores: descarga si el voltaje baja de (V/celda)"],["descMin","Cargadores: bancos de la misma rama que deben bajar a la vez para contar una descarga"]];
+  ["vDesc","Cargadores: descarga si el voltaje baja de (V/celda)"],["descMin","Cargadores: bancos de la misma rama que deben bajar a la vez para contar una descarga"],
+  ["vidaT","Vida: grados arriba de 25 °C que la reducen a la mitad (°C)"],["vidaRed","Vida: Vigilar si la temperatura la reduce más de (fracción)"],
+  ["pronMeses","Pronóstico: destacar las baterías que llegarían a Falla en menos de (meses)"]];
 const COLM = [["nombre","Marca y modelo","text"],["potencia","Potencia","text"],["ah","Ah","number"],["rRef","R ref. (mΩ)","number"],["rAdv","R Advertencia (+%)","number"],["rFalla","R Falla (+%)","number"],["vMin","Flot. mín. V/celda","number"],["vMax","Flot. máx. V/celda","number"],["vTc","Comp. flot. mV/°C/celda","number"],["celdas","Celdas","number"],["torque","Torque","text"],["vida","Vida diseño (años)","number"],["instalacion","Instalación del modelo","date"]];
 
 /* ================= almacenamiento =================
@@ -515,6 +582,74 @@ function rangos(ns){
   if (a != null) out.push(a===b ? a : `${a}–${b}`);
   return out.join(", ");
 }
+/* ================= pronóstico y vida =================
+   Pronóstico de la resistencia de una batería: pendiente de Theil-Sen (la mediana de las pendientes entre cada par de
+   mediciones; una lectura rara no la mueve) sobre las mediciones distintas de Gexia del último año, desde el reemplazo.
+   Solo se proyecta con 4 mediciones o más en 60 días o más, y si sube al menos 0.5 % al mes; si no, «estable» o
+   «pocos datos». No cambia el estado de la batería: es un aviso para planear. */
+const PRON = {minN:4, minDias:60, ventana:365, minPctMes:0.005, horizonte:3*365};
+/* k-ésimo menor de a[0..n) sin ordenar todo (quickselect); a se reacomoda */
+function kMenor(a, n, k){
+  let lo = 0, hi = n - 1;
+  while (lo < hi){
+    const x = a[(lo + hi) >> 1]; let i = lo, j = hi;
+    while (i <= j){ while (a[i] < x) i++; while (a[j] > x) j--; if (i <= j){ const t = a[i]; a[i] = a[j]; a[j] = t; i++; j--; } }
+    if (k <= j) hi = j; else if (k >= i) lo = i; else return a[k];
+  }
+  return a[k];
+}
+const medianaT = (a, n) => n % 2 ? kMenor(a, n, n >> 1) : (kMenor(a, n, (n >> 1) - 1) + kMenor(a, n, n >> 1)) / 2;
+function pronostico(propias, i, uMs, rAct, umb){
+  const pts = [], lim = uMs - PRON.ventana*DIA; let prev, j = propias.length;
+  while (j > 0 && propias[j-1].ms >= lim) j--;            // propias va en orden: se salta lo anterior a un año
+  for (; j < propias.length; j++){
+    const f = propias[j], x = f.bat[i]; if (!x || !vivo(x.r)) continue;
+    const r0 = x.r0 ?? x.r; if (r0 === prev) continue;   // Gexia repite la última medición hasta que vuelve a medir
+    prev = r0; pts.push(f.ms, x.r);
+  }
+  const nP = pts.length / 2, span = nP ? (pts[pts.length-2] - pts[0]) / DIA : 0;
+  if (nP < PRON.minN || span < PRON.minDias) return {tipo:"insuf", n:nP, span:Math.round(span)};
+  // hasta 40 mediciones repartidas en el año (780 pares): la misma pendiente que con todas, en una fracción del tiempo
+  const paso = Math.ceil(nP / 40), Q = [];
+  for (let k = 0; k < nP; k++) if (k % paso === 0 || k === nP - 1) Q.push([pts[2*k], pts[2*k+1]]);
+  const sl = new Float64Array(Q.length * (Q.length - 1) / 2); let ns = 0;
+  for (let a = 0; a < Q.length; a++) for (let b = a + 1; b < Q.length; b++){ const dt = (Q[b][0] - Q[a][0]) / DIA; if (dt >= 7) sl[ns++] = (Q[b][1] - Q[a][1]) / dt; }
+  if (!ns) return {tipo:"insuf", n:nP, span:Math.round(span)};
+  const s = medianaT(sl, ns);                                                         // mediana: mΩ por día
+  const c = med(Q.map(([t, r]) => r - s * (t - uMs) / DIA));                         // valor ajustado a hoy
+  const disp = med(Q.map(([t, r]) => Math.abs(r - (c + s * (t - uMs) / DIA)))) / c;  // qué tan bien sigue la recta
+  const base = {n:nP, span:Math.round(span), s, pctMes:s * 30 / c, ajuste:c, conf:nP >= 8 && span >= 150 && disp <= 0.03 ? "alta" : "media"};
+  if (base.pctMes < PRON.minPctMes) return {...base, tipo:"estable"};
+  const ahora = Math.max(c, rAct ?? c), en = u => u == null ? null : ahora >= u ? 0 : (u - ahora) / s;
+  return {...base, tipo:"sube", dW:en(umb.w), dB:en(umb.b), rW:umb.w, rB:umb.b};
+}
+const mesesTxt = d => d < 45 ? "menos de 2 meses" : d > PRON.horizonte ? "más de 3 años" : d < 365 ? `~${Math.round(d / 30.4)} meses` : `~${fx(d / 365.25, 1)} años`;
+const fechaEn = (uMs, d) => new Date(uMs + d * DIA).toLocaleDateString("es-MX", {month:"short", year:"numeric", timeZone:"UTC"});
+/* Texto corto del pronóstico de una batería (tablas). */
+function pronTxt(p, uMs){
+  if (!p) return "—";
+  if (p.tipo === "insuf") return "pocos datos";
+  if (p.tipo === "estable") return "estable";
+  if (p.dB === 0) return "ya en Falla";
+  return p.dB > PRON.horizonte ? "Falla en más de 3 años" : `Falla ${fechaEn(uMs, p.dB)} (${mesesTxt(p.dB)})`;
+}
+/* Vida y temperatura (regla de Arrhenius de las VRLA): la vida se reduce a la mitad por cada L.vidaT °C arriba de 25 °C.
+   Se promedia el factor de cada día del último año (no el de la temperatura promedio: un mes caliente pesa más que uno
+   templado). Abajo de 25 °C no se alarga. Con la fecha de instalación, la edad equivalente supone que estos días son
+   representativos de toda su vida. */
+function vidaTermica(hist, uMs, F, edad){
+  let sF = 0, sT = 0, n = 0;
+  for (const f of hist){
+    if (f.ms < uMs - 365*DIA) continue;
+    let t = vivo(f.tot?.t) ? f.tot.t : null;
+    if (t == null){ const ts = []; for (const k in f.bat){ const x = f.bat[k]?.t; if (vivo(x)) ts.push(x); } t = avg(ts); }
+    if (t == null || !(t > 5 && t < 60)) continue;
+    sF += t > 25 ? 2 ** ((t - 25) / L.vidaT) : 1; sT += t; n++;
+  }
+  if (n < 30 || !F.vida) return null;
+  const acel = sF / n, edadEq = edad != null ? edad * acel : null;
+  return {acel, t:sT / n, dias:n, esp:F.vida / acel, red:1 - 1 / acel, edad, edadEq, uso:edadEq != null ? edadEq / F.vida : null};
+}
 function analizar(B, ctx, d0, d1){
   const hist = ordenadas(B).filter(f => dia(f.t) <= d1).map(compensar);
   const delMes = hist.filter(f => dia(f.t) >= d0);
@@ -534,6 +669,8 @@ function analizar(B, ctx, d0, d1){
     for (let i = 1; i <= n; i++){ const x = f.bat[i] || {}; if (vivo(x.v)){ vs.push(x.v); if (vivo(x.r)) rs.push(x.r); } if (vivo(x.t)) tcs.push(x.t); }
     return {v:med(vs), r:med(rs), tc:avg(tcs)};
   }));
+  const edadB = inst ? (new Date(hoy) - new Date(inst)) / (365.25*DIA) : null;
+  const vida = vidaTermica(hist, u.ms, F, edadB), acel = vida?.acel || 1;
   const bats = [];
   for (let i = 1; i <= n; i++){
     const v = V[i-1], t = T[i-1], m = [];
@@ -597,13 +734,17 @@ function analizar(B, ctx, d0, d1){
     const v0 = vivo(p.bat[i]?.v) ? p.bat[i].v : null, tend = v != null && v0 != null ? v - v0 : null;
     if (tend != null && tend < -0.05 && est !== "bad"){ m.push(`El voltaje bajó ${fx(-tend,3)} V en el periodo`); est = peor(est, "warn"); }
     const desde = rep ? rep.fecha : inst;
-    const edad = desde ? (new Date(hoy) - new Date(desde)) / (365.25*DIA) : null;
-    // IEEE 1188: planear el reemplazo al acercarse al fin de la vida de diseño
-    if (rep && edad != null && F.vida && edad >= 0.8 * F.vida){ est = peor(est, "warn"); m.push(`Edad ${fx(edad,1)} años: ${edad >= F.vida ? "pasó" : "llega al 80 % de"} su vida de diseño (${F.vida} años); planear el reemplazo`); }
+    const edad = desde ? (new Date(hoy) - new Date(desde)) / (365.25*DIA) : null, edadEq = edad != null ? edad * acel : null;
+    // IEEE 1188: planear el reemplazo al acercarse al fin de la vida de diseño (con la edad equivalente por temperatura)
+    if (rep && edadEq != null && F.vida && edadEq >= 0.8 * F.vida){ est = peor(est, "warn"); m.push(`Edad ${fx(edad,1)} años${acel > 1.05 ? `, equivalentes a ${fx(edadEq,1)} por la temperatura` : ""}: ${edadEq >= F.vida ? "pasó" : "llega al 80 % de"} su vida de diseño (${F.vida} años); planear el reemplazo`); }
+    // pronóstico: cuándo llegaría a Advertencia y a Falla contra la referencia más baja (la primera que se cruza)
+    const refs = [base, rMed, rRef].filter(x => x > 0), cMin = refs.length ? Math.min(...refs) : null, lrB = limR(F);
+    let pronC;   // se calcula la primera vez que se pide (los resúmenes de los demás meses no lo usan)
+    const pronDe = () => pronC !== undefined ? pronC : (pronC = r != null && cMin ? pronostico(propias, i, u.ms, r, {w:cMin * (1 + lrB.w), b:cMin * (1 + lrB.b)}) : null);
     // la serie de la batería (para sus gráficas) se arma solo cuando se abre
     let serieC = null;
     const serieDe = () => serieC || (serieC = hist.map((f, j) => ({t:f.t, v:vivo(f.bat[i]?.v) ? f.bat[i].v : null, r:vivo(f.bat[i]?.r) ? f.bat[i].r : null, tc:vivo(f.bat[i]?.t) ? f.bat[i].t : null, ref:refDiaDe()[j]})));
-    bats.push({n:i, v, r, t, base, dBase, dMed, dRef, dV: v != null && vMed ? v - vMed : null, tend, est, m, get serie(){ return serieDe(); }, rep, edad, esperando,
+    bats.push({n:i, v, r, t, base, dBase, dMed, dRef, dV: v != null && vMed ? v - vMed : null, tend, est, m, get serie(){ return serieDe(); }, rep, edad, edadEq, get pron(){ return pronDe(); }, esperando,
       score: NIVEL[est]*1000 + Math.max(dBase ?? 0, dMed ?? 0, dRef ?? 0)*100 + Math.abs(v != null && vMed ? v - vMed : 0)*50});
   }
   // conexiones
@@ -638,9 +779,11 @@ function analizar(B, ctx, d0, d1){
   const iMed = ctx.iMed[mod];
   if (tot.i != null && iMed && ctx.nMod[mod] >= 3 && tot.i > iMed * L.iFact){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Corriente de flotación ${fx(tot.i,2)} A, ${fx(tot.i/iMed,1)} veces la mediana de los bancos ${mod} (${fx(iMed,2)} A).`}); }
   if (tot.riz != null && vivo(tot.v) && tot.riz/10/tot.v > L.rizPct){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Rizado ${Math.round(tot.riz)} mV = ${fx(tot.riz/10/tot.v,2)} % del voltaje del banco (límite ${L.rizPct} %).`}); }
-  // vida de diseño del banco (instalación del banco o del modelo); las baterías reemplazadas se evalúan por su fecha
-  const edadB = inst ? (new Date(hoy) - new Date(inst)) / (365.25*DIA) : null;
-  if (edadB != null && F.vida && edadB >= 0.8 * F.vida){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Banco con ${fx(edadB,1)} años: ${edadB >= F.vida ? "pasó" : "llega al 80 % de"} la vida de diseño de ${mod} (${F.vida} años); planear el reemplazo${bats.some(b => b.rep) ? " (sin contar las baterías reemplazadas)" : ""}.`}); }
+  // vida de diseño del banco (instalación del banco o del modelo), con la edad equivalente por temperatura;
+  // las baterías reemplazadas se evalúan por su fecha
+  const edadUso = vida?.edadEq ?? edadB;
+  if (edadUso != null && F.vida && edadUso >= 0.8 * F.vida){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Banco con ${fx(edadB,1)} años${vida && acel > 1.05 ? `, equivalentes a ${fx(vida.edadEq,1)} por su temperatura promedio de ${fx(vida.t,1)} °C` : ""}: ${edadUso >= F.vida ? "pasó" : "llega al 80 % de"} la vida de diseño de ${mod} (${F.vida} años); planear el reemplazo${bats.some(b => b.rep) ? " (sin contar las baterías reemplazadas)" : ""}.`}); }
+  if (vida && vida.red >= L.vidaRed){ estB = peor(estB, "warn"); hb.push({est:"warn", t:`Temperatura promedio ${fx(vida.t,1)} °C en los últimos ${vida.dias} días: la vida esperada de ${mod} baja de ${F.vida} a ${fx(vida.esp,1)} años (−${Math.round(vida.red*100)} %). Cada ${L.vidaT} °C arriba de 25 °C la reducen a la mitad; bajar la temperatura del cuarto la recupera.`}); }
   const vCelda = vivo(tot.v) ? tot.v / (n * celdas) : null;
   // rango de flotación de la ficha (a 25 °C), corrido por la compensación del fabricante a la temperatura promedio del banco
   const dT = F.vTc && tProm != null ? tProm - 25 : 0, cT = dT ? F.vTc/1000 * dT : 0;
@@ -651,7 +794,7 @@ function analizar(B, ctx, d0, d1){
   bats.filter(b => b.est === "bad" || b.est === "warn").sort((a, b) => NIVEL[b.est]-NIVEL[a.est] || a.n-b.n)
     .forEach(b => { estB = peor(estB, b.est); hb.push({est:b.est, t:`Batería ${b.n}: ${b.m.join("; ")}.`}); });
   const cuenta = {ok:0, warn:0, bad:0, na:0}; bats.forEach(b => cuenta[b.est]++);
-  return {B, clave, mod, F, inst, rRef, RB, refNom, hist, delMes, u, p, bats, vMed, rMed, tProm, conMal, hb, estB, cuenta, mon, nV, nT, n, ultR, diasR, difSuma, vCelda};
+  return {B, clave, mod, F, inst, rRef, RB, refNom, hist, delMes, u, p, bats, vMed, rMed, tProm, conMal, hb, estB, cuenta, mon, nV, nT, n, ultR, diasR, difSuma, vCelda, vida};
 }
 /* Meses evaluables: los que tienen al menos 5 días de datos. Gexia incluye en cada exportación el último día del mes
    anterior (la de agosto empieza el 31 de julio); ese día suelto queda en el historial pero no forma un mes propio. */
@@ -783,52 +926,143 @@ function actualizarResumenes(todos = true){
 let sel = null, selBat = null, mes = null, prioTodas = false, tabs = null;
 tabs = Comun.pestanas({est:renderEstado, ban:renderBanco, ten:renderTen, rem:renderRem, inf:prepInforme, cfg:renderUsage});
 
-/* ================= Estado ================= */
+/* ================= Estado =================
+   De arriba abajo: un resumen en palabras, los conteos, qué atender primero, el pronóstico, la temperatura, el mapa
+   de bancos y, plegado, lo técnico (monitoreo, cargadores y todos los hallazgos). */
+const N_PRIO = 10;
+let monTodos = false;
+/* baterías que llegarían a Falla, de la más próxima a la más lejana (para Estado y el informe) */
+function pronLista(A, maxDias = 365){
+  const out = [];
+  A.forEach(a => a.bats.forEach(b => { const p = b.pron; if (p?.tipo === "sube" && p.dB > 0 && p.dB <= maxDias && b.est !== "bad") out.push({a, b, p}); }));
+  return out.sort((x, y) => x.p.dB - y.p.dB);
+}
+const pronCuenta = A => { let insuf = 0, n = 0; A.forEach(a => a.bats.forEach(b => { if (b.pron){ n++; if (b.pron.tipo === "insuf") insuf++; } })); return {insuf, n}; };
+/* bancos con su vida esperada por temperatura, del más afectado al menos */
+const vidaLista = A => [...A.values()].filter(a => a.vida).sort((x, y) => y.vida.red - x.vida.red);
 function renderEstado(){
   const ms = mesesTodos();
   $("#vacio").classList.toggle("hidden", ms.length > 0); $("#res").classList.toggle("hidden", !ms.length);
+  $("#drop").classList.toggle("compacta", ms.length > 0); $("#filesTxt").textContent = ms.length ? "Cargar más CSV de Gexia" : "Elegir archivos CSV";
   if (!ms.length) return;
   if (!mes || !ms.includes(mes)) mes = ms[ms.length-1];
   $("#mes").innerHTML = ms.map(m => `<option value="${m}">${mesTxt(m)}</option>`).reverse().join(""); $("#mes").value = mes;
+  document.querySelectorAll(".lvT").forEach(x => x.textContent = L.vidaT);
   const A = analizarMes(mes);
   const c = {ok:0, warn:0, bad:0, na:0}; let nb = 0, nEq = 0;
   CLAVES.forEach(k => { const a = A.get(k), s = a ? null : resDe(k, mes); const cu = a?.cuenta || s?.cuenta; if (!cu) return; nb++; if (s) nEq++; for (const x in c) c[x] += cu[x] || 0; });
   const nRep = reemplazos.filter(r => r.fecha.startsWith(mes)).length;
-  $("#kGlobal").innerHTML = `<div class="kpi"><div class="l">Bancos con datos en ${mesTxt(mes)}</div><div class="v">${nb} <span class="muted" style="font-size:14px">de 32</span></div>${nEq ? `<div class="muted" style="font-size:12px">☁ ${nEq} del equipo</div>` : ""}</div>
-    <div class="kpi bad"><div class="l">✕ Reemplazar / crítico</div><div class="v">${c.bad}</div></div>
+  const PL = pronLista(A), pronN = PL.filter(x => x.p.dB <= L.pronMeses * 30.4).length;
+  $("#kGlobal").innerHTML = `<div class="kpi bad"><div class="l">✕ Reemplazar / crítico</div><div class="v">${c.bad}</div></div>
     <div class="kpi warn"><div class="l">! Vigilar</div><div class="v">${c.warn}</div></div>
-    <div class="kpi"><div class="l">? Sin lectura</div><div class="v">${c.na}</div></div>
     <div class="kpi"><div class="l">✓ OK</div><div class="v">${c.ok}</div></div>
+    <div class="kpi"><div class="l">? Sin lectura</div><div class="v">${c.na}</div></div>
+    <div class="kpi${pronN ? " warn" : ""}"><div class="l">Falla prevista en ${L.pronMeses} meses</div><div class="v">${pronN}</div></div>
     <div class="kpi"><div class="l">↻ Reemplazos del mes</div><div class="v">${nRep}</div></div>`;
-  $("#lados").innerHTML = ["A","B"].map(l => `<div class="card"><h3>Rama ${l}</h3>${[1,2,3,4].map(u => `<div class="muted" style="margin:8px 0 4px;font-size:13px">UPS ${u}</div><div class="upsg">${["01","02","03","04"].map(b => {
-      const k = `${l}|${u}|${b}`, a = A.get(k), s = a ? null : resDe(k, mes), e = a?.estB || s?.est, cu = a?.cuenta || s?.cuenta;
-      if (!e) return `<div class="bank vacio"><b>Banco ${+b} <span class="mtag">${modeloDe(k)}</span></b><span class="muted" style="font-size:13px">sin datos</span></div>`;
-      return `<button class="bank" data-k="${k}" aria-pressed="${k===sel}"><b>Banco ${+b} <span class="mtag">${a?.mod || s.mod}${s ? " ☁" : ""}</span></b><span class="tag t-${e}">${ICON[e]} ${CORTO[e]}</span>
-        <span class="row" style="font-size:13px">${cu.bad?`<span class="tag t-bad">✕ ${cu.bad}</span>`:""}${cu.warn?`<span class="tag t-warn">! ${cu.warn}</span>`:""}${cu.na?`<span class="tag t-na">? ${cu.na}</span>`:""}<span class="tag t-ok">✓ ${cu.ok}</span></span></button>`;
-    }).join("")}</div>`).join("")}</div>`).join("");
-  prioridades(A); monitoreo(A); cargadores();
+  resumenEstado(A, c, nb, nEq, PL, pronN);
+  $("#lados").innerHTML = ["A","B"].map(l => `<div class="card"><h3>Rama ${l}</h3><div class="bgrid"><span></span>${["1","2","3","4"].map(b => `<span class="hd">Banco ${b}</span>`).join("")}${[1,2,3,4].map(u => `<span class="ul">UPS ${u}</span>${["01","02","03","04"].map(b => {
+      const k = `${l}|${u}|${b}`, a = A.get(k), s = a ? null : resDe(k, mes), e = a?.estB || s?.est, cu = a?.cuenta || s?.cuenta, mod = a?.mod || s?.mod || modeloDe(k);
+      if (!e) return `<span class="btile vacio" title="${nombreK(k)}: sin datos">—<span class="mt">${mod}</span></span>`;
+      const nums = [cu.bad ? `✕${cu.bad}` : "", cu.warn ? `!${cu.warn}` : "", cu.na ? `?${cu.na}` : ""].filter(Boolean).join(" ") || "✓";
+      return `<button class="btile ${e}" data-k="${k}" aria-pressed="${k===sel}" aria-label="${nombreK(k)}: ${TXT[e]}; ${cu.bad} reemplazar, ${cu.warn} vigilar, ${cu.na} sin lectura">${nums}<span class="mt">${mod}${s ? " ☁" : ""}</span></button>`;
+    }).join("")}`).join("")}</div></div>`).join("");
+  prioridades(A); pronostico_(A, PL); vidaSec(A); monitoreo(A); cargadores();
   const ord = CLAVES.map(k => A.get(k) ? {k, hb:A.get(k).hb, e:A.get(k).estB} : resDe(k, mes) ? {k, hb:resDe(k, mes).hall, e:resDe(k, mes).est, eq:true} : null).filter(Boolean).sort((x, y) => NIVEL[y.e]-NIVEL[x.e]);
+  const nH = ord.reduce((s, x) => s + x.hb.length, 0);
+  $("#hallRes").textContent = nH ? `${nH} hallazgo(s) en ${ord.filter(x => x.hb.length).length} banco(s)` : "sin hallazgos";
   $("#hallTodos").innerHTML = ord.map(x => x.hb.length ? `<h3 style="margin-top:8px">${nombreK(x.k)}${x.eq ? " ☁" : ""}</h3><ul class="f">${x.hb.map(h => `<li><span class="tag t-${h.est}">${ICON[h.est]}</span> ${esc(h.t)}</li>`).join("")}</ul>` : "").join("") || "<p>Sin hallazgos.</p>";
 }
+/* Resumen en palabras: qué tan bien está todo y qué hacer, con enlaces a cada sección. */
+function resumenEstado(A, c, nb, nEq, PL, pronN){
+  const ir = (id, t) => ` <a href="#${id}" data-ir="${id}">${t}</a>`;
+  const malos = []; A.forEach(a => a.bats.forEach(b => { if (b.est === "bad") malos.push({a, b}); }));
+  malos.sort((x, y) => y.b.score - x.b.score);
+  const nBancosMal = new Set(malos.map(x => x.a.clave)).size, nBat = nb * 40;
+  const cls = c.bad ? "bad" : c.warn || pronN ? "warn" : "ok";
+  const tit = c.bad ? `✕ ${c.bad} batería(s) para reemplazar` : c.warn ? `! Ninguna para reemplazar; ${c.warn} en vigilancia` : "✓ Todas las baterías dentro de los límites";
+  const li = (ic, t) => `<li><span class="ic">${ic}</span><span>${t}</span></li>`, L2 = [];
+  const ult = ultimoDia();
+  L2.push(li("📋", `Se revisaron ${nb} de 32 bancos (${nBat} baterías) de ${mesTxt(mes)}${ult && ult.startsWith(mes) ? `, con datos hasta el ${fdia(ult)}` : ""}${nEq ? `; ${nEq} con el resumen del equipo ☁` : ""}.`));
+  if (c.bad) L2.push(li(`<span class="tag t-bad">✕</span>`, `<b>${c.bad} para reemplazar</b> en ${nBancosMal} banco(s)${malos.length ? `: ${malos.slice(0, 3).map(x => `${cortoK(x.a.clave)} bat. ${x.b.n}`).join(", ")}${malos.length > 3 ? "…" : ""}` : ""}.${ir("sPrio", "Ver lista")}`));
+  if (c.warn) L2.push(li(`<span class="tag t-warn">!</span>`, `<b>${c.warn} en vigilancia</b>: revisarlas en la siguiente ronda.${ir("sPrio", "Ver")}`));
+  if (A.size){
+    const PC = pronCuenta(A);
+    L2.push(li("📈", pronN ? `<b>${pronN} batería(s) llegarían a Falla en los próximos ${L.pronMeses} meses</b> al ritmo actual; conviene tener las refacciones.${ir("sPron", "Ver pronóstico")}`
+      : PL.length ? `Ninguna llegaría a Falla en ${L.pronMeses} meses; ${PL.length} en los próximos 12.${ir("sPron", "Ver")}` : `Ninguna batería llegaría a Falla en los próximos 12 meses al ritmo actual${PC.insuf ? ` (${PC.insuf} sin historial suficiente)` : ""}.`));
+    const VL = vidaLista(A), cal = VL.filter(a => a.vida.red >= L.vidaRed);
+    if (VL.length) L2.push(li("🌡️", cal.length ? `<b>${cal.length} banco(s) trabajan calientes</b> (hasta ${fx(Math.max(...cal.map(a => a.vida.t)),1)} °C promedio): su vida esperada baja hasta ${fx(Math.min(...cal.map(a => a.vida.esp)),1)} años.${ir("sVida", "Ver")}`
+      : `La temperatura no acorta de forma importante la vida de las baterías (promedio ${fx(avg(VL.map(a => a.vida.t)),1)} °C).`));
+    const nMon = [...A.values()].filter(a => a.mon.length).length;
+    L2.push(li(nMon ? `<span class="tag t-na">?</span>` : "✓", nMon ? `${nMon} banco(s) con fallas del monitoreo (no son fallas de las baterías).${ir("dMon", "Ver")}` : "Monitoreo Gexia sin fallas."));
+  }
+  const C = analizarCarg(`${mes}-01`, finMes(mes));
+  if (C.R.size){ const nC = [...C.R.values()].filter(r => r.hall.length).length;
+    L2.push(li(C.eventos.length ? "⚡" : nC ? `<span class="tag t-warn">!</span>` : "✓", `Cargadores: ${C.eventos.length ? `${C.eventos.length} descarga(s) detectada(s)` : "sin descargas"}${nC ? `; ${nC} banco(s) con hallazgos del cargador` : "; sin hallazgos"}.${C.eventos.length || nC ? ir("cargSec", "Ver") : ""}`)); }
+  const box = $("#resumen"); box.className = `card resumen ${cls}`;
+  box.innerHTML = `<h2>${tit}</h2><ul>${L2.join("")}</ul>`;
+}
+$("#resumen").addEventListener("click", e => {
+  const a = e.target.closest("[data-ir]"); if (!a) return; e.preventDefault();
+  const d = $("#" + a.dataset.ir); if (d?.tagName === "DETAILS") d.open = true;
+  d?.scrollIntoView({behavior:"smooth", block:"start"});
+});
 function prioridades(A){
   const todas = [];
   A.forEach(a => a.bats.forEach(b => { if (b.est === "bad" || b.est === "warn") todas.push({a, b}); }));
   todas.sort((x, y) => y.b.score - x.b.score);
-  const lista = prioTodas ? todas : todas.slice(0, 15);
-  $("#prio").innerHTML = todas.length ? `<thead><tr><th>#</th><th>Banco</th><th>Bat.</th><th>Estado</th><th>Motivo principal</th><th>R (mΩ)</th><th>vs base</th><th>vs banco</th><th>V</th><th>Edad</th></tr></thead><tbody>` +
-    lista.map(({a, b}, i) => `<tr class="clic" data-k="${a.clave}" data-n="${b.n}"><td>${i+1}</td><td>${cortoK(a.clave)} <span class="mtag">${a.mod}</span></td><td><b>${b.n}</b></td><td><span class="tag t-${b.est}">${ICON[b.est]} ${CORTO[b.est]}</span></td><td class="wrapc">${esc(b.m.find(x => !/^Reemplazada/.test(x)) || b.m[0] || "")}</td><td>${fx(b.r,3)}</td><td>${pct(b.dBase)}</td><td>${pct(b.dMed)}</td><td>${fx(b.v,3)}</td><td>${b.edad==null ? "—" : fx(b.edad,1)+" años"}</td></tr>`).join("") + `</tbody>`
+  const lista = prioTodas ? todas : todas.slice(0, N_PRIO);
+  $("#prio").className = "apila";
+  $("#prio").innerHTML = todas.length ? `<thead><tr><th>#</th><th>Batería</th><th>Estado</th><th>Motivo principal</th><th>R (mΩ)</th><th>Pronóstico</th></tr></thead><tbody>` +
+    lista.map(({a, b}, i) => `<tr class="clic" data-k="${a.clave}" data-n="${b.n}"><td class="nx">${i+1}</td><td>${cortoK(a.clave)} · <b>bat. ${b.n}</b> <span class="mtag">${a.mod}</span></td><td class="d2"><span class="tag t-${b.est}">${ICON[b.est]} ${CORTO[b.est]}</span></td><td class="wrapc full">${esc(b.m.find(x => !/^Reemplazada/.test(x)) || b.m[0] || "")}</td><td data-l="R">${fx(b.r,3)} mΩ</td><td class="full" data-l="Pronóstico">${pronTxt(b.pron, a.u.ms)}</td></tr>`).join("") + `</tbody>`
     : `<tbody><tr><td>${A.size ? "Ninguna batería requiere atención este mes." : "Carga los CSV de este mes para ver las baterías una por una."}</td></tr></tbody>`;
-  $("#prioMas").classList.toggle("hidden", todas.length <= 15);
-  $("#prioMas").textContent = prioTodas ? "Mostrar solo las 15 primeras" : `Mostrar todas (${todas.length})`;
+  $("#prioMas").classList.toggle("hidden", todas.length <= N_PRIO);
+  $("#prioMas").textContent = prioTodas ? `Mostrar solo las ${N_PRIO} primeras` : `Mostrar todas (${todas.length})`;
 }
 $("#prioMas").onclick = () => { prioTodas = !prioTodas; prioridades(analizarMes(mes)); };
-function monitoreo(A){
-  const ord = [...A.values()].sort((x, y) => x.clave.localeCompare(y.clave));
-  $("#mon").innerHTML = ord.length ? `<thead><tr><th>Banco</th><th>Estado</th><th>Sensores V</th><th>Sensores T</th><th>Resistencia actualizada</th><th>Suma V vs banco</th><th>Detalle</th></tr></thead><tbody>` +
-    ord.map(a => { const e = a.mon.length ? "na" : "ok"; return `<tr class="clic" data-k="${a.clave}"><td>${cortoK(a.clave)} <span class="mtag">${a.mod}</span></td><td><span class="tag t-${e}">${e==="ok" ? "✓ OK" : "? Falla"}</span></td>
-      <td>${a.nV}/${a.n}</td><td>${a.nT}/${a.n}</td><td>${a.ultR ? fdia(a.ultR) : "sin cambios"} (${a.diasR} d)</td><td>${a.difSuma==null ? "—" : fx(a.difSuma,1)+" %"}</td><td class="wrapc">${a.mon.map(esc).join("<br>") || "—"}</td></tr>`; }).join("") + `</tbody>`
-    : `<tbody><tr><td class="muted">Sin CSV cargados de este mes en este teléfono.</td></tr></tbody>`;
+/* Pronóstico: cuántas llegarían a Falla por trimestre y por modelo (para pedir refacciones) y la lista. */
+function pronostico_(A, PL){
+  const box = $("#pron");
+  if (!A.size){ box.innerHTML = `<p class="muted" style="margin:0">Carga los CSV de los bancos para calcular el pronóstico.</p>`; return; }
+  const ahora = [...A.values()].reduce((s, a) => s + a.cuenta.bad, 0), PC = pronCuenta(A);
+  const tramo = (d0, d1) => PL.filter(x => x.p.dB > d0 * 30.4 && x.p.dB <= d1 * 30.4);
+  const T = [["Hoy en Reemplazar", null, ahora, "bad"], ["En 0–3 meses", tramo(0, 3), 0, "bad"], ["En 3–6 meses", tramo(3, 6), 0, "warn"], ["En 6–12 meses", tramo(6, 12), 0, ""]];
+  const porMod = {}; A.forEach(a => a.bats.forEach(b => { if (b.est === "bad") porMod[a.mod] = (porMod[a.mod] || 0) + 1; })); PL.forEach(x => porMod[x.a.mod] = (porMod[x.a.mod] || 0) + 1);
+  box.innerHTML = `<div class="horiz">${T.map(([t, l, n, c]) => `<div class="${(l ? l.length : n) ? c : ""}"><b>${l ? l.length : n}</b><span>${t}</span></div>`).join("")}</div>
+    ${Object.keys(porMod).length ? `<p style="margin:4px 0 8px;font-size:14px"><b>Refacciones para los próximos 12 meses</b> (hoy + previstas): ${Object.entries(porMod).sort().map(([m, n]) => `${n} × ${esc(P.modelos[m]?.nombre || m)} (${m})`).join(" · ")}.</p>` : ""}
+    ${PL.length ? `<div class="tbl-wrap"><table id="pronTbl" class="apila"><thead><tr><th>Batería</th><th>Hoy</th><th>R hoy (mΩ)</th><th>Sube al mes</th><th>Llegaría a Falla</th><th>Confianza</th></tr></thead><tbody>${PL.map(({a, b, p}) => `<tr class="clic" data-k="${a.clave}" data-n="${b.n}"><td>${cortoK(a.clave)} · <b>bat. ${b.n}</b> <span class="mtag">${a.mod}</span></td><td class="d2"><span class="tag t-${b.est}">${ICON[b.est]} ${CORTO[b.est]}</span></td><td data-l="R hoy">${fx(b.r,3)} mΩ</td><td class="d2" data-l="Sube">+${fx(p.pctMes*100,1)} %/mes</td><td class="full" data-l="Llegaría a Falla"><b>${fechaEn(a.u.ms, p.dB)}</b> <span class="muted">(${mesesTxt(p.dB)})</span></td><td class="conf full" data-l="Confianza">${p.conf} · ${p.n} med. en ${Math.round(p.span/30.4)} meses</td></tr>`).join("")}</tbody></table></div>`
+      : `<p style="margin:0">Ninguna batería llegaría a Falla en los próximos 12 meses al ritmo actual.</p>`}
+    <p class="muted" style="margin:8px 0 0;font-size:13px">Proyección en línea recta de la resistencia (mediana de las pendientes entre mediciones, resiste lecturas raras) contra el límite de Falla más bajo de cada batería.${PC.insuf ? ` ${PC.insuf} de ${PC.n} baterías aún no tienen historial suficiente (se necesitan 4 mediciones de resistencia en 2 meses).` : ""} Es una estimación para planear: una batería puede acelerar su deterioro.</p>`;
 }
+$("#pron").addEventListener("click", e => { const tr = e.target.closest("tr[data-k]"); if (tr) abrirBanco(tr.dataset.k, +tr.dataset.n); });
+let vidaTodos = false;
+function vidaSec(A){
+  const box = $("#vidaT"), VL = vidaLista(A);
+  if (!VL.length){ box.innerHTML = `<p class="muted" style="margin:0">Hace falta al menos un mes de temperatura de los bancos (CSV de Gexia).</p>`; return; }
+  const afect = VL.filter(a => a.vida.red >= 0.10), lista = vidaTodos ? VL : afect;
+  box.innerHTML = `<p style="margin:0 0 8px;font-size:14px">${afect.length ? `<b>${afect.length} banco(s)</b> pierden más del 10 % de su vida por temperatura.` : "Ningún banco pierde más del 10 % de su vida por temperatura."} Temperatura promedio de los bancos en el último año: ${fx(avg(VL.map(a => a.vida.t)),1)} °C.</p>
+    ${lista.length ? `<div class="tbl-wrap"><table id="vidaTbl" class="apila"><thead><tr><th>Banco</th><th>Temp. promedio</th><th>Vida esperada</th><th>Pierde</th><th>Edad</th><th>Vida usada</th></tr></thead><tbody>${lista.map(a => { const v = a.vida, mal = v.red >= L.vidaRed;
+      return `<tr class="clic" data-k="${a.clave}"><td>${cortoK(a.clave)} <span class="mtag">${a.mod}</span></td><td class="d2${mal ? " txtwarn" : ""}" data-l="Temp.">${fx(v.t,1)} °C</td><td data-l="Vida esperada"><b>${fx(v.esp,1)}</b> de ${a.F.vida} años</td><td class="d2${mal ? " txtwarn" : ""}" data-l="Pierde">${v.red > 0.005 ? "−" + Math.round(v.red*100) + " %" : "—"}</td><td data-l="Edad">${v.edad == null ? "sin fecha" : `${fx(v.edad,1)} años${v.acel > 1.05 ? ` <span class="muted">(equiv. ${fx(v.edadEq,1)})</span>` : ""}`}</td><td class="d2${v.uso >= 0.8 ? " txtwarn" : ""}" data-l="Vida usada">${v.uso == null ? "—" : Math.round(v.uso*100) + " %"}</td></tr>`; }).join("")}</tbody></table></div>` : ""}
+    <div class="row" style="margin-top:6px"><button class="linkbtn" id="vidaMas">${vidaTodos ? "Mostrar solo los afectados" : `Ver los ${VL.length} bancos`}</button></div>
+    <p class="muted" style="margin:6px 0 0;font-size:13px">Vida de la ficha a 25 °C, reducida a la mitad por cada ${L.vidaT} °C arriba (regla de Arrhenius de las VRLA), con la temperatura diaria del último año. Edad y vida usada solo con la fecha de instalación del banco (Ajustes); suponen que la temperatura de este año es la de siempre.</p>`;
+  $("#vidaMas").onclick = () => { vidaTodos = !vidaTodos; vidaSec(A); };
+}
+$("#vidaT").addEventListener("click", e => { const tr = e.target.closest("tr[data-k]"); if (tr) abrirBanco(tr.dataset.k); });
+function monitoreo(A){
+  const ord = [...A.values()].sort((x, y) => x.clave.localeCompare(y.clave)), mal = ord.filter(a => a.mon.length);
+  const lista = monTodos ? ord : mal;
+  $("#monRes").textContent = !ord.length ? "" : mal.length ? `${mal.length} de ${ord.length} bancos con fallas` : `${ord.length} de ${ord.length} bancos sin fallas`;
+  $("#dMon").open = mal.length > 0 && $("#dMon").dataset.tocado !== "1" ? true : $("#dMon").open;
+  $("#mon").innerHTML = lista.length ? `<thead><tr><th>Banco</th><th>Estado</th><th>Sensores V</th><th>Sensores T</th><th>Resistencia actualizada</th><th>Suma V vs banco</th><th>Detalle</th></tr></thead><tbody>` +
+    lista.map(a => { const e = a.mon.length ? "na" : "ok"; return `<tr class="clic" data-k="${a.clave}"><td>${cortoK(a.clave)} <span class="mtag">${a.mod}</span></td><td><span class="tag t-${e}">${e==="ok" ? "✓ OK" : "? Falla"}</span></td>
+      <td>${a.nV}/${a.n}</td><td>${a.nT}/${a.n}</td><td>${a.ultR ? fdia(a.ultR) : "sin cambios"} (${a.diasR} d)</td><td>${a.difSuma==null ? "—" : fx(a.difSuma,1)+" %"}</td><td class="wrapc">${a.mon.map(esc).join("<br>") || "—"}</td></tr>`; }).join("") + `</tbody>`
+    : `<tbody><tr><td class="muted">${ord.length ? "Ningún banco con fallas del monitoreo." : "Sin CSV cargados de este mes en este teléfono."}</td></tr></tbody>`;
+  const nOk = ord.length - mal.length;
+  $("#monMas").classList.toggle("hidden", !nOk);
+  $("#monMas").textContent = monTodos ? "Mostrar solo los que tienen fallas" : `Mostrar también los ${nOk} sin fallas`;
+}
+$("#monMas").onclick = () => { monTodos = !monTodos; monitoreo(analizarMes(mes)); };
+$("#dMon").addEventListener("toggle", () => { $("#dMon").dataset.tocado = "1"; });
+$("#cargSec").addEventListener("toggle", () => { $("#cargSec").dataset.tocado = "1"; });
 /* tabla de cargadores (Estado e informe) */
 const filaCarg = (r, corto) => corto ? `<td>${fx(r.vc,3)}</td><td>${fx(r.iFlot,2)}</td><td>${r.hOff || "—"}</td>`
   : `<td>${fx(r.vc,3)}</td><td>${fx(r.vc == null ? null : r.vc*celdasBanco(r.clave),1)}</td><td>${fx(r.iFlot,2)}</td><td>${r.hs.length}</td><td>${r.hOff || "—"}</td>`;
@@ -837,6 +1071,9 @@ const CAB_CARG_C = `<th>V/celda</th><th>I flot. (A)</th><th>Sin lectura (h)</th>
 function cargadores(){
   const C = analizarCarg(`${mes}-01`, finMes(mes));
   $("#cargSec").classList.toggle("hidden", !C.R.size); if (!C.R.size) return;
+  const nH = [...C.R.values()].filter(r => r.hall.length).length;
+  if (C.eventos.length && $("#cargSec").dataset.tocado !== "1") $("#cargSec").open = true;
+  $("#cargRes").textContent = `${C.eventos.length ? `${C.eventos.length} descarga(s)` : "sin descargas"} · ${nH ? `${nH} banco(s) con hallazgos` : "sin hallazgos"}`;
   $("#cargEv").innerHTML = `<h3 style="margin-top:0">Descargas detectadas</h3>` + (C.eventos.length
     ? `<ul class="f">${C.eventos.map(e => `<li><span class="tag t-warn">⚡</span> ${esc(eventoTxt(e))}<div class="muted" style="font-size:13px">${e.bancos.map(([k, v]) => `${cortoK(k)} ${fx(v,3)}`).join(" · ")}</div></li>`).join("")}</ul>`
     : `<p class="muted" style="margin:0">Sin descargas en el mes (ninguna hora con ${L.descMin} o más bancos de la misma rama abajo de ${L.vDesc} V/celda).</p>`);
@@ -919,21 +1156,32 @@ function renderBanco(){
   $("#detSub").textContent = `Modelo ${a.mod}: ${a.F.nombre || "—"} · ${mesTxt(mes)} · ${a.delMes.length} lecturas diarias · valores del ${fdia(a.u.t)} · historial desde el ${fdia(a.hist[0].t)}${a.inst ? ` · instalado el ${fdia(a.inst)}` : ""}`;
   const k = (l, v, cls="") => `<div class="kpi ${cls}"><div class="l">${l}</div><div class="v">${v}</div></div>`;
   const rizMal = tot.riz != null && vivo(tot.v) && tot.riz/10/tot.v > L.rizPct;
+  const prox = a.bats.filter(b => b.pron?.tipo === "sube" && b.pron.dB > 0 && b.est !== "bad").sort((x, y) => x.pron.dB - y.pron.dB)[0], v = a.vida;
   $("#kBanco").innerHTML = k("Estado", `<span class="tag t-${a.estB}" style="font-size:15px">${ICON[a.estB]} ${CORTO[a.estB]}</span>`)
+    + k("Baterías", `<span style="font-size:16px">${a.cuenta.bad ? `<span class="tag t-bad">✕ ${a.cuenta.bad}</span> ` : ""}${a.cuenta.warn ? `<span class="tag t-warn">! ${a.cuenta.warn}</span> ` : ""}${a.cuenta.na ? `<span class="tag t-na">? ${a.cuenta.na}</span> ` : ""}<span class="tag t-ok">✓ ${a.cuenta.ok}</span></span>`)
+    + k("Próxima Falla prevista", prox ? `<span style="font-size:18px">Bat. ${prox.n} · ${fechaEn(a.u.ms, prox.pron.dB)}</span>` : `<span style="font-size:16px">${a.cuenta.bad ? "Ninguna más" : "Ninguna"} en 3 años</span>`, prox && prox.pron.dB <= L.pronMeses*30.4 ? "warn" : "")
+    + k("Vida esperada", v ? `${fx(v.esp,1)} <span style="font-size:14px">de ${a.F.vida} años</span>` : "—", v && v.red >= L.vidaRed ? "warn" : "")
     + k("Voltaje del banco", vivo(tot.v) ? fx(tot.v,1)+" V" : "Sin lectura", vivo(tot.v) ? "" : "warn")
     + k("Corriente", vivo(tot.v) ? fx(tot.i,2)+" A" : "—", a.hb.some(h => /Corriente/.test(h.t)) ? "warn" : "")
     + k("Temperatura", fx(tot.t,1)+" °C") + k("Rizado", tot.riz ? Math.round(tot.riz)+" mV" : "—", rizMal ? "warn" : "")
     + k("Flotación promedio", a.vCelda ? fx(a.vCelda,3)+" V/celda" : "—", a.hb.some(h => /Flotación/.test(h.t)) ? "warn" : "") + k("R mediana", fx(a.rMed,3)+" mΩ");
   $("#map").innerHTML = a.bats.map(b => `<button class="cell ${b.est}" data-n="${b.n}" aria-pressed="${b.n===selBat}" aria-label="Batería ${b.n}: ${TXT[b.est]}${b.rep?", reemplazada":""}">${b.rep?'<span class="nu" title="Reemplazada">↻</span>':""}${b.n}<i>${ICON[b.est]}</i></button>`).join("");
   refBanco(a);
-  $("#hall").innerHTML = a.hb.length ? `<ul class="f">${a.hb.map(h => `<li><span class="tag t-${h.est}">${ICON[h.est]}</span> ${esc(h.t)}</li>`).join("")}</ul>` : "<p>Sin hallazgos.</p>";
-  $("#tabla").innerHTML = `<thead><tr><th>Bat.</th><th>Estado</th><th>V</th><th>Δ V mediana</th><th>Tendencia V</th><th>R (mΩ)</th><th>R base</th><th>vs base</th><th>vs banco</th>${a.rRef?`<th>vs ${a.RB?.r ? "ref. real" : "fabricante"}</th>`:""}<th>T (°C)</th><th>Edad</th></tr></thead><tbody>` +
-    a.bats.map(b => `<tr class="clic" data-n="${b.n}"><td>${b.n}${b.rep?" ↻":""}</td><td><span class="tag t-${b.est}">${ICON[b.est]} ${TXT[b.est]}</span></td><td>${fx(b.v,3)}</td><td>${b.dV==null?"—":(b.dV>0?"+":"")+fx(b.dV,3)}</td><td>${b.tend==null?"—":(b.tend>0?"+":"")+fx(b.tend,3)}</td><td>${fx(b.r,3)}</td><td>${fx(b.base,3)}</td><td>${pct(b.dBase)}</td><td>${pct(b.dMed)}</td>${a.rRef?`<td>${pct(b.dRef)}</td>`:""}<td>${fx(b.t,1)}</td><td>${b.edad==null?"—":fx(b.edad,1)}</td></tr>`).join("") + `</tbody>`;
+  $("#hall").innerHTML = a.hb.length ? `<ul class="f">${a.hb.map(h => `<li><span class="tag t-${h.est}">${ICON[h.est]}</span> ${esc(h.t)}</li>`).join("")}</ul>` : "<p>Sin hallazgos: todas las baterías y el banco dentro de los límites.</p>";
+  // detalle: por omisión solo las que tienen algo (estado distinto de OK o Falla prevista en 12 meses); «Ver las 40» muestra todas
+  const conAlgo = b => b.est !== "ok" || (b.pron?.tipo === "sube" && b.pron.dB <= 365) || b.n === selBat;
+  const filas = tablaTodas ? a.bats : a.bats.filter(conAlgo);
+  $("#tablaCuenta").textContent = tablaTodas ? `(las ${a.bats.length})` : `(${filas.length} con algo que revisar)`;
+  $("#tablaTodas").textContent = tablaTodas ? "Mostrar solo las que tienen algo" : `Ver las ${a.bats.length} baterías`;
+  $("#tabla").innerHTML = filas.length ? `<thead><tr><th>Bat.</th><th>Estado</th><th>V</th><th>Δ V mediana</th><th>Cambio V</th><th>R (mΩ)</th><th>vs base</th><th>vs banco</th>${a.rRef?`<th>vs ${a.RB?.r ? "ref. real" : "ficha"}</th>`:""}<th>T (°C)</th><th>Pronóstico</th><th>Edad</th></tr></thead><tbody>` +
+    filas.map(b => `<tr class="clic" data-n="${b.n}"><td><b>Bat. ${b.n}</b>${b.rep?" ↻":""}</td><td class="d2"><span class="tag t-${b.est}">${ICON[b.est]} ${TXT[b.est]}</span></td><td data-l="V">${fx(b.v,3)}</td><td class="d2" data-l="Δ V mediana">${b.dV==null?"—":(b.dV>0?"+":"")+fx(b.dV,3)}</td><td data-l="Cambio V">${b.tend==null?"—":(b.tend>0?"+":"")+fx(b.tend,3)}</td><td class="d2" data-l="R">${fx(b.r,3)} mΩ</td><td data-l="vs base">${pct(b.dBase)}</td><td class="d2" data-l="vs banco">${pct(b.dMed)}</td>${a.rRef?`<td data-l="vs ${a.RB?.r ? "ref. real" : "ficha"}">${pct(b.dRef)}</td>`:""}<td class="d2" data-l="T">${fx(b.t,1)} °C</td><td class="full" data-l="Pronóstico">${pronTxt(b.pron, a.u.ms)}</td><td class="full${b.edad==null ? " nx" : ""}" data-l="Edad">${b.edad==null?"—":fx(b.edad,1)+" años"}</td></tr>`).join("") + `</tbody>`
+    : `<tbody><tr><td>Todas las baterías están en OK y ninguna llegaría a Falla en 12 meses.</td></tr></tbody>`;
   // formulario de reemplazo
   $("#rN").innerHTML = a.bats.map(b => `<option value="${b.n}">${b.n}</option>`).join(""); if (selBat) $("#rN").value = selBat;
   $("#rModelo").innerHTML = Object.entries(P.modelos).map(([m, x]) => `<option value="${m}"${m===a.mod?" selected":""}>${m} · ${esc(x.nombre||"")}</option>`).join("");
   if (!$("#rFecha").value) $("#rFecha").value = isoLocal().slice(0,10);
-  $("#repBat").textContent = `· ${nombreK(a.clave)}`;
+  $("#repBat").textContent = selBat ? `batería ${selBat} de ${nombreK(a.clave)}` : nombreK(a.clave);
+  $("#refRes").textContent = a.RB?.r ? `real del banco: ${fx(a.RB.r,3)} mΩ` : a.F.rRef ? `de la ficha: ${fx(a.F.rRef,2)} mΩ` : "sin referencia";
   bateria(a);
 }
 function cargBanco(){
@@ -951,6 +1199,8 @@ function cargBanco(){
       ${mini({pts, k:"i", titulo:"Corriente del cargador", unidad:"A", dec:2, col:"var(--accent)", serie:"Máximo de cada hora", fd:t => fdia(t.slice(0,10))})}
     </div>`;
 }
+let tablaTodas = false;
+$("#tablaTodas").onclick = () => { tablaTodas = !tablaTodas; renderBanco(); };
 $("#banSel").onchange = () => { sel = $("#banSel").value; selBat = null; renderBanco(); };
 $("#banMes").onchange = () => { mes = $("#banMes").value; renderBanco(); };
 $("#map").addEventListener("click", e => { const c = e.target.closest("[data-n]"); if (!c) return; selBat = +c.dataset.n; renderBanco(); $("#bat").scrollIntoView({behavior:"smooth", block:"nearest"}); });
@@ -1017,6 +1267,22 @@ function refBanco(a){
   $("#refUsar").onclick = () => { const x = prev(); if (!x?.pr.r) return; P.refBanco[a.clave] = {r:+x.pr.r.toFixed(3), n:x.pr.n, fecha:dia(x.f.t), rTc:L.rTc}; cambioCfg(); };
   if ($("#refQuitar")) $("#refQuitar").onclick = () => { delete P.refBanco[a.clave]; cambioCfg(); };
 }
+/* Pronóstico de una batería en palabras, con cuánto confiar en él. */
+function pronBateria(b, a){
+  const p = b.pron; if (!p) return "";
+  const meses = Math.round(p.span / 30.4), base = `${p.n} mediciones en ${meses || "menos de 1"} mes(es)`;
+  if (p.tipo === "insuf") return `<div class="pronb"><b>Pronóstico:</b> todavía no hay suficientes mediciones de resistencia (${p.n} en ${p.span} días; se necesitan 4 en 2 meses).</div>`;
+  if (p.tipo === "estable") return `<div class="pronb ok"><b>Pronóstico:</b> resistencia estable (${p.pctMes >= 0 ? "+" : ""}${fx(p.pctMes*100,1)} % al mes con ${base}). No se espera que llegue a Falla.</div>`;
+  const cls = p.dB === 0 ? "bad" : p.dB <= L.pronMeses * 30.4 ? "bad" : p.dB <= 365 ? "warn" : "ok";
+  const w = p.dW === 0 ? `ya pasó Advertencia (${fx(p.rW,2)} mΩ)` : `llegaría a Advertencia (${fx(p.rW,2)} mΩ) en ${mesesTxt(p.dW)}`;
+  const f = p.dB === 0 ? `ya pasa el límite de Falla (${fx(p.rB,2)} mΩ)` : `a Falla (${fx(p.rB,2)} mΩ) <b>${p.dB > PRON.horizonte ? "en más de 3 años" : `hacia ${fechaEn(a.u.ms, p.dB)} (${mesesTxt(p.dB)})`}</b>`;
+  return `<div class="pronb ${cls}"><b>Pronóstico:</b> la resistencia sube ${fx(p.pctMes*100,1)} % al mes (${fx(p.s*30,3)} mΩ/mes). Al mismo ritmo, ${w} y ${f}. <span class="conf">Confianza ${p.conf}: ${base}.</span></div>`;
+}
+$("#bat").addEventListener("click", e => {
+  if (!e.target.closest("#batRep")) return;
+  const d = $("#repCard"); d.open = true; $("#rN").value = selBat; $("#repBat").textContent = `batería ${selBat} de ${nombreK(sel)}`;
+  d.scrollIntoView({behavior:"smooth", block:"start"});
+});
 function bateria(a){
   const box = $("#bat"), b = a.bats.find(x => x.n === selBat);
   if (!b){ box.innerHTML = `<span class="muted">Toca una batería del mapa para ver su detalle y sus gráficas.</span>`; return; }
@@ -1029,8 +1295,10 @@ function bateria(a){
   const tMax = Math.max(...s.map(x => x.tc ?? -Infinity));
   const reps = reemplazos.filter(r => r.clave === a.clave && r.n === b.n).sort((x, y) => y.fecha.localeCompare(x.fecha));
   box.innerHTML = `<h3 style="margin-top:0">Batería ${b.n} <span class="tag t-${b.est}">${ICON[b.est]} ${TXT[b.est]}</span></h3>
-    <div style="font-size:14px">Voltaje ${fx(b.v,3)} V · Resistencia ${fx(b.r,3)} mΩ (línea base ${fx(b.base,3)}) · Temperatura ${fx(b.t,1)} °C${b.edad!=null ? ` · Edad ${fx(b.edad,1)} años` : ""}</div>
+    <div style="font-size:14px">Voltaje ${fx(b.v,3)} V · Resistencia ${fx(b.r,3)} mΩ (línea base ${fx(b.base,3)}) · Temperatura ${fx(b.t,1)} °C${b.edad!=null ? ` · Edad ${fx(b.edad,1)} años${b.edadEq != null && b.edadEq - b.edad > 0.05 ? ` (equivale a ${fx(b.edadEq,1)} por la temperatura)` : ""}` : ""}</div>
     ${b.m.length ? `<ul class="f" style="font-size:14px">${b.m.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="muted">Dentro de los límites.</p>`}
+    ${pronBateria(b, a)}
+    <div class="row noprint" style="margin-top:6px"><button class="btn sec" id="batRep">Registrar reemplazo de la batería ${b.n}</button></div>
     <div class="graf">
       ${mini({pts:s, k:"v", titulo:"Voltaje", unidad:"V", dec:3, col, refTxt:"Mediana del banco", marcas:reps.map(r => r.fecha)})}
       ${mini({pts:s, k:"r", titulo:L.rTc ? "Resistencia interna a 25 °C" : "Resistencia interna", unidad:"mΩ", dec:3, col, refTxt:"Mediana del banco", marcas:reps.map(r => r.fecha), lim:limRes})}
@@ -1039,7 +1307,7 @@ function bateria(a){
     </div>
     <p class="muted" style="margin:6px 0 0;font-size:13px">Gráficas con todo el historial cargado hasta ${mesTxt(mes)}. Gexia mide la resistencia de vez en cuando, por eso su línea va en escalones.</p>
     <h3>Reemplazos de esta batería</h3>
-    ${reps.length ? `<ul class="f" style="font-size:14px">${reps.map(r => `<li>↻ ${fdia(r.fecha)}${r.modelo ? ` · ${r.modelo}` : ""}${r.serie ? ` · serie ${esc(r.serie)}` : ""}${r.nota ? ` · ${esc(r.nota)}` : ""}${r.autor ? ` · ${esc(r.autor)}` : ""} ${r.foto ? `<button class="linkbtn" data-foto="${esc(r.id)}">Ver foto</button>` : ""}<button class="linkbtn" data-borrarrep="${esc(r.id)}">Quitar</button></li>`).join("")}</ul>` : `<p class="muted" style="margin:0">Sin reemplazos registrados. Usa «Registrar reemplazo» abajo del mapa.</p>`}`;
+    ${reps.length ? `<ul class="f" style="font-size:14px">${reps.map(r => `<li>↻ ${fdia(r.fecha)}${r.modelo ? ` · ${r.modelo}` : ""}${r.serie ? ` · serie ${esc(r.serie)}` : ""}${r.nota ? ` · ${esc(r.nota)}` : ""}${r.autor ? ` · ${esc(r.autor)}` : ""} ${r.foto ? `<button class="linkbtn" data-foto="${esc(r.id)}">Ver foto</button>` : ""}<button class="linkbtn" data-borrarrep="${esc(r.id)}">Quitar</button></li>`).join("")}</ul>` : `<p class="muted" style="margin:0">Sin reemplazos registrados.</p>`}`;
 }
 async function borrarReemplazo(id){
   const r = reemplazos.find(x => x.id === id); if (!r || !confirm("¿Quitar este reemplazo? No se puede deshacer.")) return;
@@ -1229,6 +1497,16 @@ async function generarInforme(){
   <p style="margin:4px 0">${cR.length} bancos con telemetría del cargador; flotación mediana ${fx(med(cR.map(r => r.vc)),3)} V/celda, corriente de flotación mediana ${fx(med(cR.map(r => r.iFlot).filter(i => i > 0.05)),2)} A.</p>
   <h3 style="font-size:13px;margin:8px 0 4px">Descargas detectadas</h3>${C.eventos.length ? `<ul>${C.eventos.map(e => `<li>${esc(eventoTxt(e))}</li>`).join("")}</ul>` : `<p style="margin:4px 0">Sin descargas en el periodo.</p>`}
   ${cMal.length ? `<div class="tw"><table><tr><th>Banco</th><th>Estado</th>${CAB_CARG}<th>Hallazgos del cargador</th></tr>${cMal.map(r => `<tr><td><b>${cortoK(r.clave)}</b> <span style="color:#6a7784">${r.mod}</span></td><td>${r.est === "na" ? `<span class="chip na">Falla monitoreo</span>` : chip(r.est)}</td>${filaCarg(r)}<td class="txt">${r.hall.map(h => esc(h.t)).join("<br>")}</td></tr>`).join("")}</table></div>` : `<p>Sin hallazgos en los cargadores.</p>`}`;
+  // pronóstico y vida por temperatura (solo bancos con CSV en este teléfono)
+  const PLr = pronLista(A), VLr = vidaLista(A).filter(a => a.vida.red >= 0.10);
+  const porT = (d0, d1) => PLr.filter(x => x.p.dB > d0 * 30.4 && x.p.dB <= d1 * 30.4).length;
+  const pronHtml = !A.size ? "" : `<div class="bloque"><h2>Pronóstico de reemplazos</h2>
+  <p style="margin:4px 0">Hoy en Reemplazar: <b>${c.bad}</b> · Llegarían a Falla en 0–3 meses: <b>${porT(0, 3)}</b> · 3–6 meses: <b>${porT(3, 6)}</b> · 6–12 meses: <b>${porT(6, 12)}</b>.</p>
+  ${PLr.length ? `<div class="tw"><table><tr><th>Banco</th><th>Bat.</th><th>Hoy</th><th>R (mΩ)</th><th>Sube al mes</th><th>Llegaría a Falla</th><th>Confianza</th></tr>${PLr.slice(0, 30).map(({a, b, p}) => `<tr><td>${cortoK(a.clave)} <span style="color:#6a7784">${a.mod}</span></td><td><b>${b.n}</b></td><td>${chip(b.est)}</td><td>${fx(b.r,3)}</td><td>+${fx(p.pctMes*100,1)} %</td><td><b>${fechaEn(a.u.ms, p.dB)}</b> (${mesesTxt(p.dB)})</td><td>${p.conf} · ${p.n} med.</td></tr>`).join("")}</table></div>${PLr.length > 30 ? `<div style="font-size:11px;color:#6a7784">Se muestran 30 de ${PLr.length}.</div>` : ""}` : "<p>Ninguna batería llegaría a Falla en los próximos 12 meses al ritmo actual.</p>"}
+  <div style="font-size:11px;color:#6a7784;margin-top:4px">Proyección en línea recta de la resistencia de cada batería (mediana de las pendientes entre sus mediciones del último año, mínimo 4 mediciones en 2 meses) contra su límite de Falla más bajo. Estimación para planear refacciones; no cambia el estado de la batería.</div></div>`;
+  const vidaHtml = !A.size ? "" : `<div class="bloque"><h2>Temperatura y vida</h2>
+  ${VLr.length ? `<div class="tw"><table><tr><th>Banco</th><th>Temp. promedio</th><th>Vida esperada</th><th>Pierde</th><th>Edad (equivalente)</th><th>Vida usada</th></tr>${VLr.map(a => { const v = a.vida; return `<tr><td>${cortoK(a.clave)} <span style="color:#6a7784">${a.mod}</span></td><td${v.red >= L.vidaRed ? ' class="mal"' : ""}>${fx(v.t,1)} °C</td><td><b>${fx(v.esp,1)}</b> de ${a.F.vida} años</td><td${v.red >= L.vidaRed ? ' class="mal"' : ""}>−${Math.round(v.red*100)} %</td><td>${v.edad == null ? "sin fecha" : `${fx(v.edad,1)} (${fx(v.edadEq,1)}) años`}</td><td${v.uso >= 0.8 ? ' class="mal"' : ""}>${v.uso == null ? "—" : Math.round(v.uso*100) + " %"}</td></tr>`; }).join("")}</table></div>` : "<p>Ningún banco pierde más del 10 % de su vida por temperatura.</p>"}
+  <div style="font-size:11px;color:#6a7784;margin-top:4px">Vida de la ficha a 25 °C, reducida a la mitad por cada ${L.vidaT} °C arriba (regla de Arrhenius de las VRLA), con la temperatura diaria del último año.</div></div>`;
   const html = `<div class="rep">
   <div class="hd"><div><h1>Informe de baterías UPS</h1><div>${sitio ? esc(sitio) + " · " : ""}${per} · Monitoreo Gexia</div><div class="est ${estadoG.c}">${estadoG.t}</div></div>
   <div class="m">Generado: ${fdate(ahora)}${elab ? `<br>Elaboró: ${esc(elab)}` : ""}</div></div>
@@ -1243,6 +1521,8 @@ async function generarInforme(){
   ${peores.length ? `<p style="color:#a3330b;margin-top:8px"><b>Empeoraron contra el mes anterior al periodo:</b> ${peores.map(x => cortoK(x.k)).join(", ")}.</p>` : ""}
   <h2>Prioridades de reemplazo y revisión</h2>
   ${prio.length ? `<div class="tw"><table><tr><th>#</th><th>Banco</th><th>Bat.</th><th>Estado</th><th>Motivo principal</th><th>R (mΩ)</th><th>V</th></tr>${prio.map((b, i) => `<tr><td>${i+1}</td><td>${cortoK(b.k)}</td><td><b>${b.n}</b></td><td>${chip(b.est)}</td><td class="txt">${esc(b.m)}</td><td>${fx(b.r,3)}</td><td>${fx(b.v,3)}</td></tr>`).join("")}</table></div>${nPrio > prio.length ? `<div style="font-size:11px;color:#6a7784">Se muestran ${prio.length} de ${nPrio}.</div>` : ""}` : "<p>Ninguna batería requiere atención en el periodo.</p>"}
+  ${pronHtml}
+  ${vidaHtml}
   <div class="bloque"><h2>Estado por banco</h2><div class="tw"><table><tr><th>Banco</th><th>Estado</th><th>Reempl.</th><th>Vigilar</th><th>Sin lect.</th><th>R mediana (mΩ)</th><th>V/celda</th><th>T (°C)</th><th>Hallazgos del banco (sin baterías ni monitoreo)</th></tr>${filas}</table></div>
   ${sinDatos.length ? `<div style="font-size:11.5px;margin-top:4px"><b>Sin datos de baterías en el periodo (${sinDatos.length}):</b> ${sinDatos.join(", ")}.</div>` : ""}
   <div style="font-size:11px;color:#6a7784;margin-top:4px">Última lectura de cada banco dentro del periodo. R mediana con su cambio contra el mes anterior al periodo (en rojo, +5 % o más). ☁: resumen mensual compartido por el equipo (sin el CSV en este teléfono).</div></div>
@@ -1251,12 +1531,14 @@ async function generarInforme(){
   <h2>Reemplazos del periodo</h2>${reps.length ? `<table><tr><th>Fecha</th><th>Banco</th><th>Bat.</th><th>Modelo</th><th>Serie</th><th>Nota</th><th>Capturó</th></tr>${reps.map(r => `<tr><td>${fdia(r.fecha)}</td><td>${cortoK(r.clave)}</td><td>${r.n}</td><td>${esc(r.modelo || "")}</td><td>${esc(r.serie || "")}</td><td style="white-space:normal">${esc(r.nota || "")}</td><td>${esc(r.autor || "")}</td></tr>`).join("")}</table>` : "<p>Sin reemplazos registrados en el periodo.</p>"}
   ${fotosInf ? `<h2>Evidencia fotográfica</h2><div class="fotos">${fotosInf}</div>` : ""}
   <h2>Criterios</h2>
-  <div style="font-size:12px">Resistencia interna contra la referencia del modelo (EnerSys y CSB 2.60 mΩ, Ritar 4.50 mΩ, o la referencia real del banco), su línea base y la mediana del banco: Advertencia arriba de +30 %, Falla arriba de +40 %; una Falla nueva se confirma con la siguiente medición. Voltaje contra la mediana del banco: ${L.vWarn} V Vigilar, ${L.vBad} V Crítico. Temperatura: ${L.tWarn} °C o +${L.tDelta} °C sobre el promedio Vigilar, ${L.tBad} °C Crítico. Flotación por celda dentro del rango de la ficha, compensado por temperatura. Conexiones +${L.cWarn*100} % Vigilar, +${L.cBad*100} % Crítico. Vida de diseño: Vigilar al 80 %. Basado en IEEE 1188, IEEE 1491 y las fichas de los fabricantes.</div>
+  <div style="font-size:12px">Resistencia interna contra la referencia del modelo (EnerSys y CSB 2.60 mΩ, Ritar 4.50 mΩ, o la referencia real del banco), su línea base y la mediana del banco: Advertencia arriba de +30 %, Falla arriba de +40 %; una Falla nueva se confirma con la siguiente medición. Voltaje contra la mediana del banco: ${L.vWarn} V Vigilar, ${L.vBad} V Crítico. Temperatura: ${L.tWarn} °C o +${L.tDelta} °C sobre el promedio Vigilar, ${L.tBad} °C Crítico. Flotación por celda dentro del rango de la ficha, compensado por temperatura. Conexiones +${L.cWarn*100} % Vigilar, +${L.cBad*100} % Crítico. Vida de diseño: Vigilar al 80 %, con la edad equivalente por temperatura (la vida se reduce a la mitad por cada ${L.vidaT} °C arriba de 25 °C). Pronóstico: proyección de la resistencia, informativo. Basado en IEEE 1188, IEEE 1491 y las fichas de los fabricantes.</div>
   <div class="firma"><div>Elaboró${elab ? `<br>${esc(elab)}` : ""}</div><div>Revisó${revi ? `<br>${esc(revi)}` : ""}</div></div>
   <div class="pie">Generado con Bitácora de baterías UPS a partir de la telemetría diaria de Gexia. La inspección es pasiva y no incluye intervención en equipos.</div></div>`;
   const T = [`*Baterías UPS – ${per}${sitio ? " – " + sitio : ""}*`, `Bancos con datos ${con.length}/32 | Reemplazar ${c.bad} | Vigilar ${c.warn} | Sin lectura ${c.na} | Reemplazos ${reps.length}`, ""];
   if (prio.length){ T.push("Prioridades:"); prio.slice(0, 10).forEach((b, i) => T.push(`${i+1}. ${cortoK(b.k)} bat. ${b.n} [${CORTO[b.est]}]: ${b.m}`)); }
   else T.push("Ninguna batería requiere atención.");
+  if (PLr.length){ T.push(""); T.push(`Pronóstico: ${porT(0, 3)} llegarían a Falla en 0–3 meses, ${porT(3, 6)} en 3–6 y ${porT(6, 12)} en 6–12.`); }
+  if (VLr.some(a => a.vida.red >= L.vidaRed)){ T.push(""); T.push(`Temperatura: ${VLr.filter(a => a.vida.red >= L.vidaRed).map(a => `${cortoK(a.clave)} ${fx(a.vida.t,1)} °C (vida ${fx(a.vida.esp,1)} años)`).join(", ")}`); }
   if (peores.length){ T.push(""); T.push(`Empeoraron: ${peores.map(x => cortoK(x.k)).join(", ")}`); }
   if (C.eventos.length){ T.push(""); T.push("Descargas:"); C.eventos.forEach(e => T.push(`- ${eventoTxt(e)}`)); }
   if (cMal.length){ T.push(""); T.push(`Cargadores con hallazgos: ${cMal.map(r => cortoK(r.clave)).join(", ")}`); }
@@ -1301,8 +1583,9 @@ function renderCriterios(){
       <table style="margin:6px 0"><thead><tr><th>Modelo</th><th>Referencia</th><th>Normal</th><th>Advertencia</th><th>Falla</th></tr></thead><tbody>${matriz}</tbody></table>
       Cada banco puede usar su referencia real (promedio de sus baterías sanas en una medición, lo ideal 72 h después de la puesta en servicio). Confirmación: una Falla nueva queda en Advertencia hasta que la siguiente medición la repita. Histéresis: para salir de una alarma baja ${L.rHist} puntos debajo del umbral. Compensación por temperatura opcional (% por °C). Si sube ${L.rMes*100} % o más en 30 días, Vigilar. IEEE 1188 e IEEE 1491.`],
     ["Voltaje de flotación", `Por batería contra la mediana del banco: más de ${L.vWarn} V Vigilar, más de ${L.vBad} V Crítico. Por banco, el promedio por celda dentro del rango de la ficha a 25 °C, corrido por la compensación del fabricante a la temperatura promedio (EnerSys y Ritar −3.0, CSB −3.3 mV/°C/celda).`],
-    ["Vida de diseño", "Con la fecha de instalación del banco (o del modelo, o la del reemplazo), al 80 % de la vida de diseño: Vigilar para planear el reemplazo (IEEE 1188). EnerSys 10 años, CSB 10 años, Ritar 15 años."],
-    ["Temperatura", `Más de ${L.tWarn} °C o ${L.tDelta} °C arriba del promedio del banco: Vigilar; más de ${L.tBad} °C: Crítico. La vida de una VRLA se reduce a la mitad por cada ~8–10 °C arriba de 25 °C.`],
+    ["Vida de diseño y temperatura", `EnerSys 10 años, CSB 10 años, Ritar 15 años a 25 °C. La vida esperada se corrige con la temperatura diaria del banco en el último año: se reduce a la mitad por cada ${L.vidaT} °C arriba de 25 °C (regla de Arrhenius de las VRLA; se promedia el factor de cada día). Si la reduce ${Math.round(L.vidaRed*100)} % o más: Vigilar el banco. Con la fecha de instalación, la edad equivalente (edad × factor) al 80 % de la vida de diseño: Vigilar para planear el reemplazo (IEEE 1188).`],
+    ["Temperatura", `Más de ${L.tWarn} °C o ${L.tDelta} °C arriba del promedio del banco: Vigilar; más de ${L.tBad} °C: Crítico.`],
+    ["Pronóstico", `Pendiente de la resistencia de cada batería con Theil-Sen (la mediana de las pendientes entre cada par de mediciones de Gexia del último año, desde el reemplazo); resiste lecturas raras. Se proyecta en línea recta hasta el límite de Advertencia y el de Falla más bajos (ficha, línea base o mediana del banco). Solo con 4 mediciones o más en 60 días y si sube 0.5 % al mes o más. Confianza alta con 8 mediciones en 5 meses que siguen la recta (dispersión ≤ 3 %). Es informativo: no cambia el estado de la batería. Se destacan las que llegarían a Falla en ${L.pronMeses} meses.`],
     ["Conexiones", `Contra la mediana de las conexiones del mismo tipo: +${L.cWarn*100} % Vigilar (limpiar y reapretar al torque del modelo), +${L.cBad*100} % Crítico.`],
     ["Corriente y rizado", `Corriente de flotación más de ${L.iFact} veces la mediana de los bancos del mismo modelo: Vigilar. Rizado arriba de ${L.rizPct} % del voltaje del banco: Vigilar.`],
     ["Cargadores", `Con el CSV de los cargadores (CARGADORES_LADO_A/B), agrupado por hora. Descarga: ${L.descMin} o más bancos de la misma rama abajo de ${L.vDesc} V/celda en la misma hora; esas horas y las 3 siguientes (recarga) no cuentan para la flotación. Flotación: mediana del voltaje por celda contra el rango de la ficha compensado por temperatura. Corriente de flotación más de ${L.iFact} veces la mediana de los bancos del mismo modelo: Vigilar. 0 V (sin lectura) o corriente pegada en 0 A: falla del monitoreo.`],
