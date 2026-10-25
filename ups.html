@@ -184,6 +184,8 @@ const FIELDS_UPS = [
 ];
 const FIELDS_SCCT = [
   {g:"BYPASS INPUT", k:"byp", cols:3, f:[["vab","ØA-B V"],["vbc","ØB-C V"],["vca","ØC-A V"]]},
+  // el panel del SCCT muestra también la entrada de los UPS (solo voltajes)
+  {g:"UPS INPUT PWR", k:"in", cols:3, f:[["vab","ØA-B V"],["vbc","ØB-C V"],["vca","ØC-A V"]]},
   {g:"SYSTEM OUTPUT", k:"out", cols:3, f:[["vab","ØA-B V"],["vbc","ØB-C V"],["vca","ØC-A V"],["hz","Hz"]]},
   {g:"SYSTEM LOAD", k:"load", cols:3, f:[["kva","kVA"],["kw","kW"],["x",""],["ia","ØA A"],["ib","ØB A"],["ic","ØC A"]]},
   {g:"MÓDULOS", k:"sys", cols:2, f:[["enlinea","UPS en línea"]]}
@@ -261,6 +263,8 @@ function calcularLectura(r){
     unbVin: sc ? unb([byp.vab,byp.vbc,byp.vca]) : unb([i.vab,i.vbc,i.vca]),
     unbIin: sc ? null : unb([i.ia,i.ib,i.ic]),
     unbVout: unb([o.vab,o.vbc,o.vca]), unbIout: unb([l.ia,l.ib,l.ic]),
+    // SCCT: entrada de los UPS (UPS INPUT PWR), aparte del bypass
+    devUin: sc ? devFases([i.vab,i.vbc,i.vca], P.vnom) : null, unbVuin: sc ? unb([i.vab,i.vbc,i.vca]) : null,
     vout, dev: vout!==null ? (vout-P.vnom)/P.vnom : null,
     kvaCalc, kvaDiff: (kvaCalc!==null && num(l.kva)) ? (kvaCalc-l.kva)/l.kva : null,
     vCell: (!sc && num(b.v)!==null) ? b.v/P.celdas : null, batA: sc ? null : num(b.a), hz: num(o.hz)
@@ -268,10 +272,11 @@ function calcularLectura(r){
   c.flags = []; c.det = [];
   const flag = (n, d) => { c.flags.push(n); c.det.push(d ? `${n} (${d})` : n); };
   if (c.pctKw!==null && c.pctKw>P.limCarga) flag("Carga alta", `${pct(c.pctKw)} por ${c.limita}`);
-  if ((c.unbVin??0)>P.limV || (c.unbVout??0)>P.limV) flag("Desbalance de voltaje", `${sc?"bypass":"entrada"} ${pct(c.unbVin,2)}, salida ${pct(c.unbVout,2)}`);
+  if ((c.unbVin??0)>P.limV || (c.unbVuin??0)>P.limV || (c.unbVout??0)>P.limV) flag("Desbalance de voltaje", `${sc?"bypass":"entrada"} ${pct(c.unbVin,2)}${sc && c.unbVuin!==null ? `, entrada UPS ${pct(c.unbVuin,2)}` : ""}, salida ${pct(c.unbVout,2)}`);
   if ((c.unbIin??0)>P.limI || (c.unbIout??0)>P.limI) flag("Desbalance de corriente", sc ? `carga ${pct(c.unbIout)}` : `entrada ${pct(c.unbIin)}, carga ${pct(c.unbIout)}`);
   if (c.devOut!==null && Math.abs(c.devOut)>P.limDev) flag("Voltaje de salida fuera de rango", `una fase a ${(c.devOut>0?"+":"")+pct(c.devOut,1)} del nominal`);
   if (c.devIn!==null && Math.abs(c.devIn)>P.limDevIn) flag(`Voltaje de ${sc?"bypass":"entrada"} fuera de rango`, `una fase a ${(c.devIn>0?"+":"")+pct(c.devIn,1)} del nominal`);
+  if (c.devUin!==null && Math.abs(c.devUin)>P.limDevIn) flag("Voltaje de entrada UPS fuera de rango", `una fase a ${(c.devUin>0?"+":"")+pct(c.devUin,1)} del nominal`);
   if (c.vCell!==null && (c.vCell<P.vCeldaMin || c.vCell>P.vCeldaMax)) flag(c.vCell<P.vCeldaMin ? "Batería bajo flotación" : "Batería sobre flotación", `${fx(c.vCell,3)} V/celda; rango ${fx(P.vCeldaMin,3)}–${fx(P.vCeldaMax,3)}`);
   if (c.hz!==null && Math.abs(c.hz-60)>0.5) flag("Frecuencia fuera de rango", `${fx(c.hz)} Hz`);
   if (c.batA!==null && Math.abs(c.batA)>P.limBatA) flag("Batería con corriente", `${c.batA} A`);
@@ -338,6 +343,7 @@ function renderChecks(){
     [c.sc ? "Desbalance I de carga" : "Desbalance I entrada / carga", c.sc ? pct(c.unbIout) : `${pct(c.unbIin)} / ${pct(c.unbIout)}`, (c.unbIin===null&&c.unbIout===null)?null:((c.unbIin??0)<=P.limI && (c.unbIout??0)<=P.limI)],
     ["Voltaje salida vs nominal", c.devOut===null?"—":`prom. ${fx(c.vout)} V; peor fase ${(c.devOut>0?"+":"")+pct(c.devOut,1)}`, c.devOut===null?null:Math.abs(c.devOut)<=P.limDev],
     [c.sc ? "Voltaje bypass vs nominal" : "Voltaje entrada vs nominal", c.devIn===null?"—":`peor fase ${(c.devIn>0?"+":"")+pct(c.devIn,1)}`, c.devIn===null?null:Math.abs(c.devIn)<=P.limDevIn],
+    ...(c.sc ? [["Voltaje entrada UPS vs nominal", c.devUin===null?"—":`peor fase ${(c.devUin>0?"+":"")+pct(c.devUin,1)}; desbalance ${pct(c.unbVuin,2)}`, c.devUin===null?null:Math.abs(c.devUin)<=P.limDevIn && (c.unbVuin??0)<=P.limV]] : []),
     ["Frecuencia", c.hz===null?"—":fx(c.hz)+" Hz", c.hz===null?null:Math.abs(c.hz-60)<=0.5],
     c.sc ? ["UPS en línea", c.enlinea===null?"—":`${c.enlinea} de ${P.modulos}`, c.enlinea===null?null:c.enlinea>=P.modulos]
          : ["Batería", c.vCell===null&&c.batA===null?"—":`${fx(c.vCell,3)} V/celda, ${(c.batA??"—")} A`,
@@ -383,7 +389,7 @@ function siguiente(){
 /* Valores que casi seguro son errores de dedo (no límites de operación): se avisan antes de guardar. */
 function revisarCaptura(d, eq){
   const sc = isScct(eq), out = [], fase = {vab:"A-B", vbc:"B-C", vca:"C-A"};
-  for (const [g, n] of sc ? [["byp","bypass"],["out","salida"]] : [["in","entrada"],["out","salida"]])
+  for (const [g, n] of sc ? [["byp","bypass"],["in","entrada UPS"],["out","salida"]] : [["in","entrada"],["out","salida"]])
     for (const k of ["vab","vbc","vca"]){ const v = num(d[g]?.[k]); if (v!==null && (v < P.vnom*0.5 || v > P.vnom*1.5)) out.push(`Voltaje de ${n} ${fase[k]}: ${v} V (nominal ${P.vnom} V)`); }
   const kw = num(d.load?.kw), kva = num(d.load?.kva);
   if (kw!==null && kva!==null && kw > kva*1.02) out.push(`kW (${kw}) mayor que kVA (${kva}): el factor de potencia no puede pasar de 1`);
@@ -404,7 +410,7 @@ $("#saveBtn").onclick = async () => {
   const id = Comun.nuevoId("l");
   const sc = isScct(selEq);
   const r = {id, rama:selRama, equipo:selEq, ups: sc ? null : +selEq.replace(/\D/g,""), ts:h.ts, guardado:h.guardado, ...(h.manual ? {tsManual:true} : {}),
-    in: sc ? {} : {...draft.in}, byp: sc ? {...draft.byp} : {}, out:{...draft.out}, load:{...draft.load},
+    in: sc ? {vab:draft.in.vab ?? null, vbc:draft.in.vbc ?? null, vca:draft.in.vca ?? null} : {...draft.in}, byp: sc ? {...draft.byp} : {}, out:{...draft.out}, load:{...draft.load},
     bat: sc ? {} : {...draft.bat}, sys: sc ? {...draft.sys} : {}, nota:$("#nota").value.trim(), foto:false, autor:sync.autor()};
   const gf = await foto.guardar(id); r.foto = gf.ok;
   readings.push(r); sortR();
