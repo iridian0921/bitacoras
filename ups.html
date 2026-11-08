@@ -77,6 +77,8 @@
   <div class="ramas" id="ramas"></div>
   <h2>Si se pierde una rama</h2>
   <div class="card" id="cruce"></div>
+  <h2>Crecimiento de la carga</h2>
+  <div class="card" id="crec"></div>
 </section>
 
 <section id="ten">
@@ -168,13 +170,14 @@ const {$, esc, num, pct, fx, fdate, isoLocal, nowLocal, stamp, download, descarg
 const RAMAS = ["A","B"];
 /* Flotación por celda: 13.6 ± 0.1 V por batería de 12 V (6 celdas) a 25 °C, EnerSys DataSafe 12HX540-FR. */
 const DEFAULTS = {kva:500, fp:0.9, modulos:4, celdas:240, vnom:480, limV:0.02, limI:0.10, limDev:0.05, limCarga:0.80,
-  limDevIn:0.10, vCeldaMin:2.25, vCeldaMax:2.283, limBatA:0};
+  limDevIn:0.10, vCeldaMin:2.25, vCeldaMax:2.283, limBatA:0, sccKva:1663};
 const CFG_FIELDS = [
   ["kva","Capacidad por módulo (kVA)",1],["fp","Factor de potencia nominal",0.01],["modulos","Módulos UPS por rama",1],
   ["celdas","Celdas de batería por módulo",1],["vnom","Voltaje nominal de salida (V)",1],["limV","Límite desbalance de voltaje (fracción)",0.005],
   ["limI","Límite desbalance de corriente (fracción)",0.01],["limDev","Límite desviación de salida por fase (fracción)",0.01],["limCarga","Carga máx. por módulo (fracción)",0.05],
   ["limDevIn","Límite desviación de entrada/bypass por fase (fracción)",0.01],["vCeldaMin","Flotación mínima por celda (V)",0.001],
-  ["vCeldaMax","Flotación máxima por celda (V)",0.001],["limBatA","Corriente de batería tolerada (A, 0 = ninguna)",1]
+  ["vCeldaMax","Flotación máxima por celda (V)",0.001],["limBatA","Corriente de batería tolerada (A, 0 = ninguna)",1],
+  ["sccKva","Capacidad del SCCT (kVA, «RATED» del panel; 0 = sin límite)",1]
 ];
 const FIELDS_UPS = [
   {g:"UPS INPUT PWR", k:"in", cols:3, f:[["vab","ØA-B V"],["vbc","ØB-C V"],["vca","ØC-A V"],["ia","ØA A"],["ib","ØB A"],["ic","ØC A"]]},
@@ -230,10 +233,32 @@ const fotos = Comun.fotosDB("bitacora-ups-fotos");
 /* ================= cálculos ================= */
 const avg = a => { const v = a.map(num); return v.every(x=>x!==null) ? v.reduce((s,x)=>s+x,0)/v.length : null; };
 const unb = a => { const m = avg(a); if (m===null || m===0) return null; const v=a.map(num); return Math.max(Math.max(...v)-m, m-Math.min(...v))/m; };
+const RT3 = Math.sqrt(3);
 const kwMod = () => P.kva * P.fp;
-/* Carga relativa a n módulos: el módulo tiene dos límites (kW = kVA × FP nominal, y kVA); manda el mayor. */
-const cargaRel = (kw, kva, n) => n>0 && kw!==null ? Math.max(kw/(kwMod()*n), num(kva)!==null ? kva/(P.kva*n) : 0) : null;
-const modsNecesarios = (kw, kva) => Math.max(1, Math.ceil(kw/kwMod()), num(kva)!==null ? Math.ceil(kva/P.kva) : 1);
+/* Corriente nominal por fase de un módulo: 500 kVA a 480 V = 601 A. */
+const iMod = () => P.kva * 1000 / (RT3 * P.vnom);
+/* El SCCT tiene su propio límite: SCC-2000 «RATED 1663 KVA» = 2000 A por fase a 480 V. Toda la rama pasa por él. */
+const sccKva = () => num(P.sccKva) > 0 ? P.sccKva : Infinity;
+const iScc = () => sccKva() * 1000 / (RT3 * P.vnom);
+/* Capacidad de n módulos en paralelo; con scc, detrás del SCCT (manda lo menor de los módulos y el SCCT). */
+const capN = (n, scc) => ({kw:Math.min(kwMod()*n, scc ? sccKva() : Infinity), kva:Math.min(P.kva*n, scc ? sccKva() : Infinity), i:Math.min(iMod()*n, scc ? iScc() : Infinity)});
+/* Fase más cargada de una lectura (o de una suma de fases). */
+const iMaxDe = l => { const v = [l?.ia, l?.ib, l?.ic].map(num).filter(x => x !== null); return v.length ? Math.max(...v) : null; };
+/* Carga relativa a n módulos: el mayor de kW (kVA × FP nominal), kVA y la fase más cargada contra la corriente nominal
+   (el UPS y el interruptor estático se limitan por fase; el total en kVA esconde una fase más cargada). Con scc (la rama
+   detrás del SCCT), la capacidad no pasa de la del SCCT. Devuelve también qué límite manda. */
+function cargaDet(kw, kva, n, iMax = null, scc = true){
+  if (!(n > 0) || num(kw) === null) return null;
+  const c = capN(n, scc), xs = [["kW", kw/c.kw], ["kVA", num(kva)!==null ? kva/c.kva : null], ["fase", num(iMax)!==null ? iMax/c.i : null]].filter(x => x[1] !== null);
+  const m = xs.reduce((a, b) => b[1] > a[1] ? b : a);
+  const sccManda = scc && isFinite(sccKva()) && (P.kva*n > sccKva());
+  return {p:m[1], por:m[0], scc:sccManda};
+}
+const cargaRel = (kw, kva, n, iMax = null, scc = true) => cargaDet(kw, kva, n, iMax, scc)?.p ?? null;
+const modsNecesarios = (kw, kva, iMax = null) => Math.max(1, Math.ceil(kw/kwMod() - 1e-9), num(kva)!==null ? Math.ceil(kva/P.kva - 1e-9) : 1, num(iMax)!==null ? Math.ceil(iMax/iMod() - 1e-9) : 1);
+/* La carga no cabe en el SCCT aunque haya módulos de sobra: no hay redundancia que valga. */
+const excedeScc = (kw, kva, iMax) => kw > sccKva() || (num(kva)!==null && kva > sccKva()) || (num(iMax)!==null && iMax > iScc());
+const limTxt = d => d ? (d.por === "fase" ? "por la fase más cargada" : `por ${d.por}`) + (d.scc ? ", límite del SCCT" : "") : "";
 /* Mayor desviación por fase contra el nominal, con signo: un promedio correcto puede esconder una fase fuera. */
 const devFases = (vs, vnom) => { let m = null; for (const v of vs.map(num)) if (v!==null){ const d = (v-vnom)/vnom; if (m===null || Math.abs(d)>Math.abs(m)) m = d; } return m; };
 /* Las lecturas guardadas no cambian: su cálculo se reutiliza hasta que cambian los parámetros. */
@@ -250,14 +275,18 @@ function calcularLectura(r){
   const vout=avg([o.vab,o.vbc,o.vca]), iout=avg([l.ia,l.ib,l.ic]);
   const kvaCalc = (vout!==null && iout!==null) ? Math.sqrt(3)*vout*iout/1000 : null;
   const enl = num(s.enlinea);
-  const nMods = sc ? (enl ?? P.modulos) : 1;
-  const pKw = num(l.kw)!==null && nMods>0 ? l.kw/(kwMod()*nMods) : null, pKva = num(l.kva)!==null && nMods>0 ? l.kva/(P.kva*nMods) : null;
+  const nMods = sc ? (enl ?? P.modulos) : 1, cap = capN(nMods, sc), iMx = iMaxDe(l);
+  const pKw = num(l.kw)!==null && nMods>0 ? l.kw/cap.kw : null, pKva = num(l.kva)!==null && nMods>0 ? l.kva/cap.kva : null, pI = iMx!==null && nMods>0 ? iMx/cap.i : null;
+  const pMax = Math.max(pKw ?? -1, pKva ?? -1, pI ?? -1);
+  // SCCT: si falla un UPS, cómo quedan los demás (redundancia real contra el límite de operación)
+  const p1 = sc && nMods > 1 && num(l.kw)!==null ? cargaRel(l.kw, l.kva, nMods - 1, iMx) : null;
   const c = {
     sc, enlinea: enl,
     fp: (num(l.kw)!==null && num(l.kva)) ? l.kw/l.kva : null,
-    // % de carga: el mayor entre kW y kVA contra la capacidad (un UPS o los UPS en línea del SCCT)
-    pctKw: pKw===null && pKva===null ? null : Math.max(pKw ?? 0, pKva ?? 0), pKw, pKva,
-    limita: pKva!==null && pKw!==null && pKva>pKw ? "kVA" : "kW",
+    // % de carga: el mayor de kW, kVA y la fase más cargada contra la capacidad (un UPS, o los UPS en línea del SCCT
+    // sin pasar de la capacidad del SCCT)
+    pctKw: pMax < 0 ? null : pMax, pKw, pKva, pI, iMax: iMx, p1,
+    limita: pMax === pI ? "fase" : pMax === pKva ? "kVA" : "kW", sccManda: sc && P.kva*nMods > sccKva(),
     devIn: sc ? devFases([byp.vab,byp.vbc,byp.vca], P.vnom) : devFases([i.vab,i.vbc,i.vca], P.vnom),
     devOut: devFases([o.vab,o.vbc,o.vca], P.vnom),
     unbVin: sc ? unb([byp.vab,byp.vbc,byp.vca]) : unb([i.vab,i.vbc,i.vca]),
@@ -271,7 +300,10 @@ function calcularLectura(r){
   };
   c.flags = []; c.det = [];
   const flag = (n, d) => { c.flags.push(n); c.det.push(d ? `${n} (${d})` : n); };
-  if (c.pctKw!==null && c.pctKw>P.limCarga) flag("Carga alta", `${pct(c.pctKw)} por ${c.limita}`);
+  if (c.pctKw!==null && c.pctKw>P.limCarga) flag("Carga alta", `${pct(c.pctKw)} ${c.limita === "fase" ? "por la fase más cargada" : "por " + c.limita}${c.sccManda ? ", contra el límite del SCCT" : ""}`);
+  if (sc && num(l.kw)!==null && excedeScc(l.kw, l.kva, iMx)) flag("Carga arriba de la capacidad del SCCT", `${fx(l.kva,0)} kVA de ${fx(sccKva(),0)} kVA`);
+  else if (p1!==null && p1>1) flag("Sin redundancia", `si falla 1 UPS, los ${nMods-1} restantes quedarían al ${pct(p1)}`);
+  else if (p1!==null && p1>P.limCarga) flag("Redundancia al límite", `si falla 1 UPS, los ${nMods-1} restantes quedarían al ${pct(p1)} (límite ${pct(P.limCarga,0)})`);
   if ((c.unbVin??0)>P.limV || (c.unbVuin??0)>P.limV || (c.unbVout??0)>P.limV) flag("Desbalance de voltaje", `${sc?"bypass":"entrada"} ${pct(c.unbVin,2)}${sc && c.unbVuin!==null ? `, entrada UPS ${pct(c.unbVuin,2)}` : ""}, salida ${pct(c.unbVout,2)}`);
   if ((c.unbIin??0)>P.limI || (c.unbIout??0)>P.limI) flag("Desbalance de corriente", sc ? `carga ${pct(c.unbIout)}` : `entrada ${pct(c.unbIin)}, carga ${pct(c.unbIout)}`);
   if (c.devOut!==null && Math.abs(c.devOut)>P.limDev) flag("Voltaje de salida fuera de rango", `una fase a ${(c.devOut>0?"+":"")+pct(c.devOut,1)} del nominal`);
@@ -337,7 +369,8 @@ $("#lcd").addEventListener("keydown", e => {
 function renderChecks(){
   const c = calc({...draft, equipo:selEq});
   const rows = [
-    [c.sc ? "Carga de la rama (vs UPS en línea)" : "Carga del módulo", c.pctKw===null?"—":`${pct(c.pctKw)} (por ${c.limita})`, c.pctKw===null?null:c.pctKw<=P.limCarga],
+    [c.sc ? "Carga de la rama (vs UPS en línea y SCCT)" : "Carga del módulo", c.pctKw===null?"—":`${pct(c.pctKw)} (${c.limita === "fase" ? "por la fase más cargada" : "por " + c.limita}${c.sccManda ? ", límite del SCCT" : ""})`, c.pctKw===null?null:c.pctKw<=P.limCarga],
+    ...(c.sc ? [["Si falla 1 UPS", c.p1===null?"—":`los demás quedarían al ${pct(c.p1)}`, c.p1===null?null:c.p1<=P.limCarga]] : []),
     ["Factor de potencia de la carga", fx(c.fp,2), c.fp===null?null:true],
     ["kVA calculado con V×I", c.kvaCalc===null?"—":`${fx(c.kvaCalc)} kVA (${c.kvaDiff===null?"—":(c.kvaDiff>0?"+":"")+pct(c.kvaDiff)} vs display)`, c.kvaDiff===null?null:Math.abs(c.kvaDiff)<=0.10],
     [c.sc ? "Desbalance V bypass / salida" : "Desbalance V entrada / salida", `${pct(c.unbVin,2)} / ${pct(c.unbVout,2)}`, (c.unbVin===null&&c.unbVout===null)?null:((c.unbVin??0)<=P.limV && (c.unbVout??0)<=P.limV)],
@@ -453,8 +486,18 @@ function estadoRama(rama, filtro){
   const enl = sc && num(sc.sys?.enlinea)!==null ? num(sc.sys.enlinea) : P.modulos;
   const kw = scKw ?? (ups.length ? sumKw : null), kva = scKva ?? (ups.length ? sumKva : null);
   const fuente = scKw!==null ? "SCCT" : "suma de módulos";
-  const N = kw!==null ? modsNecesarios(kw, kva) : null;
-  const warns = [];
+  // fase más cargada de la rama: la del SCCT o, sin él, la mayor de las sumas por fase de los módulos
+  const sumFase = f => ups.reduce((t, e) => t + (num(L[e].load?.[f]) || 0), 0);
+  const iMax = sc && iMaxDe(sc.load)!==null ? iMaxDe(sc.load) : (ups.length ? Math.max(sumFase("ia"), sumFase("ib"), sumFase("ic")) || null : null);
+  const sobreScc = kw!==null && excedeScc(kw, kva, iMax);
+  const N = kw!==null ? modsNecesarios(kw, kva, iMax) : null;
+  const det = kw!==null ? cargaDet(kw, kva, enl, iMax) : null, p1 = kw!==null && enl > 1 ? cargaRel(kw, kva, enl - 1, iMax) : null;
+  const pScc = kw!==null && isFinite(sccKva()) ? Math.max(num(kva) ?? kw, kw) / sccKva() : null;
+  const warns = [], alertas = [];
+  // redundancia real: si falla un UPS, los demás no deben pasar del límite de operación
+  if (sobreScc) alertas.push({est:"bad", t:`La carga (${fx(kva ?? kw,0)} kVA) supera la capacidad del SCCT (${fx(sccKva(),0)} kVA)`});
+  else if (p1!==null && p1>1) alertas.push({est:"bad", t:`Sin redundancia: si falla 1 UPS, los ${enl-1} restantes quedarían al ${pct(p1)}`});
+  else if (p1!==null && p1>P.limCarga) alertas.push({est:"warn", t:`Redundancia al límite: si falla 1 UPS, los ${enl-1} restantes quedarían al ${pct(p1)} (límite ${pct(P.limCarga,0)})`});
   const faltan = P.modulos - ups.length;
   if (!sc) warns.push("Sin lectura del SCCT: la carga se toma de la suma de módulos.");
   if (faltan>0) warns.push(`Faltan lecturas de ${faltan} UPS.`);
@@ -463,18 +506,87 @@ function estadoRama(rama, filtro){
   const fechas = Object.values(L).map(r=>+new Date(r.ts));
   const rango = fechas.length>1 ? Math.max(...fechas)-Math.min(...fechas) : 0;
   if (rango>86400000) warns.push(`Las lecturas usadas tienen hasta ${Math.round(rango/86400000)} día(s) de diferencia.`);
-  return {rama, L, ups, kw, kva, sumKw, fuente, enl, N, red: N!==null ? enl-N : null, warns, hay: Object.keys(L).length>0};
+  return {rama, L, ups, kw, kva, iMax, sumKw, fuente, enl, N, red: N===null ? null : sobreScc ? -1 : enl-N, det, p1, pScc, sobreScc, warns, alertas, hay: Object.keys(L).length>0};
 }
 /* Escenario de pérdida de una rama: toda la carga pasa a la rama que queda. */
-function escenario(queda, tot, totKva){
-  const cap = kwMod()*queda.enl, N = modsNecesarios(tot, totKva), red = queda.enl - N, p = cargaRel(tot, totKva, queda.enl);
-  return {rama:queda.rama, cap, red, p, ok: red>=0 && p<=P.limCarga};
+function escenario(queda, tot, totKva, totI = null){
+  const c = capN(queda.enl, true), N = modsNecesarios(tot, totKva, totI), sobre = excedeScc(tot, totKva, totI);
+  const red = sobre ? -1 : queda.enl - N, d = cargaDet(tot, totKva, queda.enl, totI);
+  return {rama:queda.rama, cap:c.kw, capKva:c.kva, red, p:d?.p ?? null, det:d, sobre, ok: red>=0 && d && d.p<=P.limCarga};
 }
 const kvaTotal = (A, B) => num(A.kva)!==null && num(B.kva)!==null ? A.kva + B.kva : null;
+/* Corriente total si una rama toma la carga de las dos: la suma de sus fases más cargadas (conservador). */
+const iTotal = (A, B) => num(A.iMax)!==null && num(B.iMax)!==null ? A.iMax + B.iMax : null;
+/* ================= crecimiento de la carga =================
+   kW de cada rama por día (SCCT o suma de módulos, con la última lectura de cada equipo de ese día) en el último año.
+   Pendiente de Theil-Sen: la mediana de las pendientes entre cada par de días, así un día raro no la mueve. Se proyecta en
+   línea recta suponiendo que kVA y corrientes crecen en la misma proporción que los kW y con todos los módulos en línea.
+   Es una estimación para planear capacidad: no cambia ningún estado. */
+const DIA = 86400000, CREC = {minDias:6, minSpan:30, ventana:365, estable:0.003, horizonte:5*365};
+const mesesTxt = d => d < 45 ? "menos de 2 meses" : d > CREC.horizonte ? "más de 5 años" : d < 365 ? `~${Math.round(d / 30.4)} meses` : `~${fx(d / 365.25, 1)} años`;
+const fechaEn = d => new Date(Date.now() + d * DIA).toLocaleDateString("es-MX", {month:"short", year:"numeric"});
+const medArr = a => { const b = a.filter(x => x!==null && isFinite(x)).sort((x, y) => x - y); if (!b.length) return null; const m = b.length >> 1; return b.length % 2 ? b[m] : (b[m-1] + b[m]) / 2; };
+function serieRama(rama, hasta){
+  const lim = hasta - CREC.ventana * DIA, dias = [...new Set(readings.filter(r => r.rama===rama && +new Date(r.ts) <= hasta && +new Date(r.ts) >= lim).map(r => diaDe(r.ts)))].sort();
+  return dias.map(d => { const e = estadoRama(rama, x => diaDe(x.ts)===d); return {t:+new Date(d + "T12:00"), kw:e.kw, kva:e.kva, i:e.iMax}; }).filter(x => x.kw!==null && x.kw > 0);
+}
+function tendenciaKw(pts, hasta){
+  const span = pts.length ? (pts[pts.length-1].t - pts[0].t) / DIA : 0;
+  if (pts.length < CREC.minDias || span < CREC.minSpan) return {tipo:"insuf", n:pts.length, span:Math.round(span)};
+  const paso = Math.ceil(pts.length / 60), Q = pts.filter((x, k) => k % paso === 0 || k === pts.length - 1), sl = [];
+  for (let a = 0; a < Q.length; a++) for (let b = a + 1; b < Q.length; b++){ const dt = (Q[b].t - Q[a].t) / DIA; if (dt >= 3) sl.push((Q[b].kw - Q[a].kw) / dt); }
+  if (!sl.length) return {tipo:"insuf", n:pts.length, span:Math.round(span)};
+  const s = medArr(sl), c = medArr(Q.map(x => x.kw - s * (x.t - hasta) / DIA));
+  const disp = medArr(Q.map(x => Math.abs(x.kw - (c + s * (x.t - hasta) / DIA)))) / c, pctMes = s * 30 / c;
+  // cómo escalan kVA y la fase más cargada con los kW: mediana de los últimos días
+  const ult = pts.slice(-8), rKva = medArr(ult.map(x => num(x.kva)!==null ? x.kva / x.kw : null)), rI = medArr(ult.map(x => num(x.i)!==null ? x.i / x.kw : null));
+  return {tipo: Math.abs(pctMes) < CREC.estable ? "estable" : s > 0 ? "sube" : "baja", n:pts.length, span:Math.round(span), s, c, pctMes, rKva, rI,
+    conf: pts.length >= 20 && span >= 120 && disp <= 0.05 ? "alta" : "media"};
+}
+/* Días hasta que la carga, al ritmo actual, multiplique la de hoy por g (0 si ya pasó; null si no sube). */
+const diasA = (t, g) => g == null || !isFinite(g) ? null : g <= 1 ? 0 : t.s > 0 ? (g - 1) * t.c / t.s : null;
+const cargaEsc = (t, n) => cargaRel(t.c, t.rKva!=null ? t.c * t.rKva : null, n, t.rI!=null ? t.c * t.rI : null);
+function crecimiento(hasta = Date.now()){
+  const R = RAMAS.map(rama => {
+    const t = tendenciaKw(serieRama(rama, hasta), hasta);
+    if (t.tipo === "insuf") return {rama, ...t};
+    const pTodos = cargaEsc(t, P.modulos), pMenos1 = P.modulos > 1 ? cargaEsc(t, P.modulos - 1) : null;
+    return {rama, ...t, pTodos, pMenos1, d80:diasA(t, P.limCarga / pTodos), dRedLim:pMenos1 ? diasA(t, P.limCarga / pMenos1) : null, dRed:pMenos1 ? diasA(t, 1 / pMenos1) : null};
+  });
+  // si se pierde una rama: la que queda toma la suma de las dos
+  let esc = null;
+  if (R.every(r => r.tipo !== "insuf")){
+    const tot = {c:R[0].c + R[1].c, s:R[0].s + R[1].s}, kvaT = R.every(r => r.rKva!=null) ? R[0].c*R[0].rKva + R[1].c*R[1].rKva : null, iT = R.every(r => r.rI!=null) ? R[0].c*R[0].rI + R[1].c*R[1].rI : null;
+    const p = cargaRel(tot.c, kvaT, P.modulos, iT);
+    esc = {p, c:tot.c, s:tot.s, pctMes:tot.s * 30 / tot.c, dLim:diasA(tot, P.limCarga / p), dTope:diasA(tot, 1 / p)};
+  }
+  return {R, esc};
+}
+/* Texto de una proyección: «hoy», «hacia mar 2028 (~2.3 años)» o «más de 5 años». */
+const cuandoTxt = d => d == null ? "no se alcanza al ritmo actual" : d === 0 ? "<b>ya hoy</b>" : d > CREC.horizonte ? "en más de 5 años" : `hacia <b>${fechaEn(d)}</b> (${mesesTxt(d)})`;
+function crecTxt(r){
+  if (r.tipo === "insuf") return `<b>Rama ${r.rama}:</b> pocos datos para estimar el crecimiento (${r.n} día(s) con lecturas en ${r.span} días; se necesitan 6 días en 30).`;
+  const base = `<b>Rama ${r.rama}:</b> ${fx(r.c,0)} kW hoy (ajustado), ${r.s >= 0 ? "+" : ""}${fx(r.s*30,1)} kW/mes (${r.pctMes >= 0 ? "+" : ""}${pct(r.pctMes,1)}/mes). <span class="muted">Confianza ${r.conf}: ${r.n} días con lecturas en ${Math.round(r.span/30.4) || "menos de 1"} mes(es).</span>`;
+  if (r.tipo !== "sube") return `${base} Carga ${r.tipo === "estable" ? "estable" : "a la baja"}: no se espera llegar a los límites.`;
+  return `${base}<br>Al ritmo actual, con los ${P.modulos} UPS: ${pct(P.limCarga,0)} de la capacidad ${cuandoTxt(r.d80)}. Si falla 1 UPS, los demás pasarían del ${pct(P.limCarga,0)} ${cuandoTxt(r.dRedLim)} y se perdería la redundancia (más de 100 %) ${cuandoTxt(r.dRed)}.`;
+}
+function escTxt(x){
+  if (!x) return "";
+  if (x.s <= 0 || Math.abs(x.pctMes) < CREC.estable) return `<b>Si se pierde una rama:</b> la otra tomaría ${fx(x.c,0)} kW (${pct(x.p)} de su capacidad); la carga total no crece.`;
+  return `<b>Si se pierde una rama:</b> la otra tomaría ${fx(x.c,0)} kW (${pct(x.p)} de su capacidad hoy). Al ritmo actual pasaría del ${pct(P.limCarga,0)} ${cuandoTxt(x.dLim)} y ya no podría con toda la carga ${cuandoTxt(x.dTope)}.`;
+}
+function renderCrec(){
+  const box = $("#crec"); if (!box) return;
+  const C = crecimiento();
+  box.innerHTML = `<ul style="margin:0;padding-left:18px">${C.R.map(r => `<li style="margin:6px 0">${crecTxt(r)}</li>`).join("")}${C.esc ? `<li style="margin:6px 0">${escTxt(C.esc)}</li>` : ""}</ul>
+    <p class="muted" style="margin:8px 0 0;font-size:13px">kW de cada rama por día en el último año (SCCT o suma de módulos). Pendiente de Theil-Sen (mediana de las pendientes entre pares de días: un día raro no la mueve), proyectada en línea recta; supone que kVA y corrientes crecen en la misma proporción y que todos los UPS están en línea. Es una estimación para planear capacidad.</p>`;
+}
 function renderSys(){
   const E = RAMAS.map(r => estadoRama(r));
+  renderCrec();
   $("#ramas").innerHTML = E.map(e => {
-    const lf = k => (e.kw===null || e.enl-k<=0) ? "—" : pct(cargaRel(e.kw, e.kva, e.enl-k));
+    const lf = k => { if (e.kw===null || e.enl-k<=0) return "—"; const p = cargaRel(e.kw, e.kva, e.enl-k, e.iMax); return `<span style="color:${p>1 ? "var(--bad)" : p>P.limCarga ? "var(--warn,#8a5a00)" : "inherit"};font-weight:${p>P.limCarga ? 700 : 400}">${pct(p)}</span>`; };
+    const cap = capN(e.enl, true);
     let u = "";
     for (const eq of equipos()){
       const r = e.L[eq];
@@ -488,13 +600,16 @@ function renderSys(){
         <div><div class="muted">Configuración</div><div class="big">${e.kw===null?"—":confTxt(e.red)}</div></div>
         <div style="text-align:right"><div class="muted">Carga (${e.fuente})</div><div class="big">${e.kw===null?"—":Math.round(e.kw)+" kW"}</div></div>
       </div>
+      ${e.alertas.length?`<div class="note ${e.alertas.some(a => a.est==="bad") ? "bad" : ""}" style="border-color:${e.alertas.some(a => a.est==="bad") ? "var(--bad)" : "var(--warn,#8a5a00)"}">${e.alertas.map(a => `<b>${a.est==="bad" ? "✕" : "!"}</b> ${esc(a.t)}`).join("<br>")}</div>`:""}
       ${e.warns.length?`<div class="note">${e.warns.map(esc).join("<br>")}</div>`:""}
       <div class="kv" style="margin-top:8px">
         <span>UPS en línea</span><span>${e.enl} de ${P.modulos}</span>
-        <span>Capacidad en línea</span><span>${fx(kwMod()*e.enl,0)} kW / ${fx(P.kva*e.enl,0)} kVA</span>
+        <span>Capacidad en línea</span><span>${fx(cap.kw,0)} kW / ${fx(cap.kva,0)} kVA / ${fx(cap.i,0)} A por fase${P.kva*e.enl > sccKva() ? ` <span class="muted">(la limita el SCCT de ${fx(sccKva(),0)} kVA)</span>` : ""}</span>
+        <span>Fase más cargada</span><span>${e.iMax!==null ? fx(e.iMax,0)+" A" : "—"}</span>
+        <span>Uso del SCCT</span><span>${e.pScc!==null ? pct(e.pScc) + ` de ${fx(sccKva(),0)} kVA` : "—"}</span>
         <span>Factor de potencia</span><span>${e.kw!==null&&e.kva?fx(e.kw/e.kva,2):"—"}</span>
         <span>Módulos requeridos (N)</span><span>${e.N??"—"}</span>
-        <span>Carga por módulo, todos en línea</span><span>${lf(0)}</span>
+        <span>Carga, todos en línea</span><span>${lf(0)}${e.det ? ` <span class="muted">(${limTxt(e.det)})</span>` : ""}</span>
         <span>Si falla 1 UPS</span><span>${lf(1)}</span>
         <span>Si fallan 2 UPS</span><span>${lf(2)}</span>
       </div>
@@ -507,17 +622,17 @@ function renderSys(){
   }
   const tot = A.kw + B.kw;
   const tarjeta = (queda, pierde) => {
-    const x = escenario(queda, tot, kvaTotal(A, B));
+    const x = escenario(queda, tot, kvaTotal(A, B), iTotal(A, B));
     return `<div class="rama"><div class="muted">Si se pierde la Rama ${pierde.rama}</div>
       <div class="row" style="justify-content:space-between;align-items:flex-end">
         <div><div class="muted">Rama ${queda.rama} quedaría en</div><div class="big">${confTxt(x.red)}</div></div>
         <div style="text-align:right"><div class="muted">Carga por módulo</div><div class="big" style="color:${x.ok?"var(--ok)":"var(--bad)"}">${pct(x.p,0)}</div></div>
       </div>
-      <div class="muted">${Math.round(tot)} kW sobre ${fx(x.cap,0)} kW en línea de la Rama ${queda.rama}.</div></div>`;
+      <div class="muted">${Math.round(tot)} kW sobre ${fx(x.cap,0)} kW / ${fx(x.capKva,0)} kVA en línea de la Rama ${queda.rama}${x.det ? ` (${limTxt(x.det)})` : ""}.${x.sobre ? ` <b style="color:var(--bad)">No cabe en el SCCT.</b>` : ""}</div></div>`;
   };
   $("#cruce").innerHTML = `<p style="margin-top:0">Carga total del sistema: <b>${Math.round(tot)} kW</b> (A ${Math.round(A.kw)} + B ${Math.round(B.kw)}).</p>
     <div class="cmp">${tarjeta(B,A)}${tarjeta(A,B)}</div>
-    <p class="muted">Supone que toda la carga es de doble alimentación y se transfiere completa a la otra rama. Las cargas de un solo cordón se pierden con su rama.</p>`;
+    <p class="muted">Supone que toda la carga es de doble alimentación y se transfiere completa a la otra rama. Las cargas de un solo cordón se pierden con su rama. La capacidad de la rama que queda no pasa de la de su SCCT (${fx(sccKva(),0)} kVA, ${fx(iScc(),0)} A por fase), y la fase más cargada se suma de las dos ramas.</p>`;
 }
 
 /* ================= tendencias ================= */
@@ -525,8 +640,8 @@ function renderSys(){
    lim: límite superior · banda: rango normal [mín, máx]. Los puntos fuera van en rojo. */
 const METRICS = [
   {k:"kwMod", l:"Carga por módulo (kW)", f:r=>num(r.load?.kw), eqs:"ups", lim:()=>P.limCarga*kwMod(), nota:()=>`Límite: ${pct(P.limCarga,0)} de ${fx(kwMod(),0)} kW por módulo.`},
-  {k:"kwRama", l:"Carga de la rama, SCCT (kW)", f:r=>num(r.load?.kw), eqs:"scct", lim:()=>P.limCarga*kwMod()*P.modulos, nota:()=>`Límite: ${pct(P.limCarga,0)} de ${P.modulos} × ${fx(kwMod(),0)} kW. La redundancia depende de cuántos UPS estén en línea (ver Sistema).`},
-  {k:"pctKw", l:"Carga (% de capacidad)", f:r=>calc(r).pctKw, pct:true, eqs:"all", lim:()=>P.limCarga, nota:()=>"El mayor entre kW y kVA; en el SCCT, sobre los UPS en línea."},
+  {k:"kwRama", l:"Carga de la rama, SCCT (kW)", f:r=>num(r.load?.kw), eqs:"scct", lim:()=>P.limCarga*capN(P.modulos, true).kw, nota:()=>`Límite: ${pct(P.limCarga,0)} de ${fx(capN(P.modulos, true).kw,0)} kW (${P.modulos} × ${fx(kwMod(),0)} kW${P.kva*P.modulos > sccKva() ? `, limitado por el SCCT de ${fx(sccKva(),0)} kVA` : ""}). La redundancia depende de cuántos UPS estén en línea (ver Sistema).`},
+  {k:"pctKw", l:"Carga (% de capacidad)", f:r=>calc(r).pctKw, pct:true, eqs:"all", lim:()=>P.limCarga, nota:()=>"El mayor de kW, kVA y la fase más cargada; en el SCCT, sobre los UPS en línea y sin pasar de la capacidad del SCCT."},
   {k:"unbIout", l:"Desbalance de corriente de carga (%)", f:r=>calc(r).unbIout, pct:true, eqs:"all", lim:()=>P.limI},
   {k:"unbIin", l:"Desbalance de corriente de entrada (%)", f:r=>calc(r).unbIin, pct:true, eqs:"ups", lim:()=>P.limI},
   {k:"vout", l:"Voltaje de salida promedio (V)", f:r=>calc(r).vout, eqs:"all", banda:()=>[P.vnom*(1-P.limDev), P.vnom*(1+P.limDev)], nota:()=>`Banda: ${P.vnom} V ± ${pct(P.limDev,0)}.`},
@@ -771,7 +886,7 @@ function comportamiento(lect){
     const ds = diario.map(x => ({d:x.d, e:x.E[i]})).filter(x => x.e.kw!==null);
     if (!ds.length) return `<tr><td><b>Rama ${rama}</b></td><td colspan="5" style="color:#6a7784">Sin lecturas</td></tr>`;
     const k = stats(ds.map(x => x.e.kw)), dMax = ds.find(x => x.e.kw===k.max).d;
-    const caps = ds.map(x => ({d:x.d, p:cargaRel(x.e.kw, x.e.kva, x.e.enl)})).filter(x => x.p!==null);
+    const caps = ds.map(x => ({d:x.d, p:cargaRel(x.e.kw, x.e.kva, x.e.enl, x.e.iMax)})).filter(x => x.p!==null);
     const cMax = caps.length ? caps.reduce((a, b) => b.p > a.p ? b : a) : null;
     const reds = ds.filter(x => x.e.red!==null), peor = reds.length ? reds.reduce((a, b) => b.e.red < a.e.red ? b : a) : null;
     texto.push(`Rama ${rama}: ${Math.round(k.min)}–${Math.round(k.max)} kW (máx. ${fDia(dMax)})${cMax ? `, hasta ${pct(cMax.p)} de capacidad` : ""}${peor ? `, peor: ${confTxt(peor.e.red)} (${fDia(peor.d)})` : ""}`);
@@ -837,16 +952,21 @@ async function generarInforme(){
       if (!r){ faltan.push(`Rama ${e.rama} ${eq}`); continue; }
       calc(r).det.forEach(d => hall.push({eq:`Rama ${e.rama} ${eq}`, d, f:fdate(r.ts)}));
     }
-    if (e.red!==null && e.red<1) hall.push({eq:`Rama ${e.rama}`, d: e.red<0 ? "Sobrecarga: la carga supera la capacidad en línea" : "Sin redundancia (N)", f:""});
+    if (e.alertas.length) e.alertas.forEach(a => hall.push({eq:`Rama ${e.rama}`, d:a.t, f:""}));
+    else if (e.red!==null && e.red<1) hall.push({eq:`Rama ${e.rama}`, d: e.red<0 ? "Sobrecarga: la carga supera la capacidad en línea" : "Sin redundancia (N)", f:""});
     e.warns.filter(w => /difiere/.test(w)).forEach(w => hall.push({eq:`Rama ${e.rama}`, d:w, f:""}));
   }
+  // crecimiento de la carga, con el historial hasta el fin del periodo
+  const C = crecimiento(hasta ? +new Date(hasta + "T23:59") : Date.now());
+  const crecHtml = C.R.some(r => r.tipo !== "insuf") ? `<div class="bloque"><h2>Crecimiento de la carga</h2><ul>${C.R.map(r => `<li>${crecTxt(r)}</li>`).join("")}${C.esc ? `<li>${escTxt(C.esc)}</li>` : ""}</ul>
+    <div style="font-size:11px;color:#6a7784;margin-top:4px">kW de cada rama por día en el último año; pendiente de Theil-Sen proyectada en línea recta, con todos los UPS en línea. Estimación para planear capacidad.</div></div>` : "";
   // análisis cruzado
   let cruce = null;
   const [A,B] = E;
   if (A.kw!==null && B.kw!==null){
     const tot = A.kw + B.kw;
     const totKva = kvaTotal(A, B);
-    cruce = {tot, pierdeA: escenario(B, tot, totKva), pierdeB: escenario(A, tot, totKva)};
+    cruce = {tot, pierdeA: escenario(B, tot, totKva, iTotal(A, B)), pierdeB: escenario(A, tot, totKva, iTotal(A, B))};
     [cruce.pierdeA, cruce.pierdeB].forEach((x,i) => { if (!x.ok) hall.push({eq:`Rama ${x.rama}`, d:`Si se pierde la Rama ${i===0?"A":"B"}, quedaría en ${confTxt(x.red)} al ${pct(x.p,0)} por módulo`, f:""}); });
   }
   const estadoGlobal = hall.length ? {t:`${hall.length} hallazgo(s) que requieren atención`, c:"bad"} : faltan.length ? {t:"Sin hallazgos, con lecturas incompletas", c:"warn"} : {t:"Sin hallazgos", c:"ok"};
@@ -861,7 +981,7 @@ async function generarInforme(){
       : td((c.batA!==null && Math.abs(c.batA)>P.limBatA) || (c.vCell!==null && (c.vCell<P.vCeldaMin || c.vCell>P.vCeldaMax)), `${fx(c.vCell,3)} V/c${c.batA ? ` · ${c.batA} A` : ""}`);
     return `<tr><td><b>${eq}</b></td><td>${fdate(r.ts)}${r.tsManual ? " ✎" : ""}</td><td>${fx(r.load?.kw,0)}</td><td>${d===null?"—":(d>0?"+":"")+fx(d,0)}</td><td>${fx(r.load?.kva,0)}</td>${td(c.pctKw>P.limCarga, pct(c.pctKw))}<td>${fx(c.fp,2)}</td>${td(c.devOut!==null && Math.abs(c.devOut)>P.limDev, fx(c.vout,0))}${td(c.unbIout>P.limI, pct(c.unbIout))}${bat}<td><span class="est ${c.ok?"ok":"bad"}" style="margin:0;padding:1px 6px">${c.ok?"OK":"Revisar"}</span></td></tr>`;
   }).join("");
-  const kpiRama = e => `<div class="kpi"><div class="l">Rama ${e.rama}</div><div class="v">${e.kw===null?"—":confTxt(e.red)}</div><div>${e.kw===null?"Sin datos":Math.round(e.kw)+" kW ("+e.fuente+")"}</div><div style="color:#4a5866">${e.enl} de ${P.modulos} UPS en línea${e.kw!==null?`, ${pct(cargaRel(e.kw, e.kva, e.enl))} de capacidad`:""}</div></div>`;
+  const kpiRama = e => `<div class="kpi"><div class="l">Rama ${e.rama}</div><div class="v">${e.kw===null?"—":confTxt(e.red)}</div><div>${e.kw===null?"Sin datos":Math.round(e.kw)+" kW ("+e.fuente+")"}</div><div style="color:#4a5866">${e.enl} de ${P.modulos} UPS en línea${e.kw!==null?`, ${pct(cargaRel(e.kw, e.kva, e.enl, e.iMax))} de capacidad`:""}</div></div>`;
 
   // notas
   const notas = incNotas ? (multi ? [...enPeriodo].reverse() : usadas).filter(r => r.nota).map(r => `<li><b>Rama ${r.rama} ${esc(r.equipo)}</b> (${fdate(r.ts)}): ${esc(r.nota)}</li>`).join("") : "";
@@ -876,20 +996,21 @@ async function generarInforme(){
   <h2>${multi ? "Estado al cierre del periodo" : "Resumen"}</h2>${multi ? `<div style="font-size:12px;color:#4a5866;margin-bottom:6px">Con la última lectura de cada equipo dentro del periodo.</div>` : ""}
   <div class="kpis">${E.map(kpiRama).join("")}
     ${cruce?`<div class="kpi"><div class="l">Carga total del sistema</div><div class="v">${Math.round(cruce.tot)} kW</div><div style="color:#4a5866">A ${Math.round(A.kw)} + B ${Math.round(B.kw)} kW</div></div>`:""}</div>
-  ${cruce?`<h2>Si se pierde una rama</h2><div class="tw"><table><tr><th>Escenario</th><th>Rama que queda</th><th>Configuración</th><th>Carga por módulo</th></tr>
+  ${cruce?`<h2>Si se pierde una rama</h2><div class="tw"><table><tr><th>Escenario</th><th>Rama que queda</th><th>Configuración</th><th>Carga de la rama</th></tr>
     <tr><td>Se pierde la Rama A</td><td>B</td><td>${confTxt(cruce.pierdeA.red)}</td><td>${pct(cruce.pierdeA.p,0)}</td></tr>
     <tr><td>Se pierde la Rama B</td><td>A</td><td>${confTxt(cruce.pierdeB.red)}</td><td>${pct(cruce.pierdeB.p,0)}</td></tr></table></div>
-    <div style="font-size:11px;color:#6a7784;margin-top:4px">Supone carga de doble alimentación que se transfiere completa a la otra rama.</div>`:""}
+    <div style="font-size:11px;color:#6a7784;margin-top:4px">Supone carga de doble alimentación que se transfiere completa a la otra rama. La capacidad de la rama que queda no pasa de la de su SCCT (${fx(sccKva(),0)} kVA); cuenta kW, kVA y la fase más cargada.</div>`:""}
+  ${crecHtml}
   <h2>Hallazgos</h2>
   ${hall.length?`<ul>${hall.map(h=>`<li><b>${esc(h.eq)}</b>: ${esc(h.d)}${h.f?` <span style="color:#6a7784">(${h.f})</span>`:""}</li>`).join("")}</ul>`:"<p>No se detectaron parámetros fuera de límite.</p>"}
   ${faltan.length?`<p style="color:#6b5200"><b>Sin lectura${unDia?" ese día":filtro?" en el periodo":""}:</b> ${faltan.map(esc).join(", ")}.</p>`:""}
   ${E.map(e=>`<div class="bloque"><h2>Detalle Rama ${e.rama}</h2><div class="tw"><table><tr><th>Equipo</th><th>Lectura</th><th>kW</th><th>Δ kW</th><th>kVA</th><th>% carga</th><th>FP</th><th>V salida</th><th>Desb. I</th><th>Batería</th><th>Estado</th></tr>${filas(e)}</table></div></div>`).join("")}
-  <div style="font-size:11px;color:#6a7784;margin-top:4px">Δ kW: cambio respecto a la lectura anterior del mismo equipo. % carga: el mayor entre kW contra ${fx(kwMod(),0)} kW y kVA contra ${fx(P.kva,0)} kVA por módulo (en el SCCT, por los UPS en línea). V salida: promedio; se marca si alguna fase sale de rango. Batería: voltaje por celda y corriente (en flotación debe ser 0 A); en el SCCT, UPS en línea. En rojo, los valores fuera de límite.${usadas.some(r => r.tsManual) ? " ✎: hora de la lectura corregida a mano." : ""}</div>
+  <div style="font-size:11px;color:#6a7784;margin-top:4px">Δ kW: cambio respecto a la lectura anterior del mismo equipo. % carga: el mayor de kW contra ${fx(kwMod(),0)} kW, kVA contra ${fx(P.kva,0)} kVA y la fase más cargada contra ${fx(iMod(),0)} A por módulo (en el SCCT, por los UPS en línea y sin pasar de ${fx(sccKva(),0)} kVA / ${fx(iScc(),0)} A del SCCT). V salida: promedio; se marca si alguna fase sale de rango. Batería: voltaje por celda y corriente (en flotación debe ser 0 A); en el SCCT, UPS en línea. En rojo, los valores fuera de límite.${usadas.some(r => r.tsManual) ? " ✎: hora de la lectura corregida a mano." : ""}</div>
   ${comp ? comp.html : ""}
   ${notas?`<h2>Notas de campo</h2><ul>${notas}</ul>`:""}
   ${fotosInf?`<h2>Evidencia fotográfica</h2><div class="fotos">${fotosInf}</div>`:""}
   <h2>Criterios</h2>
-  <div style="font-size:12px">Módulo ${P.kva} kVA / ${fx(kwMod(),0)} kW (FP ${P.fp}). Límites: carga ${pct(P.limCarga,0)} (kW o kVA, el mayor), desbalance de voltaje ${pct(P.limV,1)}, desbalance de corriente ${pct(P.limI,0)}, desviación por fase ${pct(P.limDev,0)} en salida y ${pct(P.limDevIn,0)} en entrada/bypass sobre ${P.vnom} V, frecuencia de salida y de bypass 60 ± 0.5 Hz, kVA vs V×I ±10 %. Batería: ${P.celdas} celdas, flotación ${fx(P.vCeldaMin,3)}–${fx(P.vCeldaMax,3)} V/celda a 25 °C, corriente tolerada ${P.limBatA} A.</div>
+  <div style="font-size:12px">Módulo ${P.kva} kVA / ${fx(kwMod(),0)} kW (FP ${P.fp}). SCCT ${fx(sccKva(),0)} kVA (${fx(iScc(),0)} A por fase). Límites: carga ${pct(P.limCarga,0)} (el mayor de kW, kVA y la fase más cargada contra ${fx(iMod(),0)} A por módulo), redundancia: si falla 1 UPS los demás no deben pasar de ${pct(P.limCarga,0)}, desbalance de voltaje ${pct(P.limV,1)}, desbalance de corriente ${pct(P.limI,0)}, desviación por fase ${pct(P.limDev,0)} en salida y ${pct(P.limDevIn,0)} en entrada/bypass sobre ${P.vnom} V, frecuencia de salida y de bypass 60 ± 0.5 Hz, kVA vs V×I ±10 %. Batería: ${P.celdas} celdas, flotación ${fx(P.vCeldaMin,3)}–${fx(P.vCeldaMax,3)} V/celda a 25 °C, corriente tolerada ${P.limBatA} A.</div>
   <div class="firma"><div>Elaboró${elab?`<br>${esc(elab)}`:""}</div><div>Revisó${revi?`<br>${esc(revi)}`:""}</div></div>
   <div class="pie">Generado con Bitácora de UPS. Valores capturados de los displays de los equipos; la inspección es pasiva y no incluye intervención en equipos.</div>
   </div>`;
@@ -899,8 +1020,9 @@ async function generarInforme(){
   L.push(`*Informe UPS${sitio?" – "+sitio:""}*`);
   L.push(`${fdate(ahora)} | Lecturas: ${periodo}`);
   L.push("");
-  E.forEach(e => L.push(`Rama ${e.rama}: ${e.kw===null?"sin datos":`${confTxt(e.red)} | ${Math.round(e.kw)} kW | ${pct(cargaRel(e.kw, e.kva, e.enl))} | ${e.enl}/${P.modulos} UPS en línea`}`));
+  E.forEach(e => L.push(`Rama ${e.rama}: ${e.kw===null?"sin datos":`${confTxt(e.red)} | ${Math.round(e.kw)} kW | ${pct(cargaRel(e.kw, e.kva, e.enl, e.iMax))} | ${e.enl}/${P.modulos} UPS en línea`}`));
   if (cruce) L.push(`Si se pierde A: B en ${confTxt(cruce.pierdeA.red)} al ${pct(cruce.pierdeA.p,0)}. Si se pierde B: A en ${confTxt(cruce.pierdeB.red)} al ${pct(cruce.pierdeB.p,0)}.`);
+  C.R.filter(r => r.tipo === "sube").forEach(r => L.push(`Rama ${r.rama} crece ${pct(r.pctMes,1)}/mes: ${pct(P.limCarga,0)} de capacidad ${r.d80===0 ? "ya" : r.d80!=null && r.d80 <= CREC.horizonte ? "hacia " + fechaEn(r.d80) : "en más de 5 años"}.`));
   L.push("");
   L.push(hall.length ? `Hallazgos (${hall.length}):` : "Sin hallazgos.");
   hall.forEach(h => L.push(`• ${h.eq}: ${h.d}`));
